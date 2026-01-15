@@ -2,6 +2,7 @@ import sys
 import os
 import platform
 import time
+import signal
 
 # Add the directory containing the generated module to sys.path
 # Assuming the module is built into a 'python_module' directory relative to the project root
@@ -155,6 +156,10 @@ class MainWindow(QMainWindow):
     def error_callback(self, msg):
         self.error_signal.emit(msg)
 
+    def closeEvent(self, event):
+        self.on_stop_clicked()
+        super().closeEvent(event)
+
     @Slot(QImage)
     def update_frame(self, image):
         if not image.isNull():
@@ -307,4 +312,13 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
+
+    # Handle Ctrl+C
+    signal.signal(signal.SIGINT, lambda sig, frame: window.close())
+
+    # Timer to let the Python interpreter handle signals periodically
+    timer = QTimer()
+    timer.start(100)
+    timer.timeout.connect(lambda: None)
+
     sys.exit(app.exec())

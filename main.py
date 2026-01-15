@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
 
         self.spin_exposure_time = QDoubleSpinBox()
         self.spin_exposure_time.setSuffix(" ms")
+        self.spin_exposure_time.setDecimals(4)
         self.spin_exposure_time.setRange(0.1, 1000.0)
         self.spin_exposure_time.setEnabled(False)
         self.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
@@ -161,7 +162,7 @@ class MainWindow(QMainWindow):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.avi")
+                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
                 self.record_btn.setText("Stop Recording")
             
             # Display
@@ -217,7 +218,14 @@ class MainWindow(QMainWindow):
     def sync_ui(self):
         # Ranges
         min_exp, max_exp = self.camera.getExposureTimeRange()
+        step_exp = self.camera.getExposureTimeStep()
+
         self.spin_exposure_time.setRange(min_exp, max_exp)
+        if step_exp > 0:
+            self.spin_exposure_time.setSingleStep(step_exp)
+            self.slider_exposure.setRange(0, int((max_exp - min_exp) / step_exp))
+        else:
+            self.slider_exposure.setRange(0, 10000)
         
         min_gain, max_gain = self.camera.getAnalogGainRange()
         self.spin_gain.setRange(min_gain, max_gain)
@@ -241,10 +249,15 @@ class MainWindow(QMainWindow):
 
     def update_slider_from_time(self, current, min_val, max_val):
         self.slider_exposure.blockSignals(True)
-        rng = max_val - min_val
-        if rng > 0:
-            val = int((current - min_val) / rng * 10000)
+        step_exp = self.camera.getExposureTimeStep()
+        if step_exp > 0:
+            val = int(round((current - min_val) / step_exp))
             self.slider_exposure.setValue(val)
+        else:
+            rng = max_val - min_val
+            if rng > 0:
+                val = int((current - min_val) / rng * 10000)
+                self.slider_exposure.setValue(val)
         self.slider_exposure.blockSignals(False)
 
     def on_auto_exposure_toggled(self, checked):
@@ -278,9 +291,13 @@ class MainWindow(QMainWindow):
 
     def on_exposure_slider_changed(self, value):
         min_exp = self.spin_exposure_time.minimum()
-        max_exp = self.spin_exposure_time.maximum()
-        rng = max_exp - min_exp
-        new_time = min_exp + (value / 10000.0) * rng
+        step_exp = self.camera.getExposureTimeStep()
+        if step_exp > 0:
+            new_time = min_exp + (value * step_exp)
+        else:
+            max_exp = self.spin_exposure_time.maximum()
+            rng = max_exp - min_exp
+            new_time = min_exp + (value / 10000.0) * rng
         self.spin_exposure_time.setValue(new_time)
 
     def on_gain_changed(self, value):

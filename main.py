@@ -21,7 +21,8 @@ import PySide6.QtWidgets
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QHBoxLayout, QLabel, QPushButton, QGroupBox, 
-                               QCheckBox, QDoubleSpinBox, QSlider, QSpinBox, QFormLayout, QSizePolicy)
+                               QCheckBox, QDoubleSpinBox, QSlider, QSpinBox, QFormLayout, QSizePolicy,
+                               QRadioButton, QButtonGroup)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QImage, QPixmap
 
@@ -89,6 +90,34 @@ class MainWindow(QMainWindow):
         
         self.controls_group.setEnabled(False)
         self.main_layout.addWidget(self.controls_group)
+
+        # Trigger Group
+        self.trigger_group = QGroupBox("Trigger Settings")
+        self.trigger_layout = QVBoxLayout(self.trigger_group)
+        
+        self.rb_continuous = QRadioButton("Continuous")
+        self.rb_software = QRadioButton("Software Trigger")
+        self.rb_hardware = QRadioButton("Hardware Trigger")
+        self.rb_continuous.setChecked(True)
+        
+        self.btn_soft_trigger = QPushButton("Trigger")
+        self.btn_soft_trigger.setEnabled(False)
+        
+        self.trigger_bg = QButtonGroup(self)
+        self.trigger_bg.addButton(self.rb_continuous, 0)
+        self.trigger_bg.addButton(self.rb_software, 1)
+        self.trigger_bg.addButton(self.rb_hardware, 2)
+        
+        self.trigger_bg.idToggled.connect(self.on_trigger_mode_changed)
+        self.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
+        
+        self.trigger_layout.addWidget(self.rb_continuous)
+        self.trigger_layout.addWidget(self.rb_software)
+        self.trigger_layout.addWidget(self.rb_hardware)
+        self.trigger_layout.addWidget(self.btn_soft_trigger)
+        
+        self.trigger_group.setEnabled(False)
+        self.main_layout.addWidget(self.trigger_group)
 
         # Buttons
         self.btn_layout = QHBoxLayout()
@@ -186,6 +215,7 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.controls_group.setEnabled(False)
+        self.trigger_group.setEnabled(False)
 
     def on_start_clicked(self):
         if self.camera.open():
@@ -194,6 +224,7 @@ class MainWindow(QMainWindow):
                 self.stop_btn.setEnabled(True)
                 self.record_btn.setEnabled(True)
                 self.controls_group.setEnabled(True)
+                self.trigger_group.setEnabled(True)
                 self.video_label.setText("Starting stream...")
                 self.sync_ui()
 
@@ -207,6 +238,7 @@ class MainWindow(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.record_btn.setEnabled(False)
         self.controls_group.setEnabled(False)
+        self.trigger_group.setEnabled(False)
         self.video_label.clear()
         self.video_label.setText("Camera Stopped")
         self.fps_label.setText("FPS: 0.0")
@@ -307,6 +339,18 @@ class MainWindow(QMainWindow):
 
     def on_gain_changed(self, value):
         self.camera.setAnalogGain(value)
+
+    def on_trigger_mode_changed(self, id, checked):
+        if checked:
+            # 0=Continuous, 1=Software, 2=Hardware
+            if self.camera.setTriggerMode(id):
+                self.btn_soft_trigger.setEnabled(id == 1)
+            else:
+                print(f"Failed to set trigger mode {id}")
+                # Revert logic could be added here
+
+    def on_soft_trigger_clicked(self):
+        self.camera.triggerSoftware()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

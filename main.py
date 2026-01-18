@@ -5,7 +5,6 @@ import time
 import signal
 
 # Add the directory containing the generated module to sys.path
-# Assuming the module is built into a 'python_module' directory relative to the project root
 script_dir = os.path.dirname(__file__)
 release_dir = os.path.join(r"z:\src\mindvision_qobject", "release")
 sys.path.insert(0, release_dir)
@@ -19,12 +18,10 @@ os.add_dll_directory(r"C:\Program Files (x86)\MindVision\SDK\X64")
 import _mindvision_qobject_py
 import PySide6.QtWidgets
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                               QHBoxLayout, QLabel, QPushButton, QGroupBox, 
-                               QCheckBox, QDoubleSpinBox, QSlider, QSpinBox, QFormLayout, QSizePolicy,
-                               QRadioButton, QButtonGroup)
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup)
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject
 from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtUiTools import QUiLoader
 
 try:
     from _mindvision_qobject_py import MindVisionCamera, VideoThread
@@ -32,7 +29,7 @@ except ImportError as e:
     print(f"Failed to import _mindvision_qobject_py: {e}")
     sys.exit(1)
 
-class MainWindow(QMainWindow):
+class MainWindow(QObject):
     update_frame_signal = Signal(QImage)
     update_fps_signal = Signal(float)
     error_signal = Signal(str)
@@ -40,104 +37,60 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        self.setWindowTitle("MindVision Camera Viewer (Python - PySide6)")
-        self.resize(800, 600)
+        # Load UI from file
+        loader = QUiLoader()
+        ui_file_path = os.path.join(script_dir, "mainwindow.ui")
+        ui_file = QFile(ui_file_path)
+        if not ui_file.open(QFile.ReadOnly):
+            print(f"Cannot open {ui_file_path}: {ui_file.errorString()}")
+            sys.exit(-1)
+        
+        self.ui = loader.load(ui_file)
+        ui_file.close()
 
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
+        if not self.ui:
+            print(loader.errorString())
+            sys.exit(-1)
 
-        # Video Label
-        self.video_label = QLabel("Camera Stream")
-        self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("QLabel { background-color : black; color : white; }")
-        self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # Expanding
-        self.main_layout.addWidget(self.video_label)
+        # Access Widgets
+        self.video_label = self.ui.video_label
+        self.controls_group = self.ui.controls_group
+        self.chk_auto_exposure = self.ui.chk_auto_exposure
+        self.chk_roi = self.ui.chk_roi
+        self.spin_exposure_time = self.ui.spin_exposure_time
+        self.slider_exposure = self.ui.slider_exposure
+        self.spin_gain = self.ui.spin_gain
+        self.trigger_group = self.ui.trigger_group
+        self.rb_continuous = self.ui.rb_continuous
+        self.rb_software = self.ui.rb_software
+        self.rb_hardware = self.ui.rb_hardware
+        self.btn_soft_trigger = self.ui.btn_soft_trigger
+        self.start_btn = self.ui.start_btn
+        self.stop_btn = self.ui.stop_btn
+        self.record_btn = self.ui.record_btn
+        
+        # Status Bar (add permanent widget manually)
+        self.fps_label = QLabel("FPS: 0.0")
+        self.ui.statusBar().addPermanentWidget(self.fps_label)
 
-        # Controls Group
-        self.controls_group = QGroupBox("Camera Settings")
-        self.controls_layout = QFormLayout(self.controls_group)
-
-        self.chk_auto_exposure = QCheckBox("Auto Exposure")
-        self.chk_auto_exposure.setChecked(True)
+        # Connections
         self.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
-
-        self.chk_roi = QCheckBox("High FPS ROI (640x480)")
-        self.chk_roi.setChecked(False)
         self.chk_roi.toggled.connect(self.on_roi_toggled)
-
-        self.spin_exposure_time = QDoubleSpinBox()
-        self.spin_exposure_time.setSuffix(" ms")
-        self.spin_exposure_time.setDecimals(4)
-        self.spin_exposure_time.setRange(0.1, 1000.0)
-        self.spin_exposure_time.setEnabled(False)
         self.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
-
-        self.slider_exposure = QSlider(Qt.Horizontal)
-        self.slider_exposure.setRange(0, 10000)
-        self.slider_exposure.setEnabled(False)
         self.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
-
-        self.spin_gain = QSpinBox()
-        self.spin_gain.setRange(0, 100)
         self.spin_gain.valueChanged.connect(self.on_gain_changed)
-
-        self.controls_layout.addRow(self.chk_auto_exposure)
-        self.controls_layout.addRow(self.chk_roi)
-        self.controls_layout.addRow("Exposure Time:", self.spin_exposure_time)
-        self.controls_layout.addRow("Exposure Slider:", self.slider_exposure)
-        self.controls_layout.addRow("Analog Gain:", self.spin_gain)
         
-        self.controls_group.setEnabled(False)
-        self.main_layout.addWidget(self.controls_group)
-
-        # Trigger Group
-        self.trigger_group = QGroupBox("Trigger Settings")
-        self.trigger_layout = QVBoxLayout(self.trigger_group)
-        
-        self.rb_continuous = QRadioButton("Continuous")
-        self.rb_software = QRadioButton("Software Trigger")
-        self.rb_hardware = QRadioButton("Hardware Trigger")
-        self.rb_continuous.setChecked(True)
-        
-        self.btn_soft_trigger = QPushButton("Trigger")
-        self.btn_soft_trigger.setEnabled(False)
-        
-        self.trigger_bg = QButtonGroup(self)
+        # Recreate ButtonGroup for logic
+        self.trigger_bg = QButtonGroup(self.ui)
         self.trigger_bg.addButton(self.rb_continuous, 0)
         self.trigger_bg.addButton(self.rb_software, 1)
         self.trigger_bg.addButton(self.rb_hardware, 2)
-        
         self.trigger_bg.idToggled.connect(self.on_trigger_mode_changed)
+        
         self.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
-        
-        self.trigger_layout.addWidget(self.rb_continuous)
-        self.trigger_layout.addWidget(self.rb_software)
-        self.trigger_layout.addWidget(self.rb_hardware)
-        self.trigger_layout.addWidget(self.btn_soft_trigger)
-        
-        self.trigger_group.setEnabled(False)
-        self.main_layout.addWidget(self.trigger_group)
-
-        # Buttons
-        self.btn_layout = QHBoxLayout()
-        self.start_btn = QPushButton("Start Camera")
         self.start_btn.clicked.connect(self.on_start_clicked)
-        self.stop_btn = QPushButton("Stop Camera")
         self.stop_btn.clicked.connect(self.on_stop_clicked)
-        self.stop_btn.setEnabled(False)
-        self.record_btn = QPushButton("Start Recording")
         self.record_btn.clicked.connect(self.on_record_clicked)
-        self.record_btn.setEnabled(False)
-
-        self.btn_layout.addWidget(self.start_btn)
-        self.btn_layout.addWidget(self.stop_btn)
-        self.btn_layout.addWidget(self.record_btn)
-        self.main_layout.addLayout(self.btn_layout)
-
-        # Status Bar
-        self.fps_label = QLabel("FPS: 0.0")
-        self.statusBar().addPermanentWidget(self.fps_label)
 
         # Camera Setup
         self.camera = MindVisionCamera()
@@ -157,10 +110,15 @@ class MainWindow(QMainWindow):
         self.current_fps = 30.0
         self.last_ui_update_time = 0
 
+    def show(self):
+        self.ui.show()
+
+    def close(self):
+        self.on_stop_clicked()
+        self.ui.close()
+
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
-        # 1. Recording (High Priority, no copies if possible)
-        # Note: 'data' is valid only during this callback.
-        # VideoThread.addFrameBytes must copy the data internally.
+        # 1. Recording (High Priority)
         if self.video_thread.isRunning():
             try:
                 self.video_thread.addFrameBytes(width, height, bytes_per_line, fmt, data)
@@ -168,7 +126,6 @@ class MainWindow(QMainWindow):
                 print(f"Recording error in callback: {e}")
 
         # 2. UI Update (Throttled)
-        # We don't need to display 100+ FPS. 30 FPS is enough for preview.
         current_time = time.time()
         if current_time - self.last_ui_update_time > 0.033: # ~30 FPS
             self.last_ui_update_time = current_time
@@ -184,10 +141,6 @@ class MainWindow(QMainWindow):
 
     def error_callback(self, msg):
         self.error_signal.emit(msg)
-
-    def closeEvent(self, event):
-        self.on_stop_clicked()
-        super().closeEvent(event)
 
     @Slot(QImage)
     def update_frame(self, image):

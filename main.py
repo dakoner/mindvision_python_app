@@ -52,45 +52,28 @@ class MainWindow(QObject):
             print(loader.errorString())
             sys.exit(-1)
 
-        # Access Widgets
-        self.video_label = self.ui.video_label
-        self.controls_group = self.ui.controls_group
-        self.chk_auto_exposure = self.ui.chk_auto_exposure
-        self.chk_roi = self.ui.chk_roi
-        self.spin_exposure_time = self.ui.spin_exposure_time
-        self.slider_exposure = self.ui.slider_exposure
-        self.spin_gain = self.ui.spin_gain
-        self.trigger_group = self.ui.trigger_group
-        self.rb_continuous = self.ui.rb_continuous
-        self.rb_software = self.ui.rb_software
-        self.rb_hardware = self.ui.rb_hardware
-        self.btn_soft_trigger = self.ui.btn_soft_trigger
-        self.start_btn = self.ui.start_btn
-        self.stop_btn = self.ui.stop_btn
-        self.record_btn = self.ui.record_btn
-        
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
         self.ui.statusBar().addPermanentWidget(self.fps_label)
 
         # Connections
-        self.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
-        self.chk_roi.toggled.connect(self.on_roi_toggled)
-        self.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
-        self.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
-        self.spin_gain.valueChanged.connect(self.on_gain_changed)
+        self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
+        self.ui.chk_roi.toggled.connect(self.on_roi_toggled)
+        self.ui.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
+        self.ui.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
+        self.ui.spin_gain.valueChanged.connect(self.on_gain_changed)
         
         # Recreate ButtonGroup for logic
         self.trigger_bg = QButtonGroup(self.ui)
-        self.trigger_bg.addButton(self.rb_continuous, 0)
-        self.trigger_bg.addButton(self.rb_software, 1)
-        self.trigger_bg.addButton(self.rb_hardware, 2)
+        self.trigger_bg.addButton(self.ui.rb_continuous, 0)
+        self.trigger_bg.addButton(self.ui.rb_software, 1)
+        self.trigger_bg.addButton(self.ui.rb_hardware, 2)
         self.trigger_bg.idToggled.connect(self.on_trigger_mode_changed)
         
-        self.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
-        self.start_btn.clicked.connect(self.on_start_clicked)
-        self.stop_btn.clicked.connect(self.on_stop_clicked)
-        self.record_btn.clicked.connect(self.on_record_clicked)
+        self.ui.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
+        self.ui.start_btn.clicked.connect(self.on_start_clicked)
+        self.ui.stop_btn.clicked.connect(self.on_stop_clicked)
+        self.ui.record_btn.clicked.connect(self.on_record_clicked)
 
         # Camera Setup
         self.camera = MindVisionCamera()
@@ -150,11 +133,11 @@ class MainWindow(QObject):
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
                 self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
-                self.record_btn.setText("Stop Recording")
+                self.ui.record_btn.setText("Stop Recording")
             
             # Display
             pixmap = QPixmap.fromImage(image)
-            self.video_label.setPixmap(pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.ui.video_label.setPixmap(pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     @Slot(float)
     def update_fps(self, fps):
@@ -164,21 +147,21 @@ class MainWindow(QObject):
     @Slot(str)
     def handle_error(self, message):
         print(f"Camera Error: {message}")
-        self.video_label.setText(f"Error: {message}")
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.controls_group.setEnabled(False)
-        self.trigger_group.setEnabled(False)
+        self.ui.video_label.setText(f"Error: {message}")
+        self.ui.start_btn.setEnabled(True)
+        self.ui.stop_btn.setEnabled(False)
+        self.ui.controls_group.setEnabled(False)
+        self.ui.trigger_group.setEnabled(False)
 
     def on_start_clicked(self):
         if self.camera.open():
             if self.camera.start():
-                self.start_btn.setEnabled(False)
-                self.stop_btn.setEnabled(True)
-                self.record_btn.setEnabled(True)
-                self.controls_group.setEnabled(True)
-                self.trigger_group.setEnabled(True)
-                self.video_label.setText("Starting stream...")
+                self.ui.start_btn.setEnabled(False)
+                self.ui.stop_btn.setEnabled(True)
+                self.ui.record_btn.setEnabled(True)
+                self.ui.controls_group.setEnabled(True)
+                self.ui.trigger_group.setEnabled(True)
+                self.ui.video_label.setText("Starting stream...")
                 self.sync_ui()
 
     def on_stop_clicked(self):
@@ -187,13 +170,13 @@ class MainWindow(QObject):
         
         self.camera.stop()
         self.camera.close()
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.record_btn.setEnabled(False)
-        self.controls_group.setEnabled(False)
-        self.trigger_group.setEnabled(False)
-        self.video_label.clear()
-        self.video_label.setText("Camera Stopped")
+        self.ui.start_btn.setEnabled(True)
+        self.ui.stop_btn.setEnabled(False)
+        self.ui.record_btn.setEnabled(False)
+        self.ui.controls_group.setEnabled(False)
+        self.ui.trigger_group.setEnabled(False)
+        self.ui.video_label.clear()
+        self.ui.video_label.setText("Camera Stopped")
         self.fps_label.setText("FPS: 0.0")
 
     def on_record_clicked(self):
@@ -202,7 +185,7 @@ class MainWindow(QObject):
             print("Recording requested...")
         else:
             self.video_thread.stopRecording()
-            self.record_btn.setText("Start Recording")
+            self.ui.record_btn.setText("Start Recording")
             print("Recording stopped.")
 
     def sync_ui(self):
@@ -210,85 +193,85 @@ class MainWindow(QObject):
         min_exp, max_exp = self.camera.getExposureTimeRange()
         step_exp = self.camera.getExposureTimeStep()
 
-        self.spin_exposure_time.setRange(min_exp, max_exp)
+        self.ui.spin_exposure_time.setRange(min_exp, max_exp)
         if step_exp > 0:
-            self.spin_exposure_time.setSingleStep(step_exp)
-            self.slider_exposure.setRange(0, int((max_exp - min_exp) / step_exp))
+            self.ui.spin_exposure_time.setSingleStep(step_exp)
+            self.ui.slider_exposure.setRange(0, int((max_exp - min_exp) / step_exp))
         else:
-            self.slider_exposure.setRange(0, 10000)
+            self.ui.slider_exposure.setRange(0, 10000)
         
         min_gain, max_gain = self.camera.getAnalogGainRange()
-        self.spin_gain.setRange(min_gain, max_gain)
+        self.ui.spin_gain.setRange(min_gain, max_gain)
         
         # Values
         is_auto = self.camera.getAutoExposure()
-        self.chk_auto_exposure.setChecked(is_auto)
-        self.spin_exposure_time.setEnabled(not is_auto)
-        self.slider_exposure.setEnabled(not is_auto)
+        self.ui.chk_auto_exposure.setChecked(is_auto)
+        self.ui.spin_exposure_time.setEnabled(not is_auto)
+        self.ui.slider_exposure.setEnabled(not is_auto)
         
         current_exp = self.camera.getExposureTime()
-        self.spin_exposure_time.blockSignals(True)
-        self.spin_exposure_time.setValue(current_exp)
-        self.spin_exposure_time.blockSignals(False)
+        self.ui.spin_exposure_time.blockSignals(True)
+        self.ui.spin_exposure_time.setValue(current_exp)
+        self.ui.spin_exposure_time.blockSignals(False)
         
         self.update_slider_from_time(current_exp, min_exp, max_exp)
         
-        self.spin_gain.blockSignals(True)
-        self.spin_gain.setValue(self.camera.getAnalogGain())
-        self.spin_gain.blockSignals(False)
+        self.ui.spin_gain.blockSignals(True)
+        self.ui.spin_gain.setValue(self.camera.getAnalogGain())
+        self.ui.spin_gain.blockSignals(False)
 
     def update_slider_from_time(self, current, min_val, max_val):
-        self.slider_exposure.blockSignals(True)
+        self.ui.slider_exposure.blockSignals(True)
         step_exp = self.camera.getExposureTimeStep()
         if step_exp > 0:
             val = int(round((current - min_val) / step_exp))
-            self.slider_exposure.setValue(val)
+            self.ui.slider_exposure.setValue(val)
         else:
             rng = max_val - min_val
             if rng > 0:
                 val = int((current - min_val) / rng * 10000)
-                self.slider_exposure.setValue(val)
-        self.slider_exposure.blockSignals(False)
+                self.ui.slider_exposure.setValue(val)
+        self.ui.slider_exposure.blockSignals(False)
 
     def on_auto_exposure_toggled(self, checked):
         if self.camera.setAutoExposure(checked):
-            self.spin_exposure_time.setEnabled(not checked)
-            self.slider_exposure.setEnabled(not checked)
+            self.ui.spin_exposure_time.setEnabled(not checked)
+            self.ui.slider_exposure.setEnabled(not checked)
             if not checked:
                 # Update manual values
                 current_exp = self.camera.getExposureTime()
-                self.spin_exposure_time.setValue(current_exp)
-                min_exp = self.spin_exposure_time.minimum()
-                max_exp = self.spin_exposure_time.maximum()
+                self.ui.spin_exposure_time.setValue(current_exp)
+                min_exp = self.ui.spin_exposure_time.minimum()
+                max_exp = self.ui.spin_exposure_time.maximum()
                 self.update_slider_from_time(current_exp, min_exp, max_exp)
         else:
-            self.chk_auto_exposure.setChecked(not checked)
+            self.ui.chk_auto_exposure.setChecked(not checked)
 
     def on_roi_toggled(self, checked):
         if not self.camera.setRoi(checked):
-            self.chk_roi.setChecked(not checked)
+            self.ui.chk_roi.setChecked(not checked)
 
     def on_exposure_time_changed(self, value):
         self.camera.setExposureTime(value)
         actual = self.camera.getExposureTime()
-        self.spin_exposure_time.blockSignals(True)
-        self.spin_exposure_time.setValue(actual)
-        self.spin_exposure_time.blockSignals(False)
+        self.ui.spin_exposure_time.blockSignals(True)
+        self.ui.spin_exposure_time.setValue(actual)
+        self.ui.spin_exposure_time.blockSignals(False)
         
-        min_exp = self.spin_exposure_time.minimum()
-        max_exp = self.spin_exposure_time.maximum()
+        min_exp = self.ui.spin_exposure_time.minimum()
+        max_exp = self.ui.spin_exposure_time.maximum()
         self.update_slider_from_time(actual, min_exp, max_exp)
 
     def on_exposure_slider_changed(self, value):
-        min_exp = self.spin_exposure_time.minimum()
+        min_exp = self.ui.spin_exposure_time.minimum()
         step_exp = self.camera.getExposureTimeStep()
         if step_exp > 0:
             new_time = min_exp + (value * step_exp)
         else:
-            max_exp = self.spin_exposure_time.maximum()
+            max_exp = self.ui.spin_exposure_time.maximum()
             rng = max_exp - min_exp
             new_time = min_exp + (value / 10000.0) * rng
-        self.spin_exposure_time.setValue(new_time)
+        self.ui.spin_exposure_time.setValue(new_time)
 
     def on_gain_changed(self, value):
         self.camera.setAnalogGain(value)
@@ -297,7 +280,7 @@ class MainWindow(QObject):
         if checked:
             # 0=Continuous, 1=Software, 2=Hardware
             if self.camera.setTriggerMode(id):
-                self.btn_soft_trigger.setEnabled(id == 1)
+                self.ui.btn_soft_trigger.setEnabled(id == 1)
             else:
                 print(f"Failed to set trigger mode {id}")
                 # Revert logic could be added here

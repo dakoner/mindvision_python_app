@@ -7,7 +7,7 @@ import signal
 # Add the directory containing the generated module to sys.path
 # Assuming the module is built into a 'python_module' directory relative to the project root
 script_dir = os.path.dirname(__file__)
-release_dir = os.path.join(r"c:\Users\davidek\mindvision_qobject", "release")
+release_dir = os.path.join(r"z:\src\mindvision_qobject", "release")
 sys.path.insert(0, release_dir)
 
 os.add_dll_directory(release_dir)

@@ -54,6 +54,9 @@ class MainWindow(QObject):
 
         # Install event filter to handle close event
         self.ui.installEventFilter(self)
+        self.ui.video_label.installEventFilter(self)
+
+        self.current_pixmap = None
 
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
@@ -65,6 +68,7 @@ class MainWindow(QObject):
         self.ui.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
         self.ui.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
         self.ui.spin_gain.valueChanged.connect(self.on_gain_changed)
+        self.ui.spin_ae_target.valueChanged.connect(self.on_ae_target_changed)
         
         # Recreate ButtonGroup for logic
         self.trigger_bg = QButtonGroup(self.ui)
@@ -104,9 +108,26 @@ class MainWindow(QObject):
         self.ui.close()
 
     def eventFilter(self, watched, event):
-        if watched == self.ui and event.type() == QEvent.Close:
-            self.on_stop_clicked()
+        try:
+            if watched is self.ui and event.type() == QEvent.Close:
+                self.on_stop_clicked()
+                self.ui.removeEventFilter(self)
+                try:
+                    self.ui.video_label.removeEventFilter(self)
+                except RuntimeError:
+                    pass
+            elif watched == self.ui.video_label and event.type() == QEvent.Resize:
+                self.refresh_video_label()
+        except RuntimeError:
+            # Object already deleted during shutdown, ignore
+            pass
         return super().eventFilter(watched, event)
+
+    def refresh_video_label(self):
+        if self.current_pixmap and not self.current_pixmap.isNull():
+            # Use FastTransformation for responsive resizing. SmoothTransformation is too slow for real-time interaction.
+            scaled = self.current_pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+            self.ui.video_label.setPixmap(scaled)
 
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
         # 1. Recording (High Priority)
@@ -140,12 +161,12 @@ class MainWindow(QObject):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
+                self.video_thread.startRecording(image.width(), image.height(), record_fps, r"c:\Users\davidek\Desktop\output.mkv")
                 self.ui.record_btn.setText("Stop Recording")
             
             # Display
-            pixmap = QPixmap.fromImage(image)
-            self.ui.video_label.setPixmap(pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.current_pixmap = QPixmap.fromImage(image)
+            self.refresh_video_label()
 
     @Slot(float)
     def update_fps(self, fps):
@@ -216,6 +237,23 @@ class MainWindow(QObject):
         self.ui.chk_auto_exposure.setChecked(is_auto)
         self.ui.spin_exposure_time.setEnabled(not is_auto)
         self.ui.slider_exposure.setEnabled(not is_auto)
+        self.ui.spin_ae_target.setEnabled(is_auto)
+
+        # AE Target
+        if hasattr(self.camera, 'getAutoExposureTarget'):
+            try:
+                # Try to get range if available, otherwise default to 0-255 or current limits
+                # Assuming getAutoExposureTargetRange exists, otherwise catch
+                if hasattr(self.camera, 'getAutoExposureTargetRange'):
+                    min_ae, max_ae = self.camera.getAutoExposureTargetRange()
+                    self.ui.spin_ae_target.setRange(min_ae, max_ae)
+                
+                current_ae = self.camera.getAutoExposureTarget()
+                self.ui.spin_ae_target.blockSignals(True)
+                self.ui.spin_ae_target.setValue(current_ae)
+                self.ui.spin_ae_target.blockSignals(False)
+            except Exception as e:
+                print(f"Error syncing AE target: {e}")
         
         current_exp = self.camera.getExposureTime()
         self.ui.spin_exposure_time.blockSignals(True)
@@ -245,6 +283,7 @@ class MainWindow(QObject):
         if self.camera.setAutoExposure(checked):
             self.ui.spin_exposure_time.setEnabled(not checked)
             self.ui.slider_exposure.setEnabled(not checked)
+            self.ui.spin_ae_target.setEnabled(checked)
             if not checked:
                 # Update manual values
                 current_exp = self.camera.getExposureTime()
@@ -283,6 +322,10 @@ class MainWindow(QObject):
 
     def on_gain_changed(self, value):
         self.camera.setAnalogGain(value)
+
+    def on_ae_target_changed(self, value):
+        if hasattr(self.camera, 'setAutoExposureTarget'):
+            self.camera.setAutoExposureTarget(value)
 
     def on_trigger_mode_changed(self, id, checked):
         if checked:

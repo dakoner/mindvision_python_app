@@ -19,7 +19,7 @@ import _mindvision_qobject_py
 import PySide6.QtWidgets
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup)
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
 
@@ -51,6 +51,9 @@ class MainWindow(QObject):
         if not self.ui:
             print(loader.errorString())
             sys.exit(-1)
+
+        # Install event filter to handle close event
+        self.ui.installEventFilter(self)
 
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
@@ -97,8 +100,13 @@ class MainWindow(QObject):
         self.ui.show()
 
     def close(self):
-        self.on_stop_clicked()
+        # Triggers closeEvent via the widget
         self.ui.close()
+
+    def eventFilter(self, watched, event):
+        if watched == self.ui and event.type() == QEvent.Close:
+            self.on_stop_clicked()
+        return super().eventFilter(watched, event)
 
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
         # 1. Recording (High Priority)

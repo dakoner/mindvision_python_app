@@ -306,6 +306,7 @@ class MainWindow(QObject):
 
         # Install event filter to handle close event
         self.ui.installEventFilter(self)
+
         self.ui.video_label.installEventFilter(self)
 
         self.current_pixmap = None
@@ -492,8 +493,17 @@ class MainWindow(QObject):
         try:
             if watched is self.ui and event.type() == QEvent.Close:
                 self.on_stop_clicked()
-                self.matching_thread.quit()
-                self.matching_thread.wait()
+                
+                # Cleanup Matching Thread
+                if self.matching_thread.isRunning():
+                    self.matching_thread.quit()
+                    self.matching_thread.wait()
+                
+                # Cleanup Serial Thread
+                if self.serial_thread.isRunning():
+                    self.serial_thread.quit()
+                    self.serial_thread.wait()
+
                 self.ui.removeEventFilter(self)
                 try:
                     self.ui.video_label.removeEventFilter(self)

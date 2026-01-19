@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1400</width>
-    <height>800</height>
+    <width>1800</width>
+    <height>1000</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,480 +16,478 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="main_layout">
     <item>
-     <widget class="QScrollArea" name="scrollArea">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
+     <widget class="QSplitter" name="main_h_splitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
-      <property name="minimumSize">
-       <size>
-        <width>320</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>320</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <property name="widgetResizable">
-       <bool>true</bool>
-      </property>
-      <widget class="QWidget" name="scrollAreaWidgetContents">
-       <property name="geometry">
-        <rect>
-         <x>0</x>
-         <y>0</y>
-         <width>318</width>
-         <height>800</height>
-        </rect>
+      <widget class="QScrollArea" name="scrollArea">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
        </property>
-       <layout class="QVBoxLayout" name="scroll_layout">
-        <item>
-         <widget class="QGroupBox" name="controls_group">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="title">
-           <string>Exposure &amp; Gain</string>
-          </property>
-          <layout class="QFormLayout" name="controls_layout">
-           <item row="0" column="0">
-            <widget class="QCheckBox" name="chk_auto_exposure">
-             <property name="text">
-              <string>Auto Exposure</string>
-             </property>
-             <property name="checked">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QCheckBox" name="chk_roi">
-             <property name="text">
-              <string>High FPS ROI</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_ae_target">
-             <property name="text">
-              <string>AE Target:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QSpinBox" name="spin_ae_target">
-             <property name="maximum">
-              <number>255</number>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="0" colspan="2">
-            <widget class="QSlider" name="slider_ae_target">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="0">
-            <widget class="QLabel" name="label_exposure_time">
-             <property name="text">
-              <string>Exp Time (ms):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="1">
-            <widget class="QDoubleSpinBox" name="spin_exposure_time">
-             <property name="enabled">
-              <bool>false</bool>
-             </property>
-             <property name="decimals">
-              <number>4</number>
-             </property>
-             <property name="maximum">
-              <double>100000.000000000000000</double>
-             </property>
-            </widget>
-           </item>
-           <item row="5" column="0" colspan="2">
-            <widget class="QSlider" name="slider_exposure">
-             <property name="enabled">
-              <bool>false</bool>
-             </property>
-             <property name="maximum">
-              <number>10000</number>
-             </property>
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-            </widget>
-           </item>
-           <item row="6" column="0">
-            <widget class="QLabel" name="label_gain">
-             <property name="text">
-              <string>Analog Gain:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="6" column="1">
-            <widget class="QSpinBox" name="spin_gain">
-             <property name="maximum">
-              <number>1000</number>
-             </property>
-            </widget>
-           </item>
-           <item row="7" column="0" colspan="2">
-            <widget class="QSlider" name="slider_gain">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="trigger_group">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="title">
-           <string>Trigger Mode</string>
-          </property>
-          <layout class="QVBoxLayout" name="trigger_layout">
+       <property name="minimumSize">
+        <size>
+         <width>320</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="scrollAreaWidgetContents">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>318</width>
+          <height>800</height>
+         </rect>
+        </property>
+        <layout class="QVBoxLayout" name="scroll_layout">
+         <item>
+          <widget class="QGroupBox" name="controls_group">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="title">
+            <string>Exposure &amp; Gain</string>
+           </property>
+           <layout class="QFormLayout" name="controls_layout">
+            <item row="0" column="0">
+             <widget class="QCheckBox" name="chk_auto_exposure">
+              <property name="text">
+               <string>Auto Exposure</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QCheckBox" name="chk_roi">
+              <property name="text">
+               <string>High FPS ROI</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_ae_target">
+              <property name="text">
+               <string>AE Target:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSpinBox" name="spin_ae_target">
+              <property name="maximum">
+               <number>255</number>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0" colspan="2">
+             <widget class="QSlider" name="slider_ae_target">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_exposure_time">
+              <property name="text">
+               <string>Exp Time (ms):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QDoubleSpinBox" name="spin_exposure_time">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="decimals">
+               <number>4</number>
+              </property>
+              <property name="maximum">
+               <double>100000.000000000000000</double>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="0" colspan="2">
+             <widget class="QSlider" name="slider_exposure">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="maximum">
+               <number>10000</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item row="6" column="0">
+             <widget class="QLabel" name="label_gain">
+              <property name="text">
+               <string>Analog Gain:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="6" column="1">
+             <widget class="QSpinBox" name="spin_gain">
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="0" colspan="2">
+             <widget class="QSlider" name="slider_gain">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="trigger_group">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="title">
+            <string>Trigger Mode</string>
+           </property>
+           <layout class="QVBoxLayout" name="trigger_layout">
+            <item>
+             <widget class="QRadioButton" name="rb_continuous">
+              <property name="text">
+               <string>Continuous</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="rb_software">
+              <property name="text">
+               <string>Software Trigger</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="rb_hardware">
+              <property name="text">
+               <string>Hardware Trigger</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_soft_trigger">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>Execute Software Trigger</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="trigger_params_group">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="title">
+            <string>Trigger Parameters</string>
+           </property>
+           <layout class="QFormLayout" name="formLayout_2">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_trig_count">
+              <property name="text">
+               <string>Count:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QSpinBox" name="spin_trigger_count">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_trig_delay">
+              <property name="text">
+               <string>Delay (us):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QSpinBox" name="spin_trigger_delay">
+              <property name="maximum">
+               <number>10000000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_trig_interval">
+              <property name="text">
+               <string>Interval (us):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSpinBox" name="spin_trigger_interval">
+              <property name="maximum">
+               <number>10000000</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="ext_trigger_group">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="title">
+            <string>External Trigger Params</string>
+           </property>
+           <layout class="QFormLayout" name="formLayout_3">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_ext_mode">
+              <property name="text">
+               <string>Edge Mode:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QComboBox" name="combo_ext_mode">
+              <item>
+               <property name="text">
+                <string>Rising Edge</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Falling Edge</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_ext_jitter">
+              <property name="text">
+               <string>Jitter (us):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QSpinBox" name="spin_ext_jitter">
+              <property name="maximum">
+               <number>1000000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_ext_shutter">
+              <property name="text">
+               <string>Shutter Mode:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QComboBox" name="combo_ext_shutter">
+              <item>
+               <property name="text">
+                <string>Standard</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Mode 1</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="strobe_group">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="title">
+            <string>Strobe Settings</string>
+           </property>
+           <layout class="QFormLayout" name="formLayout_4">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_strobe_mode">
+              <property name="text">
+               <string>Mode:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QComboBox" name="combo_strobe_mode">
+              <item>
+               <property name="text">
+                <string>Auto</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Manual/Semi-Auto</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_strobe_polarity">
+              <property name="text">
+               <string>Polarity:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="combo_strobe_polarity">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <item>
+               <property name="text">
+                <string>Low</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>High</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_strobe_delay">
+              <property name="text">
+               <string>Delay (us):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSpinBox" name="spin_strobe_delay">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="maximum">
+               <number>10000000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_strobe_width">
+              <property name="text">
+               <string>Pulse Width (us):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QSpinBox" name="spin_strobe_width">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="maximum">
+               <number>10000000</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <layout class="QVBoxLayout" name="main_btn_layout">
            <item>
-            <widget class="QRadioButton" name="rb_continuous">
+            <widget class="QPushButton" name="start_btn">
              <property name="text">
-              <string>Continuous</string>
-             </property>
-             <property name="checked">
-              <bool>true</bool>
+              <string>Start Camera</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QRadioButton" name="rb_software">
+            <widget class="QPushButton" name="stop_btn">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="text">
-              <string>Software Trigger</string>
+              <string>Stop Camera</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QRadioButton" name="rb_hardware">
+            <widget class="QPushButton" name="record_btn">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="text">
-              <string>Hardware Trigger</string>
+              <string>Start Recording</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="btn_soft_trigger">
+            <widget class="QPushButton" name="snapshot_btn">
              <property name="enabled">
               <bool>false</bool>
              </property>
              <property name="text">
-              <string>Execute Software Trigger</string>
+              <string>Take Snapshot</string>
              </property>
             </widget>
            </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="trigger_params_group">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="title">
-           <string>Trigger Parameters</string>
-          </property>
-          <layout class="QFormLayout" name="formLayout_2">
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_trig_count">
-             <property name="text">
-              <string>Count:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="1">
-            <widget class="QSpinBox" name="spin_trigger_count">
-             <property name="minimum">
-              <number>1</number>
-             </property>
-             <property name="maximum">
-              <number>1000</number>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="label_trig_delay">
-             <property name="text">
-              <string>Delay (us):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QSpinBox" name="spin_trigger_delay">
-             <property name="maximum">
-              <number>10000000</number>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_trig_interval">
-             <property name="text">
-              <string>Interval (us):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QSpinBox" name="spin_trigger_interval">
-             <property name="maximum">
-              <number>10000000</number>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="ext_trigger_group">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="title">
-           <string>External Trigger Params</string>
-          </property>
-          <layout class="QFormLayout" name="formLayout_3">
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_ext_mode">
-             <property name="text">
-              <string>Edge Mode:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="1">
-            <widget class="QComboBox" name="combo_ext_mode">
-             <item>
-              <property name="text">
-               <string>Rising Edge</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Falling Edge</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="label_ext_jitter">
-             <property name="text">
-              <string>Jitter (us):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QSpinBox" name="spin_ext_jitter">
-             <property name="maximum">
-              <number>1000000</number>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_ext_shutter">
-             <property name="text">
-              <string>Shutter Mode:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QComboBox" name="combo_ext_shutter">
-             <item>
-              <property name="text">
-               <string>Standard</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Mode 1</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="strobe_group">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="title">
-           <string>Strobe Settings</string>
-          </property>
-          <layout class="QFormLayout" name="formLayout_4">
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_strobe_mode">
-             <property name="text">
-              <string>Mode:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="1">
-            <widget class="QComboBox" name="combo_strobe_mode">
-             <item>
-              <property name="text">
-               <string>Auto</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Manual/Semi-Auto</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="label_strobe_polarity">
-             <property name="text">
-              <string>Polarity:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QComboBox" name="combo_strobe_polarity">
+           <item>
+            <widget class="QPushButton" name="btn_find_template">
              <property name="enabled">
               <bool>false</bool>
              </property>
-             <item>
-              <property name="text">
-               <string>Low</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>High</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_strobe_delay">
              <property name="text">
-              <string>Delay (us):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QSpinBox" name="spin_strobe_delay">
-             <property name="enabled">
-              <bool>false</bool>
-             </property>
-             <property name="maximum">
-              <number>10000000</number>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="0">
-            <widget class="QLabel" name="label_strobe_width">
-             <property name="text">
-              <string>Pulse Width (us):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="1">
-            <widget class="QSpinBox" name="spin_strobe_width">
-             <property name="enabled">
-              <bool>false</bool>
-             </property>
-             <property name="maximum">
-              <number>10000000</number>
+              <string>Find template in image</string>
              </property>
             </widget>
            </item>
           </layout>
-         </widget>
-        </item>
-        <item>
-         <layout class="QVBoxLayout" name="main_btn_layout">
-          <item>
-           <widget class="QPushButton" name="start_btn">
-            <property name="text">
-             <string>Start Camera</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="stop_btn">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Stop Camera</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="record_btn">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Start Recording</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="snapshot_btn">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Take Snapshot</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btn_find_template">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Find template in image</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <spacer name="verticalSpacer">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>40</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
+         </item>
+         <item>
+          <spacer name="verticalSpacer">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
       </widget>
-     </widget>
-    </item>
-    <item>
-     <layout class="QVBoxLayout" name="center_layout">
-      <item>
+      <widget class="QSplitter" name="center_v_splitter">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
        <widget class="QLabel" name="video_label">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
           <horstretch>1</horstretch>
-          <verstretch>0</verstretch>
+          <verstretch>4</verstretch>
          </sizepolicy>
         </property>
         <property name="styleSheet">
@@ -502,20 +500,12 @@
          <set>Qt::AlignCenter</set>
         </property>
        </widget>
-      </item>
-      <item>
        <widget class="QPlainTextEdit" name="log_text_edit">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
           <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
+          <verstretch>1</verstretch>
          </sizepolicy>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>150</height>
-         </size>
         </property>
         <property name="readOnly">
          <bool>true</bool>
@@ -524,734 +514,726 @@
          <string>Application Log...</string>
         </property>
        </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-     <widget class="QScrollArea" name="scrollArea_right">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>280</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>280</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <property name="widgetResizable">
-       <bool>true</bool>
-      </property>
-      <widget class="QWidget" name="scrollAreaWidgetContents_right">
-       <property name="geometry">
-        <rect>
-         <x>0</x>
-         <y>0</y>
-         <width>278</width>
-         <height>800</height>
-        </rect>
+      </widget>
+      <widget class="QScrollArea" name="scrollArea_right">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
        </property>
-       <layout class="QVBoxLayout" name="scroll_layout_right">
-        <item>
-         <widget class="QTabWidget" name="tabs_matching">
-          <property name="currentIndex">
-           <number>0</number>
-          </property>
-          <widget class="QWidget" name="tab_orb">
-           <attribute name="title">
-            <string>ORB</string>
-           </attribute>
-           <layout class="QFormLayout" name="orb_form_layout">
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_nfeatures">
-              <property name="text">
-               <string>nFeatures:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QSpinBox" name="orb_nfeatures">
-              <property name="minimum">
-               <number>1</number>
-              </property>
-              <property name="maximum">
-               <number>10000</number>
-              </property>
-              <property name="value">
-               <number>500</number>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_scaleFactor">
-              <property name="text">
-               <string>scaleFactor:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QDoubleSpinBox" name="orb_scaleFactor">
-              <property name="minimum">
-               <double>1.001000000000000</double>
-              </property>
-              <property name="maximum">
-               <double>3.000000000000000</double>
-              </property>
-              <property name="singleStep">
-               <double>0.100000000000000</double>
-              </property>
-              <property name="value">
-               <double>1.200000000000000</double>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_nlevels">
-              <property name="text">
-               <string>nLevels:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QSpinBox" name="orb_nlevels">
-              <property name="minimum">
-               <number>1</number>
-              </property>
-              <property name="maximum">
-               <number>20</number>
-              </property>
-              <property name="value">
-               <number>8</number>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_edgeThreshold">
-              <property name="text">
-               <string>edgeThreshold:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QSpinBox" name="orb_edgeThreshold">
-              <property name="maximum">
-               <number>100</number>
-              </property>
-              <property name="value">
-               <number>31</number>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="0">
-             <widget class="QLabel" name="label_firstLevel">
-              <property name="text">
-               <string>firstLevel:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="1">
-             <widget class="QSpinBox" name="orb_firstLevel">
-              <property name="maximum">
-               <number>10</number>
-              </property>
-              <property name="value">
-               <number>0</number>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="0">
-             <widget class="QLabel" name="label_wta_k">
-              <property name="text">
-               <string>WTA_K:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="1">
-             <widget class="QSpinBox" name="orb_wta_k">
-              <property name="minimum">
-               <number>2</number>
-              </property>
-              <property name="maximum">
-               <number>4</number>
-              </property>
-              <property name="value">
-               <number>2</number>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="0">
-             <widget class="QLabel" name="label_scoreType">
-              <property name="text">
-               <string>scoreType:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="1">
-             <widget class="QComboBox" name="orb_scoreType">
-              <item>
+       <property name="minimumSize">
+        <size>
+         <width>280</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="scrollAreaWidgetContents_right">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>278</width>
+          <height>800</height>
+         </rect>
+        </property>
+        <layout class="QVBoxLayout" name="scroll_layout_right">
+         <item>
+          <widget class="QTabWidget" name="tabs_matching">
+           <property name="currentIndex">
+            <number>0</number>
+           </property>
+           <widget class="QWidget" name="tab_orb">
+            <attribute name="title">
+             <string>ORB</string>
+            </attribute>
+            <layout class="QFormLayout" name="orb_form_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_nfeatures">
                <property name="text">
-                <string>HARRIS_SCORE</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>FAST_SCORE</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-            <item row="7" column="0">
-             <widget class="QLabel" name="label_patchSize">
-              <property name="text">
-               <string>patchSize:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="7" column="1">
-             <widget class="QSpinBox" name="orb_patchSize">
-              <property name="minimum">
-               <number>2</number>
-              </property>
-              <property name="maximum">
-               <number>100</number>
-              </property>
-              <property name="value">
-               <number>31</number>
-              </property>
-             </widget>
-            </item>
-            <item row="8" column="0">
-             <widget class="QLabel" name="label_fastThreshold">
-              <property name="text">
-               <string>fastThreshold:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="8" column="1">
-             <widget class="QSpinBox" name="orb_fastThreshold">
-              <property name="maximum">
-               <number>255</number>
-              </property>
-              <property name="value">
-               <number>20</number>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="tab_sift">
-           <attribute name="title">
-            <string>SIFT</string>
-           </attribute>
-           <layout class="QFormLayout" name="sift_form_layout">
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_sift_nfeatures">
-              <property name="text">
-               <string>nFeatures:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QSpinBox" name="sift_nfeatures">
-              <property name="maximum">
-               <number>10000</number>
-              </property>
-              <property name="value">
-               <number>0</number>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_sift_nOctaveLayers">
-              <property name="text">
-               <string>nOctaveLayers:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QSpinBox" name="sift_nOctaveLayers">
-              <property name="minimum">
-               <number>1</number>
-              </property>
-              <property name="maximum">
-               <number>10</number>
-              </property>
-              <property name="value">
-               <number>3</number>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_sift_contrastThreshold">
-              <property name="text">
-               <string>contrastThresh:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QDoubleSpinBox" name="sift_contrastThreshold">
-              <property name="singleStep">
-               <double>0.010000000000000</double>
-              </property>
-              <property name="value">
-               <double>0.040000000000000</double>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_sift_edgeThreshold">
-              <property name="text">
-               <string>edgeThreshold:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QDoubleSpinBox" name="sift_edgeThreshold">
-              <property name="value">
-               <double>10.000000000000000</double>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="0">
-             <widget class="QLabel" name="label_sift_sigma">
-              <property name="text">
-               <string>sigma:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="1">
-             <widget class="QDoubleSpinBox" name="sift_sigma">
-              <property name="value">
-               <double>1.600000000000000</double>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="tab_akaze">
-           <attribute name="title">
-            <string>AKAZE</string>
-           </attribute>
-           <layout class="QFormLayout" name="akaze_form_layout">
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_akaze_type">
-              <property name="text">
-               <string>Descriptor:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QComboBox" name="akaze_descriptor_type">
-              <item>
-               <property name="text">
-                <string>KAZE_UPRIGHT</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>KAZE</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>MLP_UPRIGHT</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>MLP</string>
-               </property>
-              </item>
-              <property name="currentIndex">
-               <number>3</number>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_akaze_threshold">
-              <property name="text">
-               <string>Threshold:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QDoubleSpinBox" name="akaze_threshold">
-              <property name="decimals">
-               <number>4</number>
-              </property>
-              <property name="singleStep">
-               <double>0.000100000000000</double>
-              </property>
-              <property name="value">
-               <double>0.001200000000000</double>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_akaze_nOctaves">
-              <property name="text">
-               <string>nOctaves:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QSpinBox" name="akaze_nOctaves">
-              <property name="minimum">
-               <number>1</number>
-              </property>
-              <property name="maximum">
-               <number>10</number>
-              </property>
-              <property name="value">
-               <number>4</number>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_akaze_nOctaveLayers">
-              <property name="text">
-               <string>nOctaveLayers:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QSpinBox" name="akaze_nOctaveLayers">
-              <property name="minimum">
-               <number>1</number>
-              </property>
-              <property name="maximum">
-               <number>10</number>
-              </property>
-              <property name="value">
-               <number>4</number>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="group_serial">
-          <property name="title">
-           <string>Serial Controller</string>
-          </property>
-          <layout class="QVBoxLayout" name="serial_layout">
-           <item>
-            <layout class="QHBoxLayout" name="serial_conn_layout">
-             <item>
-              <widget class="QComboBox" name="combo_serial_port"/>
-             </item>
-             <item>
-              <widget class="QPushButton" name="btn_serial_refresh">
-               <property name="text">
-                <string>↻</string>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>30</width>
-                 <height>16777215</height>
-                </size>
+                <string>nFeatures:</string>
                </property>
               </widget>
              </item>
-             <item>
-              <widget class="QPushButton" name="btn_serial_connect">
-               <property name="text">
-                <string>Connect</string>
+             <item row="0" column="1">
+              <widget class="QSpinBox" name="orb_nfeatures">
+               <property name="minimum">
+                <number>1</number>
                </property>
-               <property name="checkable">
-                <bool>true</bool>
+               <property name="maximum">
+                <number>10000</number>
+               </property>
+               <property name="value">
+                <number>500</number>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_scaleFactor">
+               <property name="text">
+                <string>scaleFactor:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QDoubleSpinBox" name="orb_scaleFactor">
+               <property name="minimum">
+                <double>1.001000000000000</double>
+               </property>
+               <property name="maximum">
+                <double>3.000000000000000</double>
+               </property>
+               <property name="singleStep">
+                <double>0.100000000000000</double>
+               </property>
+               <property name="value">
+                <double>1.200000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_nlevels">
+               <property name="text">
+                <string>nLevels:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QSpinBox" name="orb_nlevels">
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>20</number>
+               </property>
+               <property name="value">
+                <number>8</number>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="label_edgeThreshold">
+               <property name="text">
+                <string>edgeThreshold:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QSpinBox" name="orb_edgeThreshold">
+               <property name="maximum">
+                <number>100</number>
+               </property>
+               <property name="value">
+                <number>31</number>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="label_firstLevel">
+               <property name="text">
+                <string>firstLevel:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QSpinBox" name="orb_firstLevel">
+               <property name="maximum">
+                <number>10</number>
+               </property>
+               <property name="value">
+                <number>0</number>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="0">
+              <widget class="QLabel" name="label_wta_k">
+               <property name="text">
+                <string>WTA_K:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="1">
+              <widget class="QSpinBox" name="orb_wta_k">
+               <property name="minimum">
+                <number>2</number>
+               </property>
+               <property name="maximum">
+                <number>4</number>
+               </property>
+               <property name="value">
+                <number>2</number>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="0">
+              <widget class="QLabel" name="label_scoreType">
+               <property name="text">
+                <string>scoreType:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="1">
+              <widget class="QComboBox" name="orb_scoreType">
+               <item>
+                <property name="text">
+                 <string>HARRIS_SCORE</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>FAST_SCORE</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item row="7" column="0">
+              <widget class="QLabel" name="label_patchSize">
+               <property name="text">
+                <string>patchSize:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="1">
+              <widget class="QSpinBox" name="orb_patchSize">
+               <property name="minimum">
+                <number>2</number>
+               </property>
+               <property name="maximum">
+                <number>100</number>
+               </property>
+               <property name="value">
+                <number>31</number>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="0">
+              <widget class="QLabel" name="label_fastThreshold">
+               <property name="text">
+                <string>fastThreshold:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="1">
+              <widget class="QSpinBox" name="orb_fastThreshold">
+               <property name="maximum">
+                <number>255</number>
+               </property>
+               <property name="value">
+                <number>20</number>
                </property>
               </widget>
              </item>
             </layout>
-           </item>
-           <item>
-            <widget class="QTabWidget" name="tabs_serial_cmds">
-             <property name="currentIndex">
-              <number>0</number>
-             </property>
-             <widget class="QWidget" name="tab_serial_gpio">
-              <attribute name="title">
-               <string>GPIO</string>
-              </attribute>
-              <layout class="QFormLayout" name="form_serial_gpio">
-               <item row="0" column="0" colspan="2">
-                <widget class="QLabel" name="lbl_pulse">
-                 <property name="text">
-                  <string>Pulse: pin, val, dur(us)</string>
-                 </property>
-                 <property name="font">
-                   <font>
-                    <bold>true</bold>
-                   </font>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="0">
-                <widget class="QSpinBox" name="spin_pulse_pin">
-                 <property name="toolTip"><string>Pin</string></property>
-                </widget>
-               </item>
-               <item row="1" column="1">
-                <layout class="QHBoxLayout" name="layout_pulse_args">
-                 <item>
-                  <widget class="QSpinBox" name="spin_pulse_val">
-                   <property name="maximum"><number>1</number></property>
-                   <property name="toolTip"><string>Value (0/1)</string></property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QSpinBox" name="spin_pulse_dur">
-                   <property name="maximum"><number>10000000</number></property>
-                   <property name="value"><number>1000</number></property>
-                   <property name="toolTip"><string>Duration (us)</string></property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item row="2" column="0" colspan="2">
-                <widget class="QPushButton" name="btn_cmd_pulse">
-                 <property name="text"><string>Send Pulse</string></property>
-                </widget>
-               </item>
-               
-               <item row="3" column="0" colspan="2">
-                 <widget class="QLabel" name="lbl_level">
-                  <property name="text"><string>Level: pin, [val]</string></property>
-                  <property name="font"><font><bold>true</bold></font></property>
-                 </widget>
-               </item>
-               <item row="4" column="0">
-                <widget class="QSpinBox" name="spin_level_pin">
-                 <property name="toolTip"><string>Pin</string></property>
-                </widget>
-               </item>
-               <item row="4" column="1">
-                 <widget class="QComboBox" name="combo_level_val">
-                  <item><property name="text"><string>Read</string></property></item>
-                  <item><property name="text"><string>Low (0)</string></property></item>
-                  <item><property name="text"><string>High (1)</string></property></item>
-                 </widget>
-               </item>
-               <item row="5" column="0" colspan="2">
-                <widget class="QPushButton" name="btn_cmd_level">
-                 <property name="text"><string>Set/Get Level</string></property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-
-             <widget class="QWidget" name="tab_serial_pwm">
-              <attribute name="title">
-               <string>PWM/Rep</string>
-              </attribute>
-              <layout class="QFormLayout" name="form_serial_pwm">
-               <item row="0" column="0" colspan="2">
-                 <widget class="QLabel" name="lbl_pwm"><property name="text"><string>PWM: pin, hz, duty%</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-               </item>
-               <item row="1" column="0">
-                <widget class="QSpinBox" name="spin_pwm_pin"><property name="toolTip"><string>Pin</string></property></widget>
-               </item>
-               <item row="1" column="1">
-                <layout class="QHBoxLayout" name="layout_pwm_args">
-                 <item>
-                  <widget class="QSpinBox" name="spin_pwm_freq">
-                   <property name="minimum"><number>1</number></property>
-                   <property name="maximum"><number>1000000</number></property>
-                   <property name="value"><number>1000</number></property>
-                   <property name="toolTip"><string>Freq (Hz)</string></property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QSpinBox" name="spin_pwm_duty">
-                   <property name="maximum"><number>100</number></property>
-                   <property name="value"><number>50</number></property>
-                   <property name="toolTip"><string>Duty %</string></property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item row="2" column="0" colspan="2">
-                <layout class="QHBoxLayout" name="layout_pwm_btns">
-                 <item><widget class="QPushButton" name="btn_cmd_pwm"><property name="text"><string>Start</string></property></widget></item>
-                 <item><widget class="QPushButton" name="btn_cmd_stoppwm"><property name="text"><string>Stop</string></property></widget></item>
-                </layout>
-               </item>
-
-               <item row="3" column="0" colspan="2">
-                 <widget class="QLabel" name="lbl_repeat"><property name="text"><string>Repeat: pin, hz, dur</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-               </item>
-               <item row="4" column="0">
-                <widget class="QSpinBox" name="spin_repeat_pin"><property name="toolTip"><string>Pin</string></property></widget>
-               </item>
-               <item row="4" column="1">
-                <layout class="QHBoxLayout" name="layout_repeat_args">
-                 <item>
-                  <widget class="QSpinBox" name="spin_repeat_freq">
-                   <property name="maximum"><number>1000000</number></property>
-                   <property name="value"><number>10</number></property>
-                   <property name="toolTip"><string>Freq (Hz)</string></property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QSpinBox" name="spin_repeat_dur">
-                   <property name="maximum"><number>10000000</number></property>
-                   <property name="value"><number>1000</number></property>
-                   <property name="toolTip"><string>Duration (us)</string></property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item row="5" column="0" colspan="2">
-                <layout class="QHBoxLayout" name="layout_repeat_btns">
-                 <item><widget class="QPushButton" name="btn_cmd_repeat"><property name="text"><string>Start</string></property></widget></item>
-                 <item><widget class="QPushButton" name="btn_cmd_stoprepeat"><property name="text"><string>Stop</string></property></widget></item>
-                </layout>
-               </item>
-              </layout>
-             </widget>
-
-             <widget class="QWidget" name="tab_serial_adv">
-              <attribute name="title">
-               <string>Int/Throb</string>
-              </attribute>
-              <layout class="QFormLayout" name="form_serial_adv">
-               <item row="0" column="0" colspan="2">
-                 <widget class="QLabel" name="lbl_int"><property name="text"><string>Interrupt: pin, edge, tgt, w</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-               </item>
-               <item row="1" column="0">
-                <widget class="QSpinBox" name="spin_int_pin"><property name="toolTip"><string>Source Pin</string></property></widget>
-               </item>
-               <item row="1" column="1">
-                 <widget class="QComboBox" name="combo_int_edge">
-                  <item><property name="text"><string>RISING</string></property></item>
-                  <item><property name="text"><string>FALLING</string></property></item>
-                  <item><property name="text"><string>BOTH</string></property></item>
-                 </widget>
-               </item>
-               <item row="2" column="0">
-                <widget class="QSpinBox" name="spin_int_target"><property name="toolTip"><string>Target Pin</string></property></widget>
-               </item>
-               <item row="2" column="1">
-                <widget class="QSpinBox" name="spin_int_width">
-                 <property name="maximum"><number>1000000</number></property>
-                 <property name="value"><number>1000</number></property>
-                 <property name="toolTip"><string>Pulse Width (us)</string></property>
-                </widget>
-               </item>
-               <item row="3" column="0" colspan="2">
-                <layout class="QHBoxLayout" name="layout_int_btns">
-                 <item><widget class="QPushButton" name="btn_cmd_interrupt"><property name="text"><string>Set</string></property></widget></item>
-                 <item><widget class="QPushButton" name="btn_cmd_stopinterrupt"><property name="text"><string>Stop</string></property></widget></item>
-                </layout>
-               </item>
-
-               <item row="4" column="0" colspan="2">
-                 <widget class="QLabel" name="lbl_throb"><property name="text"><string>Throb: period, p1, p2, p3</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-               </item>
-               <item row="5" column="0">
-                <widget class="QSpinBox" name="spin_throb_period"><property name="minimum"><number>1</number></property><property name="value"><number>5</number></property><property name="toolTip"><string>Period (s)</string></property></widget>
-               </item>
-               <item row="5" column="1">
-                <layout class="QHBoxLayout" name="layout_throb_pins">
-                 <item><widget class="QSpinBox" name="spin_throb_p1"><property name="value"><number>0</number></property></widget></item>
-                 <item><widget class="QSpinBox" name="spin_throb_p2"><property name="value"><number>1</number></property></widget></item>
-                 <item><widget class="QSpinBox" name="spin_throb_p3"><property name="value"><number>2</number></property></widget></item>
-                </layout>
-               </item>
-               <item row="6" column="0" colspan="2">
-                <layout class="QHBoxLayout" name="layout_throb_btns">
-                 <item><widget class="QPushButton" name="btn_cmd_throb"><property name="text"><string>Start</string></property></widget></item>
-                 <item><widget class="QPushButton" name="btn_cmd_stopthrob"><property name="text"><string>Stop</string></property></widget></item>
-                </layout>
-               </item>
-              </layout>
-             </widget>
-             
-             <widget class="QWidget" name="tab_serial_sys">
-              <attribute name="title">
-               <string>System</string>
-              </attribute>
-              <layout class="QVBoxLayout" name="layout_serial_sys">
+           </widget>
+           <widget class="QWidget" name="tab_sift">
+            <attribute name="title">
+             <string>SIFT</string>
+            </attribute>
+            <layout class="QFormLayout" name="sift_form_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_sift_nfeatures">
+               <property name="text">
+                <string>nFeatures:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QSpinBox" name="sift_nfeatures">
+               <property name="maximum">
+                <number>10000</number>
+               </property>
+               <property name="value">
+                <number>0</number>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_sift_nOctaveLayers">
+               <property name="text">
+                <string>nOctaveLayers:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QSpinBox" name="sift_nOctaveLayers">
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>10</number>
+               </property>
+               <property name="value">
+                <number>3</number>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_sift_contrastThreshold">
+               <property name="text">
+                <string>contrastThresh:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QDoubleSpinBox" name="sift_contrastThreshold">
+               <property name="singleStep">
+                <double>0.010000000000000</double>
+               </property>
+               <property name="value">
+                <double>0.040000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="label_sift_edgeThreshold">
+               <property name="text">
+                <string>edgeThreshold:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QDoubleSpinBox" name="sift_edgeThreshold">
+               <property name="value">
+                <double>10.000000000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="label_sift_sigma">
+               <property name="text">
+                <string>sigma:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QDoubleSpinBox" name="sift_sigma">
+               <property name="value">
+                <double>1.600000000000000</double>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="tab_akaze">
+            <attribute name="title">
+             <string>AKAZE</string>
+            </attribute>
+            <layout class="QFormLayout" name="akaze_form_layout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_akaze_type">
+               <property name="text">
+                <string>Descriptor:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="akaze_descriptor_type">
                <item>
-                <widget class="QPushButton" name="btn_cmd_info"><property name="text"><string>System Info</string></property></widget>
+                <property name="text">
+                 <string>KAZE_UPRIGHT</string>
+                </property>
                </item>
                <item>
-                <widget class="QPushButton" name="btn_cmd_wifi"><property name="text"><string>WiFi Info</string></property></widget>
+                <property name="text">
+                 <string>KAZE</string>
+                </property>
                </item>
                <item>
-                 <layout class="QHBoxLayout" name="layout_mem">
-                  <item><widget class="QLineEdit" name="edit_mem_addr"><property name="placeholderText"><string>Hex Address</string></property></widget></item>
-                  <item><widget class="QPushButton" name="btn_cmd_mem"><property name="text"><string>Read Mem</string></property></widget></item>
+                <property name="text">
+                 <string>MLP_UPRIGHT</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>MLP</string>
+                </property>
+               </item>
+               <property name="currentIndex">
+                <number>3</number>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_akaze_threshold">
+               <property name="text">
+                <string>Threshold:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QDoubleSpinBox" name="akaze_threshold">
+               <property name="decimals">
+                <number>4</number>
+               </property>
+               <property name="singleStep">
+                <double>0.000100000000000</double>
+               </property>
+               <property name="value">
+                <double>0.001200000000000</double>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_akaze_nOctaves">
+               <property name="text">
+                <string>nOctaves:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QSpinBox" name="akaze_nOctaves">
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>1</number>
+               </property>
+               <property name="value">
+                <number>4</number>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="label_akaze_nOctaveLayers">
+               <property name="text">
+                <string>nOctaveLayers:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QSpinBox" name="akaze_nOctaveLayers">
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>10</number>
+               </property>
+               <property name="value">
+                <number>4</number>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="group_serial">
+           <property name="title">
+            <string>Serial Controller</string>
+           </property>
+           <layout class="QVBoxLayout" name="serial_layout">
+            <item>
+             <layout class="QHBoxLayout" name="serial_conn_layout">
+              <item>
+               <widget class="QComboBox" name="combo_serial_port"/>
+              </item>
+              <item>
+               <widget class="QPushButton" name="btn_serial_refresh">
+                <property name="text">
+                 <string>↻</string>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>30</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="btn_serial_connect">
+                <property name="text">
+                 <string>Connect</string>
+                </property>
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QTabWidget" name="tabs_serial_cmds">
+              <property name="currentIndex">
+               <number>0</number>
+              </property>
+              <widget class="QWidget" name="tab_serial_gpio">
+               <attribute name="title">
+                <string>GPIO</string>
+               </attribute>
+               <layout class="QFormLayout" name="form_serial_gpio">
+                <item row="0" column="0" colspan="2">
+                 <widget class="QLabel" name="lbl_pulse">
+                  <property name="text">
+                   <string>Pulse: pin, val, dur(us)</string>
+                  </property>
+                  <property name="font">
+                    <font>
+                     <bold>true</bold>
+                    </font>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QSpinBox" name="spin_pulse_pin">
+                  <property name="toolTip"><string>Pin</string></property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <layout class="QHBoxLayout" name="layout_pulse_args">
+                  <item>
+                   <widget class="QSpinBox" name="spin_pulse_val">
+                    <property name="maximum"><number>1</number></property>
+                    <property name="toolTip"><string>Value (0/1)</string></property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spin_pulse_dur">
+                    <property name="maximum"><number>10000000</number></property>
+                    <property name="value"><number>1000</number></property>
+                    <property name="toolTip"><string>Duration (us)</string></property>
+                   </widget>
+                  </item>
                  </layout>
-               </item>
-               <item><spacer name="spacer_sys"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
-              </layout>
+                </item>
+                <item row="2" column="0" colspan="2">
+                 <widget class="QPushButton" name="btn_cmd_pulse">
+                  <property name="text"><string>Send Pulse</string></property>
+                 </widget>
+                </item>
+                
+                <item row="3" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_level">
+                   <property name="text"><string>Level: pin, [val]</string></property>
+                   <property name="font"><font><bold>true</bold></font></property>
+                  </widget>
+                </item>
+                <item row="4" column="0">
+                 <widget class="QSpinBox" name="spin_level_pin">
+                  <property name="toolTip"><string>Pin</string></property>
+                 </widget>
+                </item>
+                <item row="4" column="1">
+                  <widget class="QComboBox" name="combo_level_val">
+                   <item><property name="text"><string>Read</string></property></item>
+                   <item><property name="text"><string>Low (0)</string></property></item>
+                   <item><property name="text"><string>High (1)</string></property></item>
+                  </widget>
+                </item>
+                <item row="5" column="0" colspan="2">
+                 <widget class="QPushButton" name="btn_cmd_level">
+                  <property name="text"><string>Set/Get Level</string></property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+ 
+              <widget class="QWidget" name="tab_serial_pwm">
+               <attribute name="title">
+                <string>PWM/Rep</string>
+               </attribute>
+               <layout class="QFormLayout" name="form_serial_pwm">
+                <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_pwm"><property name="text"><string>PWM: pin, hz, duty%</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QSpinBox" name="spin_pwm_pin"><property name="toolTip"><string>Pin</string></property></widget>
+                </item>
+                <item row="1" column="1">
+                 <layout class="QHBoxLayout" name="layout_pwm_args">
+                  <item>
+                   <widget class="QSpinBox" name="spin_pwm_freq">
+                    <property name="minimum"><number>1</number></property>
+                    <property name="maximum"><number>1000000</number></property>
+                    <property name="value"><number>1000</number></property>
+                    <property name="toolTip"><string>Freq (Hz)</string></property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spin_pwm_duty">
+                    <property name="maximum"><number>100</number></property>
+                    <property name="value"><number>50</number></property>
+                    <property name="toolTip"><string>Duty %</string></property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item row="2" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_pwm_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_pwm"><property name="text"><string>Start</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stoppwm"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+ 
+                <item row="3" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_repeat"><property name="text"><string>Repeat: pin, hz, dur</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="4" column="0">
+                 <widget class="QSpinBox" name="spin_repeat_pin"><property name="toolTip"><string>Pin</string></property></widget>
+                </item>
+                <item row="4" column="1">
+                 <layout class="QHBoxLayout" name="layout_repeat_args">
+                  <item>
+                   <widget class="QSpinBox" name="spin_repeat_freq">
+                    <property name="maximum"><number>1000000</number></property>
+                    <property name="value"><number>10</number></property>
+                    <property name="toolTip"><string>Freq (Hz)</string></property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spin_repeat_dur">
+                    <property name="maximum"><number>10000000</number></property>
+                    <property name="value"><number>1000</number></property>
+                    <property name="toolTip"><string>Duration (us)</string></property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item row="5" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_repeat_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_repeat"><property name="text"><string>Start</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stoprepeat"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+ 
+              <widget class="QWidget" name="tab_serial_adv">
+               <attribute name="title">
+                <string>Int/Throb</string>
+               </attribute>
+               <layout class="QFormLayout" name="form_serial_adv">
+                <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_int"><property name="text"><string>Interrupt: pin, edge, tgt, w</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QSpinBox" name="spin_int_pin"><property name="toolTip"><string>Source Pin</string></property></widget>
+                </item>
+                <item row="1" column="1">
+                  <widget class="QComboBox" name="combo_int_edge">
+                   <item><property name="text"><string>RISING</string></property></item>
+                   <item><property name="text"><string>FALLING</string></property></item>
+                   <item><property name="text"><string>BOTH</string></property></item>
+                  </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QSpinBox" name="spin_int_target"><property name="toolTip"><string>Target Pin</string></property></widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QSpinBox" name="spin_int_width">
+                  <property name="maximum"><number>1000000</number></property>
+                  <property name="value"><number>1000</number></property>
+                  <property name="toolTip"><string>Pulse Width (us)</string></property>
+                 </widget>
+                </item>
+                <item row="3" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_int_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_interrupt"><property name="text"><string>Set</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stopinterrupt"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+ 
+                <item row="4" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_throb"><property name="text"><string>Throb: period, p1, p2, p3</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="5" column="0">
+                 <widget class="QSpinBox" name="spin_throb_period"><property name="minimum"><number>1</number></property><property name="value"><number>5</number></property><property name="toolTip"><string>Period (s)</string></property></widget>
+                </item>
+                <item row="5" column="1">
+                 <layout class="QHBoxLayout" name="layout_throb_pins">
+                  <item><widget class="QSpinBox" name="spin_throb_p1"><property name="value"><number>0</number></property></widget></item>
+                  <item><widget class="QSpinBox" name="spin_throb_p2"><property name="value"><number>1</number></property></widget></item>
+                  <item><widget class="QSpinBox" name="spin_throb_p3"><property name="value"><number>2</number></property></widget></item>
+                 </layout>
+                </item>
+                <item row="6" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_throb_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_throb"><property name="text"><string>Start</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stopthrob"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+              
+              <widget class="QWidget" name="tab_serial_sys">
+               <attribute name="title">
+                <string>System</string>
+               </attribute>
+               <layout class="QVBoxLayout" name="layout_serial_sys">
+                <item>
+                 <widget class="QPushButton" name="btn_cmd_info"><property name="text"><string>System Info</string></property></widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_cmd_wifi"><property name="text"><string>WiFi Info</string></property></widget>
+                </item>
+                <item>
+                  <layout class="QHBoxLayout" name="layout_mem">
+                   <item><widget class="QLineEdit" name="edit_mem_addr"><property name="placeholderText"><string>Hex Address</string></property></widget></item>
+                   <item><widget class="QPushButton" name="btn_cmd_mem"><property name="text"><string>Read Mem</string></property></widget></item>
+                  </layout>
+                </item>
+                <item><spacer name="spacer_sys"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+               </layout>
+              </widget>
+ 
              </widget>
-
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="lbl_status">
-             <property name="text">
-              <string>Modified Pins:</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QListWidget" name="list_status">
-             <property name="maximumSize">
-              <size>
-               <width>16777215</width>
-               <height>100</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="lbl_interrupts">
-             <property name="text">
-              <string>Interrupts:</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QListWidget" name="list_interrupts">
-             <property name="maximumSize">
-              <size>
-               <width>16777215</width>
-               <height>80</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <spacer name="verticalSpacer_right">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>40</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_status">
+              <property name="text">
+               <string>Modified Pins:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="list_status">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>100</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_interrupts">
+              <property name="text">
+               <string>Interrupts:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="list_interrupts">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>80</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer_right">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
       </widget>
      </widget>
     </item>

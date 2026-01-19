@@ -6,7 +6,7 @@ import signal
 
 # Add the directory containing the generated module to sys.path
 script_dir = os.path.dirname(__file__)
-release_dir = os.path.join(r"z:\src\mindvision_qobject", "release")
+release_dir = os.path.join(r"z:\src\microtools\mindvision_qobject", "release")
 sys.path.insert(0, release_dir)
 
 os.add_dll_directory(release_dir)
@@ -33,6 +33,7 @@ except ImportError as e:
 
 class MatchingWorker(QObject):
     result_ready = Signal(QImage)
+    log_signal = Signal(str)
     
     def __init__(self):
         super().__init__()
@@ -85,7 +86,7 @@ class MatchingWorker(QObject):
                 if self.template_img is not None:
                     self.template_kp, self.template_des = self.detector.detectAndCompute(self.template_img, None)
             except Exception as e:
-                print(f"Worker update error: {e}")
+                self.log_signal.emit(f"Worker update error: {e}")
 
     @Slot(str)
     def set_template(self, file_path):
@@ -101,11 +102,11 @@ class MatchingWorker(QObject):
                 self.template_kp, self.template_des = self.detector.detectAndCompute(img, None)
                 if self.template_des is not None:
                     self.is_matching_enabled = True
-                    print(f"Worker: Template loaded {file_path}")
+                    self.log_signal.emit(f"Worker: Template loaded {file_path}")
                 else:
-                    print("Worker: No features in template")
+                    self.log_signal.emit("Worker: No features in template")
             else:
-                print("Worker: Failed to load template")
+                self.log_signal.emit("Worker: Failed to load template")
 
     @Slot(bool)
     def toggle_matching(self, enabled):
@@ -163,7 +164,7 @@ class MatchingWorker(QObject):
             self.result_ready.emit(qimg)
 
         except Exception as e:
-            print(f"Worker processing error: {e}")
+            self.log_signal.emit(f"Worker processing error: {e}")
 
 
 # Helper for MutexLocker context manager style
@@ -225,6 +226,7 @@ class MainWindow(QObject):
         self.toggle_worker_matching_signal.connect(self.worker.toggle_matching)
         
         self.worker.result_ready.connect(self.update_frame)
+        self.worker.log_signal.connect(self.log)
         
         self.matching_thread.start()
         
@@ -238,6 +240,9 @@ class MainWindow(QObject):
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
         self.ui.statusBar().addPermanentWidget(self.fps_label)
+        
+        # Log Window Setup
+        self.log("Application started.")
 
         # Connections
         self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
@@ -356,6 +361,13 @@ class MainWindow(QObject):
             scaled = self.current_pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
             self.ui.video_label.setPixmap(scaled)
 
+    @Slot(str)
+    def log(self, message):
+        timestamp = time.strftime("%H:%M:%S")
+        if hasattr(self.ui, 'log_text_edit'):
+            self.ui.log_text_edit.appendPlainText(f"[{timestamp}] {message}")
+        print(f"[{timestamp}] {message}")
+
     def update_detector(self):
         tab_index = self.ui.tabs_matching.currentIndex()
         params = {}
@@ -400,7 +412,7 @@ class MainWindow(QObject):
             try:
                 self.video_thread.addFrameBytes(width, height, bytes_per_line, fmt, data)
             except Exception as e:
-                print(f"Recording error in callback: {e}")
+                self.log(f"Recording error in callback: {e}")
 
         # 2. UI Update (Throttled)
         current_time = time.time()
@@ -417,7 +429,7 @@ class MainWindow(QObject):
                 # Else: Drop frame for UI display to prevent backlog/latency
             except Exception as e:
                 self.worker_busy = False # Reset on error
-                print(f"Error in frame callback (UI): {e}")
+                self.log(f"Error in frame callback (UI): {e}")
 
     def fps_callback(self, fps):
         self.update_fps_signal.emit(fps)
@@ -435,6 +447,7 @@ class MainWindow(QObject):
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
                 self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
                 self.ui.record_btn.setText("Stop Recording")
+                self.log("Recording started: output.mkv")
             
             # Display
             self.current_pixmap = QPixmap.fromImage(image)
@@ -447,7 +460,7 @@ class MainWindow(QObject):
 
     @Slot(str)
     def handle_error(self, message):
-        print(f"Camera Error: {message}")
+        self.log(f"Camera Error: {message}")
         self.ui.video_label.setText(f"Error: {message}")
         self.ui.start_btn.setEnabled(True)
         self.ui.stop_btn.setEnabled(False)
@@ -472,6 +485,7 @@ class MainWindow(QObject):
                 
                 self.ui.video_label.setText("Starting stream...")
                 self.sync_ui()
+                self.log("Camera started.")
 
     def on_stop_clicked(self):
         if self.video_thread.isRunning():
@@ -494,21 +508,22 @@ class MainWindow(QObject):
         self.ui.video_label.clear()
         self.ui.video_label.setText("Camera Stopped")
         self.fps_label.setText("FPS: 0.0")
+        self.log("Camera stopped.")
 
     def on_record_clicked(self):
         if not self.video_thread.isRunning():
             self.recording_requested = True
-            print("Recording requested...")
+            self.log("Recording requested...")
         else:
             self.video_thread.stopRecording()
             self.ui.record_btn.setText("Start Recording")
-            print("Recording stopped.")
+            self.log("Recording stopped.")
 
     def on_snapshot_clicked(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
             filename = f"snapshot_{int(time.time())}.png"
             self.current_pixmap.save(filename)
-            print(f"Snapshot saved: {filename}")
+            self.log(f"Snapshot saved: {filename}")
 
     def on_find_template_clicked(self):
         if self.is_matching_ui_active:
@@ -564,7 +579,7 @@ class MainWindow(QObject):
                 self.ui.slider_ae_target.setValue(current_ae)
                 self.ui.slider_ae_target.blockSignals(False)
             except Exception as e:
-                print(f"Error syncing AE target: {e}")
+                self.log(f"Error syncing AE target: {e}")
         
         current_exp = self.camera.getExposureTime()
         self.ui.spin_exposure_time.blockSignals(True)
@@ -670,7 +685,7 @@ class MainWindow(QObject):
                 self.ui.ext_trigger_group.setEnabled(id == 2)
                 
             else:
-                print(f"Failed to set trigger mode {id}")
+                self.log(f"Failed to set trigger mode {id}")
 
     def on_soft_trigger_clicked(self):
         self.camera.triggerSoftware()

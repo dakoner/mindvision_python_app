@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog)
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
 
@@ -31,10 +31,163 @@ except ImportError as e:
     print(f"Failed to import _mindvision_qobject_py: {e}")
     sys.exit(1)
 
+class MatchingWorker(QObject):
+    result_ready = Signal(QImage)
+    
+    def __init__(self):
+        super().__init__()
+        self.detector = None
+        self.bf = None
+        self.template_img = None
+        self.template_kp = None
+        self.template_des = None
+        self.is_matching_enabled = False
+        self.mutex = QMutex()
+
+    @Slot(dict)
+    def update_params(self, params):
+        # Update detector based on params
+        with QMutexLocker(self.mutex):
+            try:
+                algo = params.get('algo', 'ORB')
+                if algo == 'ORB':
+                    self.detector = cv2.ORB_create(
+                        nfeatures=params.get('nfeatures', 500),
+                        scaleFactor=params.get('scaleFactor', 1.2),
+                        nlevels=params.get('nlevels', 8),
+                        edgeThreshold=params.get('edgeThreshold', 31),
+                        firstLevel=params.get('firstLevel', 0),
+                        WTA_K=params.get('WTA_K', 2),
+                        scoreType=params.get('scoreType', 0),
+                        patchSize=params.get('patchSize', 31),
+                        fastThreshold=params.get('fastThreshold', 20)
+                    )
+                    self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                elif algo == 'SIFT':
+                    self.detector = cv2.SIFT_create(
+                        nfeatures=params.get('nfeatures', 0),
+                        nOctaveLayers=params.get('nOctaveLayers', 3),
+                        contrastThreshold=params.get('contrastThreshold', 0.04),
+                        edgeThreshold=params.get('edgeThreshold', 10),
+                        sigma=params.get('sigma', 1.6)
+                    )
+                    self.bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+                elif algo == 'AKAZE':
+                    self.detector = cv2.AKAZE_create(
+                        descriptor_type=params.get('descriptor_type', 5),
+                        threshold=params.get('threshold', 0.0012),
+                        nOctaves=params.get('nOctaves', 4),
+                        nOctaveLayers=params.get('nOctaveLayers', 4)
+                    )
+                    self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                
+                # Recompute template if exists
+                if self.template_img is not None:
+                    self.template_kp, self.template_des = self.detector.detectAndCompute(self.template_img, None)
+            except Exception as e:
+                print(f"Worker update error: {e}")
+
+    @Slot(str)
+    def set_template(self, file_path):
+        with QMutexLocker(self.mutex):
+            if not file_path:
+                self.is_matching_enabled = False
+                self.template_img = None
+                return
+
+            img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+            if img is not None and self.detector is not None:
+                self.template_img = img
+                self.template_kp, self.template_des = self.detector.detectAndCompute(img, None)
+                if self.template_des is not None:
+                    self.is_matching_enabled = True
+                    print(f"Worker: Template loaded {file_path}")
+                else:
+                    print("Worker: No features in template")
+            else:
+                print("Worker: Failed to load template")
+
+    @Slot(bool)
+    def toggle_matching(self, enabled):
+        with QMutexLocker(self.mutex):
+            self.is_matching_enabled = enabled
+
+    @Slot(int, int, int, int, bytes)
+    def process_frame(self, width, height, bytes_per_line, fmt, data_bytes):
+        # This runs in the worker thread
+        # 'data_bytes' is a copy of the frame data passed from the main thread
+        
+        with QMutexLocker(self.mutex):
+            matching_active = self.is_matching_enabled and self.template_des is not None and self.detector is not None
+            # We need local references to avoid race conditions if params change mid-processing
+            local_detector = self.detector
+            local_bf = self.bf
+            local_template_des = self.template_des
+            local_template_kp = self.template_kp
+            local_template_img = self.template_img
+        
+        try:
+            channels = bytes_per_line // width
+            img_np = np.frombuffer(data_bytes, dtype=np.uint8).reshape((height, width, channels))
+            
+            # If we are matching
+            if matching_active:
+                if channels == 3:
+                    gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+                else:
+                    gray_frame = img_np
+                
+                kp_frame, des_frame = local_detector.detectAndCompute(gray_frame, None)
+                
+                if des_frame is not None:
+                    matches = local_bf.match(local_template_des, des_frame)
+                    matches = sorted(matches, key=lambda x: x.distance)
+                    good_matches = matches[:20]
+                    
+                    res_img = cv2.drawMatches(local_template_img, local_template_kp, 
+                                            img_np if channels == 1 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR),
+                                            kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+                    
+                    res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
+                    h, w, c = res_img_rgb.shape
+                    # Must copy to decouple from numpy array
+                    qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
+                    self.result_ready.emit(qimg)
+                    return
+
+            # Pass-through if not matching or failed
+            # Create QImage from the numpy array (which is a view of data_bytes)
+            # data_bytes is local to this call (sent via signal), so it persists.
+            # But QImage needs to survive emission. .copy() is safest.
+            qimg = QImage(img_np.data, width, height, bytes_per_line, QImage.Format(fmt)).copy()
+            self.result_ready.emit(qimg)
+
+        except Exception as e:
+            print(f"Worker processing error: {e}")
+
+
+# Helper for MutexLocker context manager style
+class QMutexLocker:
+    def __init__(self, mutex):
+        self.mutex = mutex
+    def __enter__(self):
+        self.mutex.lock()
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.mutex.unlock()
+
+
 class MainWindow(QObject):
-    update_frame_signal = Signal(QImage)
     update_fps_signal = Signal(float)
     error_signal = Signal(str)
+    
+    # Signal to send frame to worker
+    process_frame_signal = Signal(int, int, int, int, bytes)
+    # Signal to update worker params
+    update_worker_params_signal = Signal(dict)
+    # Signal to set template
+    set_worker_template_signal = Signal(str)
+    # Signal to toggle matching
+    toggle_worker_matching_signal = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -60,15 +213,27 @@ class MainWindow(QObject):
 
         self.current_pixmap = None
         
-        # Template Matching State
-        self.template_kp = None
-        self.template_des = None
-        self.template_img = None
-        self.is_matching_enabled = False
+        # Setup Worker Thread
+        self.matching_thread = QThread()
+        self.worker = MatchingWorker()
+        self.worker.moveToThread(self.matching_thread)
         
-        # Initial ORB creation
-        self.update_orb_detector()
-        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        # Connect Signals
+        self.process_frame_signal.connect(self.worker.process_frame)
+        self.update_worker_params_signal.connect(self.worker.update_params)
+        self.set_worker_template_signal.connect(self.worker.set_template)
+        self.toggle_worker_matching_signal.connect(self.worker.toggle_matching)
+        
+        self.worker.result_ready.connect(self.update_frame)
+        
+        self.matching_thread.start()
+        
+        # Initial Detector config
+        self.update_detector()
+
+        # UI State for Matching
+        self.is_matching_ui_active = False
+        self.worker_busy = False
 
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
@@ -118,16 +283,32 @@ class MainWindow(QObject):
         self.ui.snapshot_btn.clicked.connect(self.on_snapshot_clicked)
         self.ui.btn_find_template.clicked.connect(self.on_find_template_clicked)
         
+        # Matching Tabs Connection
+        self.ui.tabs_matching.currentChanged.connect(self.on_detector_params_changed)
+
         # ORB Parameter Connections
-        self.ui.orb_nfeatures.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_scaleFactor.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_nlevels.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_edgeThreshold.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_firstLevel.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_wta_k.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_scoreType.currentIndexChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_patchSize.valueChanged.connect(self.on_orb_params_changed)
-        self.ui.orb_fastThreshold.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_nfeatures.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_scaleFactor.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_nlevels.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_firstLevel.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_wta_k.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_scoreType.currentIndexChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_patchSize.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_fastThreshold.valueChanged.connect(self.on_detector_params_changed)
+
+        # SIFT Parameter Connections
+        self.ui.sift_nfeatures.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.sift_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.sift_contrastThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.sift_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.sift_sigma.valueChanged.connect(self.on_detector_params_changed)
+
+        # AKAZE Parameter Connections
+        self.ui.akaze_descriptor_type.currentIndexChanged.connect(self.on_detector_params_changed)
+        self.ui.akaze_threshold.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.akaze_nOctaves.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.akaze_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
 
         # Camera Setup
         self.camera = MindVisionCamera()
@@ -138,7 +319,6 @@ class MainWindow(QObject):
         self.camera.registerErrorCallback(self.error_callback)
 
         # Signals
-        self.update_frame_signal.connect(self.update_frame)
         self.update_fps_signal.connect(self.update_fps)
         self.error_signal.connect(self.handle_error)
 
@@ -158,6 +338,8 @@ class MainWindow(QObject):
         try:
             if watched is self.ui and event.type() == QEvent.Close:
                 self.on_stop_clicked()
+                self.matching_thread.quit()
+                self.matching_thread.wait()
                 self.ui.removeEventFilter(self)
                 try:
                     self.ui.video_label.removeEventFilter(self)
@@ -174,42 +356,43 @@ class MainWindow(QObject):
             scaled = self.current_pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
             self.ui.video_label.setPixmap(scaled)
 
-    def update_orb_detector(self):
-        nfeatures = self.ui.orb_nfeatures.value()
-        scaleFactor = self.ui.orb_scaleFactor.value()
-        nlevels = self.ui.orb_nlevels.value()
-        edgeThreshold = self.ui.orb_edgeThreshold.value()
-        firstLevel = self.ui.orb_firstLevel.value()
-        WTA_K = self.ui.orb_wta_k.value()
-        scoreType = self.ui.orb_scoreType.currentIndex() # 0 or 1
-        patchSize = self.ui.orb_patchSize.value()
-        fastThreshold = self.ui.orb_fastThreshold.value()
-
-        try:
-            self.orb = cv2.ORB_create(
-                nfeatures=nfeatures,
-                scaleFactor=scaleFactor,
-                nlevels=nlevels,
-                edgeThreshold=edgeThreshold,
-                firstLevel=firstLevel,
-                WTA_K=WTA_K,
-                scoreType=scoreType,
-                patchSize=patchSize,
-                fastThreshold=fastThreshold
-            )
-            print(f"ORB Updated: {nfeatures}, {scaleFactor}, {nlevels}, ...")
-            
-            # Recompute template descriptors if a template is already loaded
-            if self.template_img is not None:
-                self.template_kp, self.template_des = self.orb.detectAndCompute(self.template_img, None)
-                if self.template_des is None:
-                    print("Warning: No features found in template with new settings.")
+    def update_detector(self):
+        tab_index = self.ui.tabs_matching.currentIndex()
+        params = {}
         
-        except Exception as e:
-            print(f"Failed to create ORB detector: {e}")
+        if tab_index == 0: # ORB
+            params['algo'] = 'ORB'
+            params['nfeatures'] = self.ui.orb_nfeatures.value()
+            params['scaleFactor'] = self.ui.orb_scaleFactor.value()
+            params['nlevels'] = self.ui.orb_nlevels.value()
+            params['edgeThreshold'] = self.ui.orb_edgeThreshold.value()
+            params['firstLevel'] = self.ui.orb_firstLevel.value()
+            params['WTA_K'] = self.ui.orb_wta_k.value()
+            params['scoreType'] = self.ui.orb_scoreType.currentIndex()
+            params['patchSize'] = self.ui.orb_patchSize.value()
+            params['fastThreshold'] = self.ui.orb_fastThreshold.value()
 
-    def on_orb_params_changed(self):
-        self.update_orb_detector()
+        elif tab_index == 1: # SIFT
+            params['algo'] = 'SIFT'
+            params['nfeatures'] = self.ui.sift_nfeatures.value()
+            params['nOctaveLayers'] = self.ui.sift_nOctaveLayers.value()
+            params['contrastThreshold'] = self.ui.sift_contrastThreshold.value()
+            params['edgeThreshold'] = self.ui.sift_edgeThreshold.value()
+            params['sigma'] = self.ui.sift_sigma.value()
+
+        elif tab_index == 2: # AKAZE
+            params['algo'] = 'AKAZE'
+            combo_idx = self.ui.akaze_descriptor_type.currentIndex()
+            mapping = [2, 3, 4, 5]
+            params['descriptor_type'] = mapping[combo_idx]
+            params['threshold'] = self.ui.akaze_threshold.value()
+            params['nOctaves'] = self.ui.akaze_nOctaves.value()
+            params['nOctaveLayers'] = self.ui.akaze_nOctaveLayers.value()
+
+        self.update_worker_params_signal.emit(params)
+
+    def on_detector_params_changed(self):
+        self.update_detector()
 
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
         # 1. Recording (High Priority)
@@ -221,48 +404,19 @@ class MainWindow(QObject):
 
         # 2. UI Update (Throttled)
         current_time = time.time()
-        if current_time - self.last_ui_update_time > 0.033: # ~30 FPS
+        # Cap sending to UI/Worker at ~30 FPS to avoid overwhelming event loop
+        if current_time - self.last_ui_update_time > 0.033: 
             self.last_ui_update_time = current_time
             try:
-                # Prepare Image Data
-                channels = bytes_per_line // width
-                
-                if self.is_matching_enabled and self.template_des is not None:
-                    # Convert to numpy for OpenCV
-                    img_np = np.frombuffer(data, dtype=np.uint8).reshape((height, width, channels))
-                    
-                    # If RGB, convert to BGR for OpenCV or just work in Gray
-                    if channels == 3:
-                        gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                    else:
-                        gray_frame = img_np
-                        
-                    # Find Keypoints
-                    kp_frame, des_frame = self.orb.detectAndCompute(gray_frame, None)
-                    
-                    if des_frame is not None:
-                        # Match
-                        matches = self.bf.match(self.template_des, des_frame)
-                        matches = sorted(matches, key=lambda x: x.distance)
-                        
-                        good_matches = matches[:20]
-                        
-                        # Draw Matches
-                        res_img = cv2.drawMatches(self.template_img, self.template_kp, 
-                                                img_np if channels == 1 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR),
-                                                kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-                        
-                        # Convert back to RGB for QImage
-                        res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
-                        h, w, c = res_img_rgb.shape
-                        img = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888)
-                        self.update_frame_signal.emit(img.copy())
-                        return
-
-                # Default Path (No Match or Disabled)
-                img = QImage(data, width, height, bytes_per_line, QImage.Format(fmt))
-                self.update_frame_signal.emit(img.copy())
+                # Flow Control: Only send to worker if it's not busy
+                if not self.worker_busy:
+                    self.worker_busy = True
+                    # Copy data for worker thread
+                    data_copy = bytes(data)
+                    self.process_frame_signal.emit(width, height, bytes_per_line, fmt, data_copy)
+                # Else: Drop frame for UI display to prevent backlog/latency
             except Exception as e:
+                self.worker_busy = False # Reset on error
                 print(f"Error in frame callback (UI): {e}")
 
     def fps_callback(self, fps):
@@ -273,6 +427,7 @@ class MainWindow(QObject):
 
     @Slot(QImage)
     def update_frame(self, image):
+        self.worker_busy = False
         if not image.isNull():
             # Recording Start Trigger
             if self.recording_requested:
@@ -356,28 +511,17 @@ class MainWindow(QObject):
             print(f"Snapshot saved: {filename}")
 
     def on_find_template_clicked(self):
-        # Toggle or Select?
-        # If enabled, disable. If disabled, select file.
-        if self.is_matching_enabled:
-            self.is_matching_enabled = False
+        if self.is_matching_ui_active:
+            self.is_matching_ui_active = False
+            self.toggle_worker_matching_signal.emit(False)
             self.ui.btn_find_template.setText("Find template in image")
-            print("Template matching disabled.")
         else:
             file_path, _ = QFileDialog.getOpenFileName(self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)")
             if file_path:
-                img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-                if img is not None:
-                    self.template_img = img
-                    # Compute using current ORB params
-                    self.template_kp, self.template_des = self.orb.detectAndCompute(img, None)
-                    if self.template_des is not None:
-                        self.is_matching_enabled = True
-                        self.ui.btn_find_template.setText("Stop Matching")
-                        print(f"Template loaded: {file_path}")
-                    else:
-                        print("No features found in template.")
-                else:
-                    print("Failed to load image.")
+                self.set_worker_template_signal.emit(file_path)
+                self.is_matching_ui_active = True
+                self.toggle_worker_matching_signal.emit(True)
+                self.ui.btn_find_template.setText("Stop Matching")
 
     def sync_ui(self):
         # Ranges

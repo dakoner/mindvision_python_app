@@ -123,7 +123,7 @@ class MainWindow(QObject):
         self.last_ui_update_time = 0
 
     def show(self):
-        self.ui.show()
+        self.ui.showMaximized()
 
     def close(self):
         # Triggers closeEvent via the widget

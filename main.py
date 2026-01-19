@@ -27,7 +27,7 @@ except ImportError:
     HAS_SERIAL = False
     print("Warning: pyserial not installed. Serial features disabled.")
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
@@ -378,7 +378,7 @@ class MainWindow(QObject):
         self.ui.btn_serial_refresh.clicked.connect(self.refresh_serial_ports)
         self.ui.btn_serial_connect.clicked.connect(self.on_btn_serial_connect_clicked)
         self.ui.btn_cmd_pulse.clicked.connect(self.on_cmd_pulse)
-        self.ui.btn_cmd_level.clicked.connect(self.on_cmd_level)
+        # self.ui.btn_cmd_level connection removed
         self.ui.btn_cmd_pwm.clicked.connect(self.on_cmd_pwm)
         self.ui.btn_cmd_stoppwm.clicked.connect(self.on_cmd_stoppwm)
         self.ui.btn_cmd_repeat.clicked.connect(self.on_cmd_repeat)
@@ -390,6 +390,30 @@ class MainWindow(QObject):
         self.ui.btn_cmd_info.clicked.connect(lambda: self.send_serial_cmd_signal.emit("info"))
         self.ui.btn_cmd_wifi.clicked.connect(lambda: self.send_serial_cmd_signal.emit("wifi"))
         self.ui.btn_cmd_mem.clicked.connect(self.on_cmd_mem)
+
+        # --- Setup Pin Level Buttons ---
+        self.pin_buttons = {}
+        # List of valid pins as requested
+        valid_pins = [4, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
+        # Access the layout from the widget defined in UI
+        # Note: In PySide6 loaded from .ui, the layout might need to be accessed via the widget
+        pin_layout = self.ui.widget_level_pins.layout()
+        
+        for i, pin in enumerate(valid_pins):
+            btn = QPushButton(f"Pin {pin}")
+            btn.setCheckable(False) # We use color to indicate state, not checked state, or we can use both
+            btn.setMinimumHeight(40)
+            # Use style sheet for default state
+            btn.setStyleSheet("background-color: none;") 
+            # Capture 'pin' in lambda
+            btn.clicked.connect(lambda checked=False, p=pin: self.toggle_pin_level(p))
+            
+            # Grid layout: 4 columns
+            row = i // 4
+            col = i % 4
+            pin_layout.addWidget(btn, row, col)
+            self.pin_buttons[pin] = btn
+
         
         # Disable serial tabs initially
         self.ui.tabs_serial_cmds.setEnabled(False)
@@ -548,10 +572,27 @@ class MainWindow(QObject):
             if cmd == "level" and len(parts) >= 3:
                 pin = int(parts[1])
                 val = int(parts[2])
-                self.update_pin_status(pin, f"Level: {val}")
-                # Update UI setters
-                self.ui.spin_level_pin.setValue(pin)
-                self.ui.combo_level_val.setCurrentIndex(val + 1)
+                # self.update_pin_status(pin, f"Level: {val}") # Removed per user request
+                
+                # If the pin was in the status list (e.g. PWM/Repeat), remove it as it's now just a simple level
+                if pin in self.status_items_map:
+                    item = self.status_items_map.pop(pin)
+                    row = self.ui.list_status.row(item)
+                    self.ui.list_status.takeItem(row)
+                
+                # Update Pin Button State
+                if hasattr(self, 'pin_buttons') and pin in self.pin_buttons:
+                    btn = self.pin_buttons[pin]
+                    if val == 1:
+                        btn.setStyleSheet("background-color: red; color: white;")
+                    else:
+                        btn.setStyleSheet("background-color: none;")
+                
+                # Update old UI setters if they exist (legacy/fallback)
+                if hasattr(self.ui, 'spin_level_pin'):
+                    self.ui.spin_level_pin.setValue(pin)
+                if hasattr(self.ui, 'combo_level_val'):
+                    self.ui.combo_level_val.setCurrentIndex(val + 1)
                 
             elif cmd == "pwm" and len(parts) >= 4:
                 pin = int(parts[1])
@@ -1035,14 +1076,16 @@ class MainWindow(QObject):
         dur = self.ui.spin_pulse_dur.value()
         self.send_serial_cmd_signal.emit(f"pulse {pin} {val} {dur}")
 
-    def on_cmd_level(self):
-        pin = self.ui.spin_level_pin.value()
-        idx = self.ui.combo_level_val.currentIndex()
-        if idx == 0: # Read
-            self.send_serial_cmd_signal.emit(f"level {pin}")
-        else: # Set 0 or 1. Index 1=Low(0), 2=High(1)
-            val = idx - 1
-            self.send_serial_cmd_signal.emit(f"level {pin} {val}")
+    def toggle_pin_level(self, pin):
+        btn = self.pin_buttons.get(pin)
+        if not btn: return
+        
+        # Check current visual state (High=Red)
+        is_high = "red" in btn.styleSheet()
+        # Toggle: If high, set to 0. If low, set to 1.
+        new_val = 0 if is_high else 1
+        
+        self.send_serial_cmd_signal.emit(f"level {pin} {new_val}")
 
     def on_cmd_pwm(self):
         pin = self.ui.spin_pwm_pin.value()
@@ -1053,6 +1096,16 @@ class MainWindow(QObject):
     def on_cmd_stoppwm(self):
         pin = self.ui.spin_pwm_pin.value()
         self.send_serial_cmd_signal.emit(f"stoppwm {pin}")
+        
+        # Remove from Modified Pins list
+        if pin in self.status_items_map:
+            item = self.status_items_map.pop(pin)
+            row = self.ui.list_status.row(item)
+            self.ui.list_status.takeItem(row)
+            
+        # Reset button state
+        if hasattr(self, 'pin_buttons') and pin in self.pin_buttons:
+             self.pin_buttons[pin].setStyleSheet("background-color: none;")
 
     def on_cmd_repeat(self):
         pin = self.ui.spin_repeat_pin.value()
@@ -1063,6 +1116,16 @@ class MainWindow(QObject):
     def on_cmd_stoprepeat(self):
         pin = self.ui.spin_repeat_pin.value()
         self.send_serial_cmd_signal.emit(f"stoprepeat {pin}")
+        
+        # Remove from Modified Pins list
+        if pin in self.status_items_map:
+            item = self.status_items_map.pop(pin)
+            row = self.ui.list_status.row(item)
+            self.ui.list_status.takeItem(row)
+            
+        # Reset button state
+        if hasattr(self, 'pin_buttons') and pin in self.pin_buttons:
+             self.pin_buttons[pin].setStyleSheet("background-color: none;")
 
     def on_cmd_interrupt(self):
         pin = self.ui.spin_int_pin.value()
@@ -1074,6 +1137,12 @@ class MainWindow(QObject):
     def on_cmd_stopinterrupt(self):
         pin = self.ui.spin_int_pin.value()
         self.send_serial_cmd_signal.emit(f"stopinterrupt {pin}")
+        
+        # Remove from Interrupts list
+        if pin in self.interrupt_items_map:
+            item = self.interrupt_items_map.pop(pin)
+            row = self.ui.list_interrupts.row(item)
+            self.ui.list_interrupts.takeItem(row)
 
     def on_cmd_throb(self):
         period = self.ui.spin_throb_period.value()

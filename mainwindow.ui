@@ -1008,25 +1008,13 @@
                 
                 <item row="3" column="0" colspan="2">
                   <widget class="QLabel" name="lbl_level">
-                   <property name="text"><string>Level: pin, [val]</string></property>
+                   <property name="text"><string>Pin Levels (Click to Toggle)</string></property>
                    <property name="font"><font><bold>true</bold></font></property>
                   </widget>
                 </item>
-                <item row="4" column="0">
-                 <widget class="QSpinBox" name="spin_level_pin">
-                  <property name="toolTip"><string>Pin</string></property>
-                 </widget>
-                </item>
-                <item row="4" column="1">
-                  <widget class="QComboBox" name="combo_level_val">
-                   <item><property name="text"><string>Read</string></property></item>
-                   <item><property name="text"><string>Low (0)</string></property></item>
-                   <item><property name="text"><string>High (1)</string></property></item>
-                  </widget>
-                </item>
-                <item row="5" column="0" colspan="2">
-                 <widget class="QPushButton" name="btn_cmd_level">
-                  <property name="text"><string>Set/Get Level</string></property>
+                <item row="4" column="0" colspan="2">
+                 <widget class="QWidget" name="widget_level_pins">
+                  <layout class="QGridLayout" name="layout_level_pins"/>
                  </widget>
                 </item>
                </layout>

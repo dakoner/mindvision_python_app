@@ -19,6 +19,13 @@ import _mindvision_qobject_py
 import PySide6.QtWidgets
 import cv2
 import numpy as np
+try:
+    import serial
+    import serial.tools.list_ports
+    HAS_SERIAL = True
+except ImportError:
+    HAS_SERIAL = False
+    print("Warning: pyserial not installed. Serial features disabled.")
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
@@ -30,6 +37,84 @@ try:
 except ImportError as e:
     print(f"Failed to import _mindvision_qobject_py: {e}")
     sys.exit(1)
+
+class SerialWorker(QObject):
+    log_signal = Signal(str)
+    connection_status = Signal(bool)
+    
+    def __init__(self):
+        super().__init__()
+        self.serial_port = None
+        self.is_connected = False
+        self.mutex = QMutex()
+
+    @Slot(str, int)
+    def connect_serial(self, port_name, baud_rate=115200):
+        if not HAS_SERIAL:
+            self.log_signal.emit("Error: pyserial not installed.")
+            return
+
+        with QMutexLocker(self.mutex):
+            if self.is_connected:
+                self.disconnect_serial()
+
+            try:
+                self.serial_port = serial.Serial(port_name, baud_rate, timeout=0.1)
+                self.is_connected = True
+                self.connection_status.emit(True)
+                self.log_signal.emit(f"Connected to {port_name} at {baud_rate}")
+            except Exception as e:
+                self.log_signal.emit(f"Failed to connect to {port_name}: {e}")
+                self.connection_status.emit(False)
+
+    @Slot()
+    def disconnect_serial(self):
+        with QMutexLocker(self.mutex):
+            if self.serial_port and self.serial_port.is_open:
+                try:
+                    self.serial_port.close()
+                except Exception as e:
+                    self.log_signal.emit(f"Error closing port: {e}")
+            self.serial_port = None
+            self.is_connected = False
+            self.connection_status.emit(False)
+            self.log_signal.emit("Disconnected.")
+
+    @Slot(str)
+    def send_command(self, cmd):
+        with QMutexLocker(self.mutex):
+            if not self.is_connected or not self.serial_port:
+                self.log_signal.emit("Error: Not connected to serial port.")
+                return
+            
+            try:
+                full_cmd = cmd.strip() + "\n"
+                self.serial_port.write(full_cmd.encode('utf-8'))
+                self.log_signal.emit(f"Tx: {cmd}")
+            except Exception as e:
+                self.log_signal.emit(f"Send error: {e}")
+                self.disconnect_serial()
+
+    @Slot()
+    def read_loop(self):
+        # This is intended to be called periodically or run in a loop if we had a dedicated thread loop
+        # For simplicity with QThread/moveToThread, we can use a QTimer in the worker or just rely on manual reads
+        # But a robust way is a loop. However, since we are using standard QThread, let's just expose a read method
+        # and let the main thread trigger it or use a timer in this worker.
+        # BETTER: Use a timer inside this worker to poll.
+        pass
+
+    @Slot()
+    def poll_serial(self):
+        # Called by a timer in the worker thread
+        with QMutexLocker(self.mutex):
+            if self.is_connected and self.serial_port and self.serial_port.in_waiting:
+                try:
+                    line = self.serial_port.readline().decode('utf-8', errors='replace').strip()
+                    if line:
+                        self.log_signal.emit(f"Rx: {line}")
+                except Exception as e:
+                    self.log_signal.emit(f"Read error: {e}")
 
 class MatchingWorker(QObject):
     result_ready = Signal(QImage)
@@ -181,6 +266,12 @@ class MainWindow(QObject):
     update_fps_signal = Signal(float)
     error_signal = Signal(str)
     
+    # Serial Signals
+    connect_serial_signal = Signal(str, int)
+    disconnect_serial_signal = Signal()
+    send_serial_cmd_signal = Signal(str)
+    poll_serial_signal = Signal()
+
     # Signal to send frame to worker
     process_frame_signal = Signal(int, int, int, int, bytes)
     # Signal to update worker params
@@ -230,6 +321,27 @@ class MainWindow(QObject):
         
         self.matching_thread.start()
         
+        # --- Serial Worker Setup ---
+        self.serial_thread = QThread()
+        self.serial_worker = SerialWorker()
+        self.serial_worker.moveToThread(self.serial_thread)
+        
+        # Connect signals
+        self.connect_serial_signal.connect(self.serial_worker.connect_serial)
+        self.disconnect_serial_signal.connect(self.serial_worker.disconnect_serial)
+        self.send_serial_cmd_signal.connect(self.serial_worker.send_command)
+        self.poll_serial_signal.connect(self.serial_worker.poll_serial)
+        
+        self.serial_worker.log_signal.connect(self.log)
+        self.serial_worker.connection_status.connect(self.on_serial_status_changed)
+        
+        self.serial_thread.start()
+        
+        # Timer for polling serial read
+        self.serial_poll_timer = QTimer()
+        self.serial_poll_timer.timeout.connect(lambda: self.poll_serial_signal.emit())
+        self.serial_poll_timer.start(50) # Poll every 50ms
+
         # Initial Detector config
         self.update_detector()
 
@@ -243,6 +355,27 @@ class MainWindow(QObject):
         
         # Log Window Setup
         self.log("Application started.")
+        
+        # Serial UI Init
+        self.refresh_serial_ports()
+        self.ui.btn_serial_refresh.clicked.connect(self.refresh_serial_ports)
+        self.ui.btn_serial_connect.clicked.connect(self.on_btn_serial_connect_clicked)
+        self.ui.btn_cmd_pulse.clicked.connect(self.on_cmd_pulse)
+        self.ui.btn_cmd_level.clicked.connect(self.on_cmd_level)
+        self.ui.btn_cmd_pwm.clicked.connect(self.on_cmd_pwm)
+        self.ui.btn_cmd_stoppwm.clicked.connect(self.on_cmd_stoppwm)
+        self.ui.btn_cmd_repeat.clicked.connect(self.on_cmd_repeat)
+        self.ui.btn_cmd_stoprepeat.clicked.connect(self.on_cmd_stoprepeat)
+        self.ui.btn_cmd_interrupt.clicked.connect(self.on_cmd_interrupt)
+        self.ui.btn_cmd_stopinterrupt.clicked.connect(self.on_cmd_stopinterrupt)
+        self.ui.btn_cmd_throb.clicked.connect(self.on_cmd_throb)
+        self.ui.btn_cmd_stopthrob.clicked.connect(self.on_cmd_stopthrob)
+        self.ui.btn_cmd_info.clicked.connect(lambda: self.send_serial_cmd_signal.emit("info"))
+        self.ui.btn_cmd_wifi.clicked.connect(lambda: self.send_serial_cmd_signal.emit("wifi"))
+        self.ui.btn_cmd_mem.clicked.connect(self.on_cmd_mem)
+        
+        # Disable serial tabs initially
+        self.ui.tabs_serial_cmds.setEnabled(False)
 
         # Connections
         self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
@@ -738,6 +871,97 @@ class MainWindow(QObject):
     def on_strobe_width_changed(self, value):
         if hasattr(self.camera, 'setStrobePulseWidth'):
             self.camera.setStrobePulseWidth(value)
+
+    # --- Serial Control Methods ---
+    def refresh_serial_ports(self):
+        self.ui.combo_serial_port.clear()
+        if HAS_SERIAL:
+            ports = serial.tools.list_ports.comports()
+            for port in ports:
+                self.ui.combo_serial_port.addItem(f"{port.device}")
+        else:
+            self.ui.combo_serial_port.addItem("No pyserial")
+            self.ui.btn_serial_connect.setEnabled(False)
+
+    def on_btn_serial_connect_clicked(self, checked):
+        if checked:
+            port = self.ui.combo_serial_port.currentText().split()[0] # Handle "COM3 - Desc" if needed
+            if port:
+                self.connect_serial_signal.emit(port, 115200)
+                self.ui.btn_serial_connect.setText("Connecting...")
+            else:
+                self.ui.btn_serial_connect.setChecked(False)
+        else:
+            self.disconnect_serial_signal.emit()
+
+    @Slot(bool)
+    def on_serial_status_changed(self, connected):
+        self.ui.btn_serial_connect.setChecked(connected)
+        self.ui.btn_serial_connect.setText("Disconnect" if connected else "Connect")
+        self.ui.tabs_serial_cmds.setEnabled(connected)
+        self.ui.combo_serial_port.setEnabled(not connected)
+        self.ui.btn_serial_refresh.setEnabled(not connected)
+
+    def on_cmd_pulse(self):
+        pin = self.ui.spin_pulse_pin.value()
+        val = self.ui.spin_pulse_val.value()
+        dur = self.ui.spin_pulse_dur.value()
+        self.send_serial_cmd_signal.emit(f"pulse {pin} {val} {dur}")
+
+    def on_cmd_level(self):
+        pin = self.ui.spin_level_pin.value()
+        idx = self.ui.combo_level_val.currentIndex()
+        if idx == 0: # Read
+            self.send_serial_cmd_signal.emit(f"level {pin}")
+        else: # Set 0 or 1. Index 1=Low(0), 2=High(1)
+            val = idx - 1
+            self.send_serial_cmd_signal.emit(f"level {pin} {val}")
+
+    def on_cmd_pwm(self):
+        pin = self.ui.spin_pwm_pin.value()
+        freq = self.ui.spin_pwm_freq.value()
+        duty = self.ui.spin_pwm_duty.value()
+        self.send_serial_cmd_signal.emit(f"pwm {pin} {freq} {duty}")
+
+    def on_cmd_stoppwm(self):
+        pin = self.ui.spin_pwm_pin.value()
+        self.send_serial_cmd_signal.emit(f"stoppwm {pin}")
+
+    def on_cmd_repeat(self):
+        pin = self.ui.spin_repeat_pin.value()
+        freq = self.ui.spin_repeat_freq.value()
+        dur = self.ui.spin_repeat_dur.value()
+        self.send_serial_cmd_signal.emit(f"repeat {pin} {freq} {dur}")
+
+    def on_cmd_stoprepeat(self):
+        pin = self.ui.spin_repeat_pin.value()
+        self.send_serial_cmd_signal.emit(f"stoprepeat {pin}")
+
+    def on_cmd_interrupt(self):
+        pin = self.ui.spin_int_pin.value()
+        edge = self.ui.combo_int_edge.currentText()
+        tgt = self.ui.spin_int_target.value()
+        width = self.ui.spin_int_width.value()
+        self.send_serial_cmd_signal.emit(f"interrupt {pin} {edge} {tgt} {width}")
+
+    def on_cmd_stopinterrupt(self):
+        pin = self.ui.spin_int_pin.value()
+        self.send_serial_cmd_signal.emit(f"stopinterrupt {pin}")
+
+    def on_cmd_throb(self):
+        period = self.ui.spin_throb_period.value()
+        p1 = self.ui.spin_throb_p1.value()
+        p2 = self.ui.spin_throb_p2.value()
+        p3 = self.ui.spin_throb_p3.value()
+        self.send_serial_cmd_signal.emit(f"throb {period} {p1} {p2} {p3}")
+
+    def on_cmd_stopthrob(self):
+        self.send_serial_cmd_signal.emit("stopthrob")
+
+    def on_cmd_mem(self):
+        addr = self.ui.edit_mem_addr.text().strip()
+        if addr:
+            self.send_serial_cmd_signal.emit(f"mem {addr}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

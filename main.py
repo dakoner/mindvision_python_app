@@ -17,8 +17,10 @@ os.add_dll_directory(r"C:\Program Files (x86)\MindVision\SDK\X64")
 
 import _mindvision_qobject_py
 import PySide6.QtWidgets
+import cv2
+import numpy as np
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
@@ -57,6 +59,16 @@ class MainWindow(QObject):
         self.ui.video_label.installEventFilter(self)
 
         self.current_pixmap = None
+        
+        # Template Matching State
+        self.template_kp = None
+        self.template_des = None
+        self.template_img = None
+        self.is_matching_enabled = False
+        
+        # Initial ORB creation
+        self.update_orb_detector()
+        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
@@ -103,6 +115,19 @@ class MainWindow(QObject):
         self.ui.start_btn.clicked.connect(self.on_start_clicked)
         self.ui.stop_btn.clicked.connect(self.on_stop_clicked)
         self.ui.record_btn.clicked.connect(self.on_record_clicked)
+        self.ui.snapshot_btn.clicked.connect(self.on_snapshot_clicked)
+        self.ui.btn_find_template.clicked.connect(self.on_find_template_clicked)
+        
+        # ORB Parameter Connections
+        self.ui.orb_nfeatures.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_scaleFactor.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_nlevels.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_edgeThreshold.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_firstLevel.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_wta_k.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_scoreType.currentIndexChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_patchSize.valueChanged.connect(self.on_orb_params_changed)
+        self.ui.orb_fastThreshold.valueChanged.connect(self.on_orb_params_changed)
 
         # Camera Setup
         self.camera = MindVisionCamera()
@@ -149,6 +174,43 @@ class MainWindow(QObject):
             scaled = self.current_pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
             self.ui.video_label.setPixmap(scaled)
 
+    def update_orb_detector(self):
+        nfeatures = self.ui.orb_nfeatures.value()
+        scaleFactor = self.ui.orb_scaleFactor.value()
+        nlevels = self.ui.orb_nlevels.value()
+        edgeThreshold = self.ui.orb_edgeThreshold.value()
+        firstLevel = self.ui.orb_firstLevel.value()
+        WTA_K = self.ui.orb_wta_k.value()
+        scoreType = self.ui.orb_scoreType.currentIndex() # 0 or 1
+        patchSize = self.ui.orb_patchSize.value()
+        fastThreshold = self.ui.orb_fastThreshold.value()
+
+        try:
+            self.orb = cv2.ORB_create(
+                nfeatures=nfeatures,
+                scaleFactor=scaleFactor,
+                nlevels=nlevels,
+                edgeThreshold=edgeThreshold,
+                firstLevel=firstLevel,
+                WTA_K=WTA_K,
+                scoreType=scoreType,
+                patchSize=patchSize,
+                fastThreshold=fastThreshold
+            )
+            print(f"ORB Updated: {nfeatures}, {scaleFactor}, {nlevels}, ...")
+            
+            # Recompute template descriptors if a template is already loaded
+            if self.template_img is not None:
+                self.template_kp, self.template_des = self.orb.detectAndCompute(self.template_img, None)
+                if self.template_des is None:
+                    print("Warning: No features found in template with new settings.")
+        
+        except Exception as e:
+            print(f"Failed to create ORB detector: {e}")
+
+    def on_orb_params_changed(self):
+        self.update_orb_detector()
+
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
         # 1. Recording (High Priority)
         if self.video_thread.isRunning():
@@ -162,7 +224,42 @@ class MainWindow(QObject):
         if current_time - self.last_ui_update_time > 0.033: # ~30 FPS
             self.last_ui_update_time = current_time
             try:
-                # Create QImage from data (deep copy for GUI thread)
+                # Prepare Image Data
+                channels = bytes_per_line // width
+                
+                if self.is_matching_enabled and self.template_des is not None:
+                    # Convert to numpy for OpenCV
+                    img_np = np.frombuffer(data, dtype=np.uint8).reshape((height, width, channels))
+                    
+                    # If RGB, convert to BGR for OpenCV or just work in Gray
+                    if channels == 3:
+                        gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+                    else:
+                        gray_frame = img_np
+                        
+                    # Find Keypoints
+                    kp_frame, des_frame = self.orb.detectAndCompute(gray_frame, None)
+                    
+                    if des_frame is not None:
+                        # Match
+                        matches = self.bf.match(self.template_des, des_frame)
+                        matches = sorted(matches, key=lambda x: x.distance)
+                        
+                        good_matches = matches[:20]
+                        
+                        # Draw Matches
+                        res_img = cv2.drawMatches(self.template_img, self.template_kp, 
+                                                img_np if channels == 1 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR),
+                                                kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+                        
+                        # Convert back to RGB for QImage
+                        res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
+                        h, w, c = res_img_rgb.shape
+                        img = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888)
+                        self.update_frame_signal.emit(img.copy())
+                        return
+
+                # Default Path (No Match or Disabled)
                 img = QImage(data, width, height, bytes_per_line, QImage.Format(fmt))
                 self.update_frame_signal.emit(img.copy())
             except Exception as e:
@@ -181,7 +278,7 @@ class MainWindow(QObject):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                self.video_thread.startRecording(image.width(), image.height(), record_fps, "c:\\Users\\davidek\\Desktop\\output.mkv")
+                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
                 self.ui.record_btn.setText("Stop Recording")
             
             # Display
@@ -204,6 +301,7 @@ class MainWindow(QObject):
         self.ui.trigger_params_group.setEnabled(False)
         self.ui.ext_trigger_group.setEnabled(False)
         self.ui.strobe_group.setEnabled(False)
+        self.ui.btn_find_template.setEnabled(False)
 
     def on_start_clicked(self):
         if self.camera.open():
@@ -211,6 +309,8 @@ class MainWindow(QObject):
                 self.ui.start_btn.setEnabled(False)
                 self.ui.stop_btn.setEnabled(True)
                 self.ui.record_btn.setEnabled(True)
+                self.ui.snapshot_btn.setEnabled(True)
+                self.ui.btn_find_template.setEnabled(True)
                 self.ui.controls_group.setEnabled(True)
                 self.ui.trigger_group.setEnabled(True)
                 self.ui.strobe_group.setEnabled(True)
@@ -227,6 +327,8 @@ class MainWindow(QObject):
         self.ui.start_btn.setEnabled(True)
         self.ui.stop_btn.setEnabled(False)
         self.ui.record_btn.setEnabled(False)
+        self.ui.snapshot_btn.setEnabled(False)
+        self.ui.btn_find_template.setEnabled(False)
         
         self.ui.controls_group.setEnabled(False)
         self.ui.trigger_group.setEnabled(False)
@@ -246,6 +348,36 @@ class MainWindow(QObject):
             self.video_thread.stopRecording()
             self.ui.record_btn.setText("Start Recording")
             print("Recording stopped.")
+
+    def on_snapshot_clicked(self):
+        if self.current_pixmap and not self.current_pixmap.isNull():
+            filename = f"snapshot_{int(time.time())}.png"
+            self.current_pixmap.save(filename)
+            print(f"Snapshot saved: {filename}")
+
+    def on_find_template_clicked(self):
+        # Toggle or Select?
+        # If enabled, disable. If disabled, select file.
+        if self.is_matching_enabled:
+            self.is_matching_enabled = False
+            self.ui.btn_find_template.setText("Find template in image")
+            print("Template matching disabled.")
+        else:
+            file_path, _ = QFileDialog.getOpenFileName(self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)")
+            if file_path:
+                img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+                if img is not None:
+                    self.template_img = img
+                    # Compute using current ORB params
+                    self.template_kp, self.template_des = self.orb.detectAndCompute(img, None)
+                    if self.template_des is not None:
+                        self.is_matching_enabled = True
+                        self.ui.btn_find_template.setText("Stop Matching")
+                        print(f"Template loaded: {file_path}")
+                    else:
+                        print("No features found in template.")
+                else:
+                    print("Failed to load image.")
 
     def sync_ui(self):
         # Ranges

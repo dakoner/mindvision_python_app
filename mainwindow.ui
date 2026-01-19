@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1100</width>
+    <width>1400</width>
     <height>800</height>
    </rect>
   </property>
@@ -443,6 +443,26 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="snapshot_btn">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Take Snapshot</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btn_find_template">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Find template in image</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </item>
         <item>
@@ -479,6 +499,240 @@
       <property name="alignment">
        <set>Qt::AlignCenter</set>
       </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QScrollArea" name="scrollArea_right">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>280</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>280</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="widgetResizable">
+       <bool>true</bool>
+      </property>
+      <widget class="QWidget" name="scrollAreaWidgetContents_right">
+       <property name="geometry">
+        <rect>
+         <x>0</x>
+         <y>0</y>
+         <width>278</width>
+         <height>800</height>
+        </rect>
+       </property>
+       <layout class="QVBoxLayout" name="scroll_layout_right">
+        <item>
+         <widget class="QGroupBox" name="orb_group">
+          <property name="title">
+           <string>ORB Parameters</string>
+          </property>
+          <layout class="QFormLayout" name="orb_form_layout">
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_nfeatures">
+             <property name="text">
+              <string>nFeatures:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QSpinBox" name="orb_nfeatures">
+             <property name="minimum">
+              <number>1</number>
+             </property>
+             <property name="maximum">
+              <number>10000</number>
+             </property>
+             <property name="value">
+              <number>500</number>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_scaleFactor">
+             <property name="text">
+              <string>scaleFactor:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QDoubleSpinBox" name="orb_scaleFactor">
+             <property name="minimum">
+              <double>1.001000000000000</double>
+             </property>
+             <property name="maximum">
+              <double>3.000000000000000</double>
+             </property>
+             <property name="singleStep">
+              <double>0.100000000000000</double>
+             </property>
+             <property name="value">
+              <double>1.200000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_nlevels">
+             <property name="text">
+              <string>nLevels:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QSpinBox" name="orb_nlevels">
+             <property name="minimum">
+              <number>1</number>
+             </property>
+             <property name="maximum">
+              <number>20</number>
+             </property>
+             <property name="value">
+              <number>8</number>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0">
+            <widget class="QLabel" name="label_edgeThreshold">
+             <property name="text">
+              <string>edgeThreshold:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QSpinBox" name="orb_edgeThreshold">
+             <property name="maximum">
+              <number>100</number>
+             </property>
+             <property name="value">
+              <number>31</number>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0">
+            <widget class="QLabel" name="label_firstLevel">
+             <property name="text">
+              <string>firstLevel:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <widget class="QSpinBox" name="orb_firstLevel">
+             <property name="maximum">
+              <number>10</number>
+             </property>
+             <property name="value">
+              <number>0</number>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="0">
+            <widget class="QLabel" name="label_wta_k">
+             <property name="text">
+              <string>WTA_K:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="1">
+            <widget class="QSpinBox" name="orb_wta_k">
+             <property name="minimum">
+              <number>2</number>
+             </property>
+             <property name="maximum">
+              <number>4</number>
+             </property>
+             <property name="value">
+              <number>2</number>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="0">
+            <widget class="QLabel" name="label_scoreType">
+             <property name="text">
+              <string>scoreType:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="1">
+            <widget class="QComboBox" name="orb_scoreType">
+             <item>
+              <property name="text">
+               <string>HARRIS_SCORE</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>FAST_SCORE</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item row="7" column="0">
+            <widget class="QLabel" name="label_patchSize">
+             <property name="text">
+              <string>patchSize:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="1">
+            <widget class="QSpinBox" name="orb_patchSize">
+             <property name="minimum">
+              <number>2</number>
+             </property>
+             <property name="maximum">
+              <number>100</number>
+             </property>
+             <property name="value">
+              <number>31</number>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="0">
+            <widget class="QLabel" name="label_fastThreshold">
+             <property name="text">
+              <string>fastThreshold:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="1">
+            <widget class="QSpinBox" name="orb_fastThreshold">
+             <property name="maximum">
+              <number>255</number>
+             </property>
+             <property name="value">
+              <number>20</number>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <spacer name="verticalSpacer_right">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
    </layout>

@@ -181,7 +181,7 @@ class MainWindow(QObject):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
+                self.video_thread.startRecording(image.width(), image.height(), record_fps, "c:\\Users\\davidek\\Desktop\\output.mkv")
                 self.ui.record_btn.setText("Stop Recording")
             
             # Display

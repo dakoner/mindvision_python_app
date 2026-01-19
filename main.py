@@ -65,11 +65,15 @@ class MainWindow(QObject):
         # Connections
         self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
         self.ui.chk_roi.toggled.connect(self.on_roi_toggled)
+        
         self.ui.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
         self.ui.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
+        
         self.ui.spin_gain.valueChanged.connect(self.on_gain_changed)
         self.ui.slider_gain.valueChanged.connect(self.on_gain_slider_changed)
+        
         self.ui.spin_ae_target.valueChanged.connect(self.on_ae_target_changed)
+        self.ui.slider_ae_target.valueChanged.connect(self.on_ae_slider_changed)
         
         # Recreate ButtonGroup for logic
         self.trigger_bg = QButtonGroup(self.ui)
@@ -79,6 +83,23 @@ class MainWindow(QObject):
         self.trigger_bg.idToggled.connect(self.on_trigger_mode_changed)
         
         self.ui.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
+        
+        # New Connections for Trigger Params
+        self.ui.spin_trigger_count.valueChanged.connect(self.on_trigger_count_changed)
+        self.ui.spin_trigger_delay.valueChanged.connect(self.on_trigger_delay_changed)
+        self.ui.spin_trigger_interval.valueChanged.connect(self.on_trigger_interval_changed)
+        
+        # New Connections for External Trigger Params
+        self.ui.combo_ext_mode.currentIndexChanged.connect(self.on_ext_mode_changed)
+        self.ui.spin_ext_jitter.valueChanged.connect(self.on_ext_jitter_changed)
+        self.ui.combo_ext_shutter.currentIndexChanged.connect(self.on_ext_shutter_changed)
+        
+        # New Connections for Strobe Params
+        self.ui.combo_strobe_mode.currentIndexChanged.connect(self.on_strobe_mode_changed)
+        self.ui.combo_strobe_polarity.currentIndexChanged.connect(self.on_strobe_polarity_changed)
+        self.ui.spin_strobe_delay.valueChanged.connect(self.on_strobe_delay_changed)
+        self.ui.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
+        
         self.ui.start_btn.clicked.connect(self.on_start_clicked)
         self.ui.stop_btn.clicked.connect(self.on_stop_clicked)
         self.ui.record_btn.clicked.connect(self.on_record_clicked)
@@ -120,13 +141,11 @@ class MainWindow(QObject):
             elif watched == self.ui.video_label and event.type() == QEvent.Resize:
                 self.refresh_video_label()
         except RuntimeError:
-            # Object already deleted during shutdown, ignore
             pass
         return super().eventFilter(watched, event)
 
     def refresh_video_label(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
-            # Use FastTransformation for responsive resizing. SmoothTransformation is too slow for real-time interaction.
             scaled = self.current_pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
             self.ui.video_label.setPixmap(scaled)
 
@@ -162,7 +181,7 @@ class MainWindow(QObject):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                self.video_thread.startRecording(image.width(), image.height(), record_fps, r"c:\Users\davidek\Desktop\output.mkv")
+                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
                 self.ui.record_btn.setText("Stop Recording")
             
             # Display
@@ -182,6 +201,9 @@ class MainWindow(QObject):
         self.ui.stop_btn.setEnabled(False)
         self.ui.controls_group.setEnabled(False)
         self.ui.trigger_group.setEnabled(False)
+        self.ui.trigger_params_group.setEnabled(False)
+        self.ui.ext_trigger_group.setEnabled(False)
+        self.ui.strobe_group.setEnabled(False)
 
     def on_start_clicked(self):
         if self.camera.open():
@@ -191,6 +213,8 @@ class MainWindow(QObject):
                 self.ui.record_btn.setEnabled(True)
                 self.ui.controls_group.setEnabled(True)
                 self.ui.trigger_group.setEnabled(True)
+                self.ui.strobe_group.setEnabled(True)
+                
                 self.ui.video_label.setText("Starting stream...")
                 self.sync_ui()
 
@@ -203,8 +227,13 @@ class MainWindow(QObject):
         self.ui.start_btn.setEnabled(True)
         self.ui.stop_btn.setEnabled(False)
         self.ui.record_btn.setEnabled(False)
+        
         self.ui.controls_group.setEnabled(False)
         self.ui.trigger_group.setEnabled(False)
+        self.ui.trigger_params_group.setEnabled(False)
+        self.ui.ext_trigger_group.setEnabled(False)
+        self.ui.strobe_group.setEnabled(False)
+        
         self.ui.video_label.clear()
         self.ui.video_label.setText("Camera Stopped")
         self.fps_label.setText("FPS: 0.0")
@@ -240,20 +269,24 @@ class MainWindow(QObject):
         self.ui.spin_exposure_time.setEnabled(not is_auto)
         self.ui.slider_exposure.setEnabled(not is_auto)
         self.ui.spin_ae_target.setEnabled(is_auto)
+        self.ui.slider_ae_target.setEnabled(is_auto)
 
         # AE Target
         if hasattr(self.camera, 'getAutoExposureTarget'):
             try:
-                # Try to get range if available, otherwise default to 0-255 or current limits
-                # Assuming getAutoExposureTargetRange exists, otherwise catch
                 if hasattr(self.camera, 'getAutoExposureTargetRange'):
                     min_ae, max_ae = self.camera.getAutoExposureTargetRange()
                     self.ui.spin_ae_target.setRange(min_ae, max_ae)
+                    self.ui.slider_ae_target.setRange(min_ae, max_ae)
                 
                 current_ae = self.camera.getAutoExposureTarget()
                 self.ui.spin_ae_target.blockSignals(True)
                 self.ui.spin_ae_target.setValue(current_ae)
                 self.ui.spin_ae_target.blockSignals(False)
+
+                self.ui.slider_ae_target.blockSignals(True)
+                self.ui.slider_ae_target.setValue(current_ae)
+                self.ui.slider_ae_target.blockSignals(False)
             except Exception as e:
                 print(f"Error syncing AE target: {e}")
         
@@ -290,6 +323,7 @@ class MainWindow(QObject):
             self.ui.spin_exposure_time.setEnabled(not checked)
             self.ui.slider_exposure.setEnabled(not checked)
             self.ui.spin_ae_target.setEnabled(checked)
+            self.ui.slider_ae_target.setEnabled(checked)
             if not checked:
                 # Update manual values
                 current_exp = self.camera.getExposureTime()
@@ -334,23 +368,85 @@ class MainWindow(QObject):
 
     def on_gain_slider_changed(self, value):
         self.ui.spin_gain.setValue(value)
-        # on_gain_changed will be triggered by spin_gain's signal, keeping logic central
 
     def on_ae_target_changed(self, value):
         if hasattr(self.camera, 'setAutoExposureTarget'):
             self.camera.setAutoExposureTarget(value)
+            self.ui.slider_ae_target.blockSignals(True)
+            self.ui.slider_ae_target.setValue(value)
+            self.ui.slider_ae_target.blockSignals(False)
+
+    def on_ae_slider_changed(self, value):
+        self.ui.spin_ae_target.setValue(value)
 
     def on_trigger_mode_changed(self, id, checked):
         if checked:
             # 0=Continuous, 1=Software, 2=Hardware
             if self.camera.setTriggerMode(id):
                 self.ui.btn_soft_trigger.setEnabled(id == 1)
+                
+                # Logic for Trigger Params Group
+                # Enabled if Software (1) or Hardware (2)
+                self.ui.trigger_params_group.setEnabled(id in [1, 2])
+                
+                # Logic for External Trigger Params Group
+                # Enabled if Hardware (2)
+                self.ui.ext_trigger_group.setEnabled(id == 2)
+                
             else:
                 print(f"Failed to set trigger mode {id}")
-                # Revert logic could be added here
 
     def on_soft_trigger_clicked(self):
         self.camera.triggerSoftware()
+
+    # Trigger Parameter Slots
+    def on_trigger_count_changed(self, value):
+        if hasattr(self.camera, 'setTriggerCount'):
+            self.camera.setTriggerCount(value)
+
+    def on_trigger_delay_changed(self, value):
+        if hasattr(self.camera, 'setTriggerDelay'):
+            self.camera.setTriggerDelay(value)
+
+    def on_trigger_interval_changed(self, value):
+        if hasattr(self.camera, 'setTriggerInterval'):
+            self.camera.setTriggerInterval(value)
+
+    # External Trigger Slots
+    def on_ext_mode_changed(self, index):
+        if hasattr(self.camera, 'setExternalTriggerSignalType'):
+            self.camera.setExternalTriggerSignalType(index)
+
+    def on_ext_jitter_changed(self, value):
+        if hasattr(self.camera, 'setExternalTriggerJitterTime'):
+            self.camera.setExternalTriggerJitterTime(value)
+    
+    def on_ext_shutter_changed(self, index):
+        if hasattr(self.camera, 'setExternalTriggerShutterMode'):
+            self.camera.setExternalTriggerShutterMode(index)
+
+    # Strobe Slots
+    def on_strobe_mode_changed(self, index):
+        # 0 = Auto, 1 = Manual/Semi-Auto
+        if hasattr(self.camera, 'setStrobeMode'):
+            self.camera.setStrobeMode(index)
+            # Enable manual controls if index == 1
+            is_manual = (index == 1)
+            self.ui.combo_strobe_polarity.setEnabled(is_manual)
+            self.ui.spin_strobe_delay.setEnabled(is_manual)
+            self.ui.spin_strobe_width.setEnabled(is_manual)
+
+    def on_strobe_polarity_changed(self, index):
+        if hasattr(self.camera, 'setStrobePolarity'):
+            self.camera.setStrobePolarity(index)
+
+    def on_strobe_delay_changed(self, value):
+        if hasattr(self.camera, 'setStrobeDelayTime'):
+            self.camera.setStrobeDelayTime(value)
+
+    def on_strobe_width_changed(self, value):
+        if hasattr(self.camera, 'setStrobePulseWidth'):
+            self.camera.setStrobePulseWidth(value)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

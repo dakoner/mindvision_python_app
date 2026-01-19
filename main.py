@@ -6,7 +6,7 @@ import signal
 
 # Add the directory containing the generated module to sys.path
 script_dir = os.path.dirname(__file__)
-release_dir = os.path.join(r"z:\src\microtools\mindvision_qobject", "release")
+release_dir = os.path.join(r"c:\users\davidek\microtools\mindvision_qobject", "release")
 sys.path.insert(0, release_dir)
 
 os.add_dll_directory(release_dir)
@@ -27,7 +27,7 @@ except ImportError:
     HAS_SERIAL = False
     print("Warning: pyserial not installed. Serial features disabled.")
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
@@ -110,9 +110,14 @@ class SerialWorker(QObject):
         with QMutexLocker(self.mutex):
             if self.is_connected and self.serial_port and self.serial_port.in_waiting:
                 try:
-                    line = self.serial_port.readline().decode('utf-8', errors='replace').strip()
-                    if line:
-                        self.log_signal.emit(f"Rx: {line}")
+                    # Read up to 10 lines to catch up but not freeze UI
+                    for _ in range(10):
+                        if self.serial_port.in_waiting:
+                            line = self.serial_port.readline().decode('utf-8', errors='replace').strip()
+                            if line:
+                                self.log_signal.emit(f"Rx: {line}")
+                        else:
+                            break
                 except Exception as e:
                     self.log_signal.emit(f"Read error: {e}")
 
@@ -354,7 +359,31 @@ class MainWindow(QObject):
         self.ui.statusBar().addPermanentWidget(self.fps_label)
         
         # Log Window Setup
+        self.ui.log_text_edit.setMaximumBlockCount(1000)
+        self.ui.log_text_edit.setCenterOnScroll(True)
         self.log("Application started.")
+
+        # --- Status Widgets Setup (Programmatic) ---
+        self.has_initialized_settings = False
+        self.status_items_map = {} # Map pin -> QListWidgetItem
+        self.interrupt_items_map = {} # Map pin -> QListWidgetItem
+
+        # Access serial layout
+        serial_layout = self.ui.group_serial.layout()
+        
+        # Status List
+        self.lbl_status = QLabel("Modified Pins:")
+        self.list_status = QListWidget()
+        self.list_status.setMaximumHeight(100)
+        serial_layout.addWidget(self.lbl_status)
+        serial_layout.addWidget(self.list_status)
+
+        # Interrupt List
+        self.lbl_interrupts = QLabel("Interrupts:")
+        self.list_interrupts = QListWidget()
+        self.list_interrupts.setMaximumHeight(80)
+        serial_layout.addWidget(self.lbl_interrupts)
+        serial_layout.addWidget(self.list_interrupts)
         
         # Serial UI Init
         self.refresh_serial_ports()
@@ -499,7 +528,101 @@ class MainWindow(QObject):
         timestamp = time.strftime("%H:%M:%S")
         if hasattr(self.ui, 'log_text_edit'):
             self.ui.log_text_edit.appendPlainText(f"[{timestamp}] {message}")
-        print(f"[{timestamp}] {message}")
+        
+        # Parse Rx messages
+        if message.startswith("Rx: "):
+            content = message[4:].strip()
+            self.process_serial_line(content)
+
+    def process_serial_line(self, line):
+        # Startup detection
+        if "LED>" in line and not self.has_initialized_settings:
+            self.has_initialized_settings = True
+            QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("printsettings"))
+            return
+
+        parts = line.split()
+        if not parts:
+            return
+        
+        cmd = parts[0]
+        
+        try:
+            if cmd == "level" and len(parts) >= 3:
+                pin = int(parts[1])
+                val = int(parts[2])
+                self.update_pin_status(pin, f"Level: {val}")
+                # Update UI setters
+                self.ui.spin_level_pin.setValue(pin)
+                self.ui.combo_level_val.setCurrentIndex(val + 1)
+                
+            elif cmd == "pwm" and len(parts) >= 4:
+                pin = int(parts[1])
+                freq = int(parts[2])
+                duty = int(parts[3])
+                self.update_pin_status(pin, f"PWM: {freq}Hz, {duty}%")
+                # Update UI setters
+                self.ui.spin_pwm_pin.setValue(pin)
+                self.ui.spin_pwm_freq.setValue(freq)
+                self.ui.spin_pwm_duty.setValue(duty)
+
+            elif cmd == "repeat" and len(parts) >= 4:
+                pin = int(parts[1])
+                freq = int(parts[2])
+                dur = int(parts[3])
+                self.update_pin_status(pin, f"Repeat: {freq}Hz, {dur}us")
+                # Update UI setters
+                self.ui.spin_repeat_pin.setValue(pin)
+                self.ui.spin_repeat_freq.setValue(freq)
+                self.ui.spin_repeat_dur.setValue(dur)
+
+            elif cmd == "throb" and len(parts) >= 5:
+                period = int(parts[1])
+                p1 = int(parts[2])
+                p2 = int(parts[3])
+                p3 = int(parts[4])
+                self.update_pin_status(p1, "Throb")
+                self.update_pin_status(p2, "Throb")
+                self.update_pin_status(p3, "Throb")
+                # Update UI setters
+                self.ui.spin_throb_period.setValue(period)
+                self.ui.spin_throb_p1.setValue(p1)
+                self.ui.spin_throb_p2.setValue(p2)
+                self.ui.spin_throb_p3.setValue(p3)
+
+            elif cmd == "interrupt" and len(parts) >= 5:
+                pin = int(parts[1])
+                edge = parts[2]
+                tgt = int(parts[3])
+                width = int(parts[4])
+                self.update_interrupt_status(pin, f"{edge} -> Pulse {tgt} ({width}us)")
+                # Update UI setters
+                self.ui.spin_int_pin.setValue(pin)
+                idx = self.ui.combo_int_edge.findText(edge)
+                if idx >= 0: self.ui.combo_int_edge.setCurrentIndex(idx)
+                self.ui.spin_int_target.setValue(tgt)
+                self.ui.spin_int_width.setValue(width)
+
+        except ValueError:
+            pass
+
+    def update_pin_status(self, pin, status_text):
+        text = f"Pin {pin}: {status_text}"
+        if pin in self.status_items_map:
+            self.status_items_map[pin].setText(text)
+        else:
+            item = QListWidgetItem(text)
+            self.list_status.addItem(item)
+            self.status_items_map[pin] = item
+
+    def update_interrupt_status(self, pin, status_text):
+        text = f"Pin {pin}: {status_text}"
+        if pin in self.interrupt_items_map:
+            self.interrupt_items_map[pin].setText(text)
+        else:
+            item = QListWidgetItem(text)
+            self.list_interrupts.addItem(item)
+            self.interrupt_items_map[pin] = item
 
     def update_detector(self):
         tab_index = self.ui.tabs_matching.currentIndex()
@@ -901,6 +1024,13 @@ class MainWindow(QObject):
         self.ui.tabs_serial_cmds.setEnabled(connected)
         self.ui.combo_serial_port.setEnabled(not connected)
         self.ui.btn_serial_refresh.setEnabled(not connected)
+        
+        if not connected:
+            self.has_initialized_settings = False
+            self.list_status.clear()
+            self.status_items_map.clear()
+            self.list_interrupts.clear()
+            self.interrupt_items_map.clear()
 
     def on_cmd_pulse(self):
         pin = self.ui.spin_pulse_pin.value()

@@ -368,22 +368,9 @@ class MainWindow(QObject):
         self.status_items_map = {} # Map pin -> QListWidgetItem
         self.interrupt_items_map = {} # Map pin -> QListWidgetItem
 
-        # Access serial layout
-        serial_layout = self.ui.group_serial.layout()
-        
-        # Status List
-        self.lbl_status = QLabel("Modified Pins:")
-        self.list_status = QListWidget()
-        self.list_status.setMaximumHeight(100)
-        serial_layout.addWidget(self.lbl_status)
-        serial_layout.addWidget(self.list_status)
-
-        # Interrupt List
-        self.lbl_interrupts = QLabel("Interrupts:")
-        self.list_interrupts = QListWidget()
-        self.list_interrupts.setMaximumHeight(80)
-        serial_layout.addWidget(self.lbl_interrupts)
-        serial_layout.addWidget(self.list_interrupts)
+        # Status List - already in UI
+        # self.ui.list_status
+        # self.ui.list_interrupts
         
         # Serial UI Init
         self.refresh_serial_ports()
@@ -612,7 +599,7 @@ class MainWindow(QObject):
             self.status_items_map[pin].setText(text)
         else:
             item = QListWidgetItem(text)
-            self.list_status.addItem(item)
+            self.ui.list_status.addItem(item)
             self.status_items_map[pin] = item
 
     def update_interrupt_status(self, pin, status_text):
@@ -621,7 +608,7 @@ class MainWindow(QObject):
             self.interrupt_items_map[pin].setText(text)
         else:
             item = QListWidgetItem(text)
-            self.list_interrupts.addItem(item)
+            self.ui.list_interrupts.addItem(item)
             self.interrupt_items_map[pin] = item
 
     def update_detector(self):
@@ -1027,9 +1014,9 @@ class MainWindow(QObject):
         
         if not connected:
             self.has_initialized_settings = False
-            self.list_status.clear()
+            self.ui.list_status.clear()
             self.status_items_map.clear()
-            self.list_interrupts.clear()
+            self.ui.list_interrupts.clear()
             self.interrupt_items_map.clear()
 
     def on_cmd_pulse(self):

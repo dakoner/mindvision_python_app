@@ -68,6 +68,7 @@ class MainWindow(QObject):
         self.ui.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
         self.ui.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
         self.ui.spin_gain.valueChanged.connect(self.on_gain_changed)
+        self.ui.slider_gain.valueChanged.connect(self.on_gain_slider_changed)
         self.ui.spin_ae_target.valueChanged.connect(self.on_ae_target_changed)
         
         # Recreate ButtonGroup for logic
@@ -231,6 +232,7 @@ class MainWindow(QObject):
         
         min_gain, max_gain = self.camera.getAnalogGainRange()
         self.ui.spin_gain.setRange(min_gain, max_gain)
+        self.ui.slider_gain.setRange(min_gain, max_gain)
         
         # Values
         is_auto = self.camera.getAutoExposure()
@@ -265,6 +267,10 @@ class MainWindow(QObject):
         self.ui.spin_gain.blockSignals(True)
         self.ui.spin_gain.setValue(self.camera.getAnalogGain())
         self.ui.spin_gain.blockSignals(False)
+        
+        self.ui.slider_gain.blockSignals(True)
+        self.ui.slider_gain.setValue(self.camera.getAnalogGain())
+        self.ui.slider_gain.blockSignals(False)
 
     def update_slider_from_time(self, current, min_val, max_val):
         self.ui.slider_exposure.blockSignals(True)
@@ -322,6 +328,13 @@ class MainWindow(QObject):
 
     def on_gain_changed(self, value):
         self.camera.setAnalogGain(value)
+        self.ui.slider_gain.blockSignals(True)
+        self.ui.slider_gain.setValue(value)
+        self.ui.slider_gain.blockSignals(False)
+
+    def on_gain_slider_changed(self, value):
+        self.ui.spin_gain.setValue(value)
+        # on_gain_changed will be triggered by spin_gain's signal, keeping logic central
 
     def on_ae_target_changed(self, value):
         if hasattr(self.camera, 'setAutoExposureTarget'):

@@ -134,14 +134,22 @@ class MatchingWorker(QObject):
         self.template_des = None
         self.is_matching_enabled = False
         self.mutex = QMutex()
+        
+        # ArUco
+        self.aruco_dict = None
+        self.aruco_params = None
+        self.aruco_obj = None
+        self.aruco_display = {'ids': True, 'rejected': False}
+        self.current_algo = 'ORB'
 
     @Slot(dict)
     def update_params(self, params):
         # Update detector based on params
         with QMutexLocker(self.mutex):
             try:
-                algo = params.get('algo', 'ORB')
-                if algo == 'ORB':
+                self.current_algo = params.get('algo', 'ORB')
+                
+                if self.current_algo == 'ORB':
                     self.detector = cv2.ORB_create(
                         nfeatures=params.get('nfeatures', 500),
                         scaleFactor=params.get('scaleFactor', 1.2),
@@ -154,7 +162,7 @@ class MatchingWorker(QObject):
                         fastThreshold=params.get('fastThreshold', 20)
                     )
                     self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-                elif algo == 'SIFT':
+                elif self.current_algo == 'SIFT':
                     self.detector = cv2.SIFT_create(
                         nfeatures=params.get('nfeatures', 0),
                         nOctaveLayers=params.get('nOctaveLayers', 3),
@@ -163,7 +171,7 @@ class MatchingWorker(QObject):
                         sigma=params.get('sigma', 1.6)
                     )
                     self.bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
-                elif algo == 'AKAZE':
+                elif self.current_algo == 'AKAZE':
                     self.detector = cv2.AKAZE_create(
                         descriptor_type=params.get('descriptor_type', 5),
                         threshold=params.get('threshold', 0.0012),
@@ -171,9 +179,35 @@ class MatchingWorker(QObject):
                         nOctaveLayers=params.get('nOctaveLayers', 4)
                     )
                     self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                elif self.current_algo == 'ARUCO':
+                    dict_name = params.get('dict', 'DICT_4X4_50')
+                    if hasattr(cv2.aruco, dict_name):
+                        self.aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dict_name))
+                        if self.aruco_params is None:
+                            self.aruco_params = cv2.aruco.DetectorParameters()
+                        
+                        # Update ArUco Params
+                        if 'markerBorderBits' in params:
+                            self.aruco_params.markerBorderBits = params['markerBorderBits']
+                        
+                        self.aruco_display['ids'] = params.get('show_ids', True)
+                        self.aruco_display['rejected'] = params.get('show_rejected', False)
+
+                        # Create ArucoDetector
+                        try:
+                            self.aruco_obj = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+                        except AttributeError:
+                            # Fallback for older OpenCV if ArucoDetector missing (though we confirmed it exists)
+                            self.aruco_obj = None 
+                            self.log_signal.emit("Error: cv2.aruco.ArucoDetector not found")
+
+                    else:
+                        self.log_signal.emit(f"Unknown ArUco dict: {dict_name}")
+                        self.aruco_dict = None
+                        self.aruco_obj = None
                 
-                # Recompute template if exists
-                if self.template_img is not None:
+                # Recompute template if exists (feature matching)
+                if self.current_algo in ['ORB', 'SIFT', 'AKAZE'] and self.template_img is not None:
                     self.template_kp, self.template_des = self.detector.detectAndCompute(self.template_img, None)
             except Exception as e:
                 self.log_signal.emit(f"Worker update error: {e}")
@@ -182,19 +216,23 @@ class MatchingWorker(QObject):
     def set_template(self, file_path):
         with QMutexLocker(self.mutex):
             if not file_path:
-                self.is_matching_enabled = False
+                if self.current_algo != 'ARUCO':
+                    self.is_matching_enabled = False
                 self.template_img = None
                 return
 
             img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-            if img is not None and self.detector is not None:
+            if img is not None:
                 self.template_img = img
-                self.template_kp, self.template_des = self.detector.detectAndCompute(img, None)
-                if self.template_des is not None:
-                    self.is_matching_enabled = True
-                    self.log_signal.emit(f"Worker: Template loaded {file_path}")
+                if self.detector is not None and self.current_algo != 'ARUCO':
+                    self.template_kp, self.template_des = self.detector.detectAndCompute(img, None)
+                    if self.template_des is not None:
+                        self.is_matching_enabled = True
+                        self.log_signal.emit(f"Worker: Template loaded {file_path}")
+                    else:
+                        self.log_signal.emit("Worker: No features in template")
                 else:
-                    self.log_signal.emit("Worker: No features in template")
+                     self.log_signal.emit(f"Worker: Template loaded (not used for {self.current_algo})")
             else:
                 self.log_signal.emit("Worker: Failed to load template")
 
@@ -209,42 +247,92 @@ class MatchingWorker(QObject):
         # 'data_bytes' is a copy of the frame data passed from the main thread
         
         with QMutexLocker(self.mutex):
-            matching_active = self.is_matching_enabled and self.template_des is not None and self.detector is not None
-            # We need local references to avoid race conditions if params change mid-processing
+            active = self.is_matching_enabled
+            algo = self.current_algo
+            
+            # Local refs
             local_detector = self.detector
             local_bf = self.bf
             local_template_des = self.template_des
             local_template_kp = self.template_kp
             local_template_img = self.template_img
+            local_aruco_dict = self.aruco_dict
+            local_aruco_params = self.aruco_params
+            local_aruco_obj = self.aruco_obj
+            local_aruco_display = self.aruco_display.copy()
         
         try:
             channels = bytes_per_line // width
             img_np = np.frombuffer(data_bytes, dtype=np.uint8).reshape((height, width, channels))
             
             # If we are matching
-            if matching_active:
-                if channels == 3:
-                    gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                else:
-                    gray_frame = img_np
-                
-                kp_frame, des_frame = local_detector.detectAndCompute(gray_frame, None)
-                
-                if des_frame is not None:
-                    matches = local_bf.match(local_template_des, des_frame)
-                    matches = sorted(matches, key=lambda x: x.distance)
-                    good_matches = matches[:20]
+            if active:
+                if algo == 'ARUCO' and local_aruco_obj:
+                     # ArUco Processing
+                     if channels == 3:
+                         gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+                     else:
+                         gray_frame = img_np
+                         
+                     corners, ids, rejected = local_aruco_obj.detectMarkers(gray_frame)
+                     
+                     # Draw on a copy (convert to BGR for OpenCV drawing functions usually)
+                     if channels == 1:
+                         res_img = cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
+                     else:
+                         res_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+                     # Draw Rejected
+                     if local_aruco_display['rejected'] and rejected:
+                         cv2.aruco.drawDetectedMarkers(res_img, rejected, borderColor=(100, 0, 255))
+
+                     # Draw Detected
+                     if ids is not None and len(ids) > 0:
+                         # Draw markers (and IDs if enabled)
+                         # Note: drawDetectedMarkers 3rd arg is 'borderColor'. 
+                         # It does not explicitly have a 'show_id' boolean in this version, 
+                         # but usually it draws IDs if they are passed.
+                         # In some OpenCV versions, to NOT draw IDs, you'd pass None for IDs? No, that stops drawing.
+                         # Actually, drawDetectedMarkers draws the IDs by default if they are provided.
+                         # If we don't want to show IDs, we might have to re-implement drawing or just accept it.
+                         # However, typically 'finish up' implies user wants to See them.
+                         # If show_ids is False, we can pass None for ids? 
+                         # Documentation says: "ids: vector of identifiers for markers in corners"
+                         # If we pass None, it draws only the squares.
+                         
+                         display_ids = ids if local_aruco_display['ids'] else None
+                         cv2.aruco.drawDetectedMarkers(res_img, corners, display_ids)
+                     
+                     # Convert back to RGB for QImage
+                     res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
+                     h, w, c = res_img_rgb.shape
+                     # Must copy to decouple from numpy array
+                     qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
+                     self.result_ready.emit(qimg)
+                     return
+
+                elif algo in ['ORB', 'SIFT', 'AKAZE'] and local_template_des is not None and local_detector is not None:
+                    if channels == 3:
+                        gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+                    else:
+                        gray_frame = img_np
                     
-                    res_img = cv2.drawMatches(local_template_img, local_template_kp, 
-                                            img_np if channels == 1 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR),
-                                            kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+                    kp_frame, des_frame = local_detector.detectAndCompute(gray_frame, None)
                     
-                    res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
-                    h, w, c = res_img_rgb.shape
-                    # Must copy to decouple from numpy array
-                    qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
-                    self.result_ready.emit(qimg)
-                    return
+                    if des_frame is not None:
+                        matches = local_bf.match(local_template_des, des_frame)
+                        matches = sorted(matches, key=lambda x: x.distance)
+                        good_matches = matches[:20]
+                        
+                        res_img = cv2.drawMatches(local_template_img, local_template_kp, 
+                                                img_np if channels == 1 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR),
+                                                kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+                        
+                        res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
+                        h, w, c = res_img_rgb.shape
+                        qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
+                        self.result_ready.emit(qimg)
+                        return
 
             # Pass-through if not matching or failed
             # Create QImage from the numpy array (which is a view of data_bytes)
@@ -489,6 +577,15 @@ class MainWindow(QObject):
         self.ui.akaze_nOctaves.valueChanged.connect(self.on_detector_params_changed)
         self.ui.akaze_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
 
+        # ArUco Parameter Connections
+        self.ui.aruco_dict.currentTextChanged.connect(self.on_detector_params_changed)
+        self.ui.chk_aruco_show_ids.toggled.connect(self.on_detector_params_changed)
+        self.ui.chk_aruco_show_rejected.toggled.connect(self.on_detector_params_changed)
+        self.ui.spin_aruco_border_bits.valueChanged.connect(self.on_detector_params_changed)
+        
+        # New ArUco Enable Checkbox
+        self.ui.chk_aruco_enable.toggled.connect(self.on_aruco_enable_toggled)
+
         # Camera Setup
         self.camera = MindVisionCamera()
         
@@ -663,6 +760,20 @@ class MainWindow(QObject):
             self.interrupt_items_map[pin] = item
 
     def update_detector(self):
+        # ArUco Priority
+        if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
+            params = {'algo': 'ARUCO'}
+            if hasattr(self.ui, 'aruco_dict'):
+                params['dict'] = self.ui.aruco_dict.currentText()
+            if hasattr(self.ui, 'chk_aruco_show_ids'):
+                params['show_ids'] = self.ui.chk_aruco_show_ids.isChecked()
+            if hasattr(self.ui, 'chk_aruco_show_rejected'):
+                params['show_rejected'] = self.ui.chk_aruco_show_rejected.isChecked()
+            if hasattr(self.ui, 'spin_aruco_border_bits'):
+                params['markerBorderBits'] = self.ui.spin_aruco_border_bits.value()
+            self.update_worker_params_signal.emit(params)
+            return
+
         tab_index = self.ui.tabs_matching.currentIndex()
         params = {}
         
@@ -819,16 +930,39 @@ class MainWindow(QObject):
             self.current_pixmap.save(filename)
             self.log(f"Snapshot saved: {filename}")
 
+    def on_aruco_enable_toggled(self, checked):
+        if checked:
+            # Mutual exclusion: disable template matching if active
+            if self.is_matching_ui_active:
+                self.is_matching_ui_active = False
+                self.ui.btn_find_template.setText("Find template in image")
+            
+            # Enable ArUco (update_detector picks up the checked state)
+            self.update_detector()
+            self.toggle_worker_matching_signal.emit(True)
+        else:
+            # Disable ArUco
+            # Only stop worker if not switching to template matching (which shouldn't happen here directly)
+            if not self.is_matching_ui_active:
+                self.toggle_worker_matching_signal.emit(False)
+
     def on_find_template_clicked(self):
+        # Mutual Exclusion
+        if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
+            self.ui.chk_aruco_enable.setChecked(False)
+            # Toggling it off will stop worker. We restart it below if file selected.
+
         if self.is_matching_ui_active:
             self.is_matching_ui_active = False
             self.toggle_worker_matching_signal.emit(False)
             self.ui.btn_find_template.setText("Find template in image")
         else:
+            # Template Matching
             file_path, _ = QFileDialog.getOpenFileName(self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)")
             if file_path:
                 self.set_worker_template_signal.emit(file_path)
                 self.is_matching_ui_active = True
+                self.update_detector()
                 self.toggle_worker_matching_signal.emit(True)
                 self.ui.btn_find_template.setText("Stop Matching")
 

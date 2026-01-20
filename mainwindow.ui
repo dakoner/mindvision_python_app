@@ -921,6 +921,176 @@
           </widget>
          </item>
          <item>
+          <widget class="QGroupBox" name="group_aruco">
+           <property name="title">
+            <string>ArUco Detection</string>
+           </property>
+           <layout class="QFormLayout" name="aruco_form_layout">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_aruco_enable">
+              <property name="text">
+               <string>Enable:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QCheckBox" name="chk_aruco_enable">
+              <property name="text">
+               <string>Active</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_aruco_dict">
+              <property name="text">
+               <string>Dictionary:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="aruco_dict">
+              <item>
+               <property name="text">
+                <string>DICT_4X4_50</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_4X4_100</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_4X4_250</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_4X4_1000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_5X5_50</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_5X5_100</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_5X5_250</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_5X5_1000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_6X6_50</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_6X6_100</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_6X6_250</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_6X6_1000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_7X7_50</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_7X7_100</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_7X7_250</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_7X7_1000</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>DICT_ARUCO_ORIGINAL</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_aruco_show_ids">
+              <property name="text">
+               <string>Show IDs:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QCheckBox" name="chk_aruco_show_ids">
+              <property name="text">
+               <string/>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_aruco_rejected">
+              <property name="text">
+               <string>Show Rejected:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QCheckBox" name="chk_aruco_show_rejected">
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_aruco_border">
+              <property name="text">
+               <string>Border Bits:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QSpinBox" name="spin_aruco_border_bits">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>10</number>
+              </property>
+              <property name="value">
+               <number>1</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
           <widget class="QGroupBox" name="group_serial">
            <property name="title">
             <string>Serial Controller</string>

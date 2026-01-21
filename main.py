@@ -27,10 +27,11 @@ except ImportError:
     HAS_SERIAL = False
     print("Warning: pyserial not installed. Serial features disabled.")
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton, QFormLayout, QSpinBox, QCheckBox, QGroupBox, QComboBox)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton, QFormLayout, QSpinBox, QCheckBox, QGroupBox, QComboBox, QSlider)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
+from range_slider import RangeSlider
 
 try:
     from _mindvision_qobject_py import MindVisionCamera, VideoThread
@@ -585,20 +586,19 @@ class MainWindow(QObject):
         self.combo_contour_mode.addItems(["Canny", "Threshold"])
         self.contours_layout.addRow("Mode:", self.combo_contour_mode)
         
-        self.spin_threshold = QSpinBox()
-        self.spin_threshold.setRange(0, 255)
-        self.spin_threshold.setValue(127)
-        self.contours_layout.addRow("Threshold:", self.spin_threshold)
+        self.slider_threshold = QSlider(Qt.Horizontal)
+        self.slider_threshold.setRange(0, 255)
+        self.slider_threshold.setValue(127)
+        self.lbl_threshold_val = QLabel("127")
+        self.contours_layout.addRow("Threshold:", self.slider_threshold)
+        self.contours_layout.addRow("", self.lbl_threshold_val)
 
-        self.spin_canny_min = QSpinBox()
-        self.spin_canny_min.setRange(0, 255)
-        self.spin_canny_min.setValue(50)
-        self.contours_layout.addRow("Canny Min:", self.spin_canny_min)
-        
-        self.spin_canny_max = QSpinBox()
-        self.spin_canny_max.setRange(0, 255)
-        self.spin_canny_max.setValue(150)
-        self.contours_layout.addRow("Canny Max:", self.spin_canny_max)
+        self.slider_canny = RangeSlider()
+        self.slider_canny.setRange(0, 255)
+        self.slider_canny.setValues(50, 150)
+        self.lbl_canny_val = QLabel("50 - 150")
+        self.contours_layout.addRow("Canny Range:", self.slider_canny)
+        self.contours_layout.addRow("", self.lbl_canny_val)
         
         self.spin_min_area = QSpinBox()
         self.spin_min_area.setRange(0, 100000)
@@ -623,9 +623,8 @@ class MainWindow(QObject):
         # Connect Contour Signals
         self.btn_toggle_contours.toggled.connect(self.on_toggle_contours_toggled)
         self.combo_contour_mode.currentTextChanged.connect(self.on_contour_params_changed)
-        self.spin_threshold.valueChanged.connect(self.on_contour_params_changed)
-        self.spin_canny_min.valueChanged.connect(self.on_contour_params_changed)
-        self.spin_canny_max.valueChanged.connect(self.on_contour_params_changed)
+        self.slider_threshold.valueChanged.connect(self.on_contour_params_changed)
+        self.slider_canny.valuesChanged.connect(self.on_contour_params_changed)
         self.spin_min_area.valueChanged.connect(self.on_contour_params_changed)
         self.spin_max_area.valueChanged.connect(self.on_contour_params_changed)
         self.chk_fill_contours.toggled.connect(self.on_contour_params_changed)
@@ -1068,15 +1067,19 @@ class MainWindow(QObject):
         mode = self.combo_contour_mode.currentText()
         is_canny = (mode == "Canny")
         
-        self.spin_canny_min.setEnabled(is_canny)
-        self.spin_canny_max.setEnabled(is_canny)
-        self.spin_threshold.setEnabled(not is_canny)
+        self.slider_canny.setEnabled(is_canny)
+        self.slider_threshold.setEnabled(not is_canny)
+        
+        # Update labels
+        self.lbl_threshold_val.setText(str(self.slider_threshold.value()))
+        c_min, c_max = self.slider_canny.getValues()
+        self.lbl_canny_val.setText(f"{c_min} - {c_max}")
 
         params = {
             'mode': mode,
-            'threshold': self.spin_threshold.value(),
-            'thresh_min': self.spin_canny_min.value(),
-            'thresh_max': self.spin_canny_max.value(),
+            'threshold': self.slider_threshold.value(),
+            'thresh_min': c_min,
+            'thresh_max': c_max,
             'min_area': self.spin_min_area.value(),
             'max_area': self.spin_max_area.value(),
             'fill': self.chk_fill_contours.isChecked(),

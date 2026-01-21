@@ -461,6 +461,19 @@ class MainWindow(QObject):
         self.serial_poll_timer.start(50) # Poll every 50ms
 
         # Initial Detector config
+        
+        # Patch: Ensure ArUco widgets are found (QUiLoader sometimes misses deep nesting)
+        if not hasattr(self.ui, 'aruco_dict'):
+            self.ui.aruco_dict = self.ui.findChild(QComboBox, "aruco_dict")
+        if not hasattr(self.ui, 'chk_aruco_show_ids'):
+            self.ui.chk_aruco_show_ids = self.ui.findChild(QCheckBox, "chk_aruco_show_ids")
+        if not hasattr(self.ui, 'chk_aruco_show_rejected'):
+            self.ui.chk_aruco_show_rejected = self.ui.findChild(QCheckBox, "chk_aruco_show_rejected")
+        if not hasattr(self.ui, 'spin_aruco_border_bits'):
+            self.ui.spin_aruco_border_bits = self.ui.findChild(QSpinBox, "spin_aruco_border_bits")
+        if not hasattr(self.ui, 'chk_aruco_enable'):
+            self.ui.chk_aruco_enable = self.ui.findChild(QCheckBox, "chk_aruco_enable")
+
         self.update_detector()
 
         # UI State for Matching

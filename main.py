@@ -27,7 +27,7 @@ except ImportError:
     HAS_SERIAL = False
     print("Warning: pyserial not installed. Serial features disabled.")
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton, QFormLayout, QSpinBox, QCheckBox, QGroupBox, QComboBox)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtUiTools import QUiLoader
@@ -140,77 +140,91 @@ class MatchingWorker(QObject):
         self.aruco_params = None
         self.aruco_obj = None
         self.aruco_display = {'ids': True, 'rejected': False}
+        self.contour_params = {
+            'mode': 'Canny',
+            'thresh_min': 50, 'thresh_max': 150,
+            'threshold': 127,
+            'min_area': 100, 'max_area': 100000,
+            'fill': False, 'box': False
+        }
         self.current_algo = 'ORB'
+        self.is_contours_enabled = False
 
     @Slot(dict)
     def update_params(self, params):
         # Update detector based on params
         with QMutexLocker(self.mutex):
             try:
-                self.current_algo = params.get('algo', 'ORB')
-                
-                if self.current_algo == 'ORB':
-                    self.detector = cv2.ORB_create(
-                        nfeatures=params.get('nfeatures', 500),
-                        scaleFactor=params.get('scaleFactor', 1.2),
-                        nlevels=params.get('nlevels', 8),
-                        edgeThreshold=params.get('edgeThreshold', 31),
-                        firstLevel=params.get('firstLevel', 0),
-                        WTA_K=params.get('WTA_K', 2),
-                        scoreType=params.get('scoreType', 0),
-                        patchSize=params.get('patchSize', 31),
-                        fastThreshold=params.get('fastThreshold', 20)
-                    )
-                    self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-                elif self.current_algo == 'SIFT':
-                    self.detector = cv2.SIFT_create(
-                        nfeatures=params.get('nfeatures', 0),
-                        nOctaveLayers=params.get('nOctaveLayers', 3),
-                        contrastThreshold=params.get('contrastThreshold', 0.04),
-                        edgeThreshold=params.get('edgeThreshold', 10),
-                        sigma=params.get('sigma', 1.6)
-                    )
-                    self.bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
-                elif self.current_algo == 'AKAZE':
-                    self.detector = cv2.AKAZE_create(
-                        descriptor_type=params.get('descriptor_type', 5),
-                        threshold=params.get('threshold', 0.0012),
-                        nOctaves=params.get('nOctaves', 4),
-                        nOctaveLayers=params.get('nOctaveLayers', 4)
-                    )
-                    self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-                elif self.current_algo == 'ARUCO':
-                    dict_name = params.get('dict', 'DICT_4X4_50')
-                    if hasattr(cv2.aruco, dict_name):
-                        self.aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dict_name))
-                        if self.aruco_params is None:
-                            self.aruco_params = cv2.aruco.DetectorParameters()
-                        
-                        # Update ArUco Params
-                        if 'markerBorderBits' in params:
-                            self.aruco_params.markerBorderBits = params['markerBorderBits']
-                        
-                        self.aruco_display['ids'] = params.get('show_ids', True)
-                        self.aruco_display['rejected'] = params.get('show_rejected', False)
+                # If 'algo' is provided, we are updating the Matching Algo
+                if 'algo' in params:
+                    self.current_algo = params['algo']
+                    
+                    if self.current_algo == 'ORB':
+                        self.detector = cv2.ORB_create(
+                            nfeatures=params.get('nfeatures', 500),
+                            scaleFactor=params.get('scaleFactor', 1.2),
+                            nlevels=params.get('nlevels', 8),
+                            edgeThreshold=params.get('edgeThreshold', 31),
+                            firstLevel=params.get('firstLevel', 0),
+                            WTA_K=params.get('WTA_K', 2),
+                            scoreType=params.get('scoreType', 0),
+                            patchSize=params.get('patchSize', 31),
+                            fastThreshold=params.get('fastThreshold', 20)
+                        )
+                        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                    elif self.current_algo == 'SIFT':
+                        self.detector = cv2.SIFT_create(
+                            nfeatures=params.get('nfeatures', 0),
+                            nOctaveLayers=params.get('nOctaveLayers', 3),
+                            contrastThreshold=params.get('contrastThreshold', 0.04),
+                            edgeThreshold=params.get('edgeThreshold', 10),
+                            sigma=params.get('sigma', 1.6)
+                        )
+                        self.bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+                    elif self.current_algo == 'AKAZE':
+                        self.detector = cv2.AKAZE_create(
+                            descriptor_type=params.get('descriptor_type', 5),
+                            threshold=params.get('threshold', 0.0012),
+                            nOctaves=params.get('nOctaves', 4),
+                            nOctaveLayers=params.get('nOctaveLayers', 4)
+                        )
+                        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                    elif self.current_algo == 'ARUCO':
+                        dict_name = params.get('dict', 'DICT_4X4_50')
+                        if hasattr(cv2.aruco, dict_name):
+                            self.aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dict_name))
+                            if self.aruco_params is None:
+                                self.aruco_params = cv2.aruco.DetectorParameters()
+                            
+                            # Update ArUco Params
+                            if 'markerBorderBits' in params:
+                                self.aruco_params.markerBorderBits = params['markerBorderBits']
+                            
+                            self.aruco_display['ids'] = params.get('show_ids', True)
+                            self.aruco_display['rejected'] = params.get('show_rejected', False)
 
-                        # Create ArucoDetector
-                        try:
-                            self.aruco_obj = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
-                        except AttributeError:
-                            # Fallback for older OpenCV if ArucoDetector missing (though we confirmed it exists)
-                            self.aruco_obj = None 
-                            self.log_signal.emit("Error: cv2.aruco.ArucoDetector not found")
+                            # Create ArucoDetector
+                            try:
+                                self.aruco_obj = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+                            except AttributeError:
+                                self.aruco_obj = None 
+                                self.log_signal.emit("Error: cv2.aruco.ArucoDetector not found")
+                        else:
+                            self.log_signal.emit(f"Unknown ArUco dict: {dict_name}")
+                            self.aruco_dict = None
+                            self.aruco_obj = None
 
-                    else:
-                        self.log_signal.emit(f"Unknown ArUco dict: {dict_name}")
-                        self.aruco_dict = None
-                        self.aruco_obj = None
-                
-                # Recompute template if exists (feature matching)
-                if self.current_algo in ['ORB', 'SIFT', 'AKAZE'] and self.template_img is not None:
-                    self.template_kp, self.template_des = self.detector.detectAndCompute(self.template_img, None)
+                    # Recompute template if exists (feature matching)
+                    if self.current_algo in ['ORB', 'SIFT', 'AKAZE'] and self.template_img is not None:
+                        self.template_kp, self.template_des = self.detector.detectAndCompute(self.template_img, None)
+
             except Exception as e:
                 self.log_signal.emit(f"Worker update error: {e}")
+
+    @Slot(dict)
+    def update_contour_params(self, params):
+        with QMutexLocker(self.mutex):
+            self.contour_params.update(params)
 
     @Slot(str)
     def set_template(self, file_path):
@@ -241,13 +255,17 @@ class MatchingWorker(QObject):
         with QMutexLocker(self.mutex):
             self.is_matching_enabled = enabled
 
+    @Slot(bool)
+    def toggle_contours(self, enabled):
+        with QMutexLocker(self.mutex):
+            self.is_contours_enabled = enabled
+
     @Slot(int, int, int, int, bytes)
     def process_frame(self, width, height, bytes_per_line, fmt, data_bytes):
         # This runs in the worker thread
-        # 'data_bytes' is a copy of the frame data passed from the main thread
-        
         with QMutexLocker(self.mutex):
-            active = self.is_matching_enabled
+            matching_active = self.is_matching_enabled
+            contours_active = self.is_contours_enabled
             algo = self.current_algo
             
             # Local refs
@@ -260,85 +278,82 @@ class MatchingWorker(QObject):
             local_aruco_params = self.aruco_params
             local_aruco_obj = self.aruco_obj
             local_aruco_display = self.aruco_display.copy()
+            local_contour_params = self.contour_params.copy()
         
         try:
             channels = bytes_per_line // width
             img_np = np.frombuffer(data_bytes, dtype=np.uint8).reshape((height, width, channels))
             
-            # If we are matching
-            if active:
+            # If no processing is needed, return original
+            if not matching_active and not contours_active:
+                qimg = QImage(img_np.data, width, height, bytes_per_line, QImage.Format(fmt)).copy()
+                self.result_ready.emit(qimg)
+                return
+
+            # Prepare visualization image (BGR for OpenCV drawing)
+            if channels == 1:
+                vis_img = cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
+                gray_frame = img_np
+            else:
+                vis_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+                gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+            # --- 1. Contours Processing ---
+            if contours_active:
+                # Blur to reduce noise
+                blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0)
+                
+                # Binarize based on mode
+                if local_contour_params.get('mode') == 'Threshold':
+                    # Binary Threshold
+                    _, binary_img = cv2.threshold(blurred, local_contour_params.get('threshold', 127), 255, cv2.THRESH_BINARY)
+                    edges = binary_img # Treat binary result as input for findContours
+                else:
+                    # Default: Canny Edges
+                    edges = cv2.Canny(blurred, local_contour_params['thresh_min'], local_contour_params['thresh_max'])
+                
+                # Find Contours
+                contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                # Draw on vis_img
+                for cnt in contours:
+                    area = cv2.contourArea(cnt)
+                    if local_contour_params['min_area'] < area < local_contour_params['max_area']:
+                        thickness = -1 if local_contour_params['fill'] else 2
+                        cv2.drawContours(vis_img, [cnt], -1, (0, 255, 0), thickness)
+                        if local_contour_params['box']:
+                            x, y, w, h = cv2.boundingRect(cnt)
+                            cv2.rectangle(vis_img, (x, y), (x+w, y+h), (0, 0, 255), 2)
+
+            # --- 2. Matching Processing ---
+            if matching_active:
                 if algo == 'ARUCO' and local_aruco_obj:
-                     # ArUco Processing
-                     if channels == 3:
-                         gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                     else:
-                         gray_frame = img_np
-                         
                      corners, ids, rejected = local_aruco_obj.detectMarkers(gray_frame)
-                     
-                     # Draw on a copy (convert to BGR for OpenCV drawing functions usually)
-                     if channels == 1:
-                         res_img = cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
-                     else:
-                         res_img = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-
-                     # Draw Rejected
                      if local_aruco_display['rejected'] and rejected:
-                         cv2.aruco.drawDetectedMarkers(res_img, rejected, borderColor=(100, 0, 255))
-
-                     # Draw Detected
+                         cv2.aruco.drawDetectedMarkers(vis_img, rejected, borderColor=(100, 0, 255))
                      if ids is not None and len(ids) > 0:
-                         # Draw markers (and IDs if enabled)
-                         # Note: drawDetectedMarkers 3rd arg is 'borderColor'. 
-                         # It does not explicitly have a 'show_id' boolean in this version, 
-                         # but usually it draws IDs if they are passed.
-                         # In some OpenCV versions, to NOT draw IDs, you'd pass None for IDs? No, that stops drawing.
-                         # Actually, drawDetectedMarkers draws the IDs by default if they are provided.
-                         # If we don't want to show IDs, we might have to re-implement drawing or just accept it.
-                         # However, typically 'finish up' implies user wants to See them.
-                         # If show_ids is False, we can pass None for ids? 
-                         # Documentation says: "ids: vector of identifiers for markers in corners"
-                         # If we pass None, it draws only the squares.
-                         
                          display_ids = ids if local_aruco_display['ids'] else None
-                         cv2.aruco.drawDetectedMarkers(res_img, corners, display_ids)
-                     
-                     # Convert back to RGB for QImage
-                     res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
-                     h, w, c = res_img_rgb.shape
-                     # Must copy to decouple from numpy array
-                     qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
-                     self.result_ready.emit(qimg)
-                     return
+                         cv2.aruco.drawDetectedMarkers(vis_img, corners, display_ids)
 
                 elif algo in ['ORB', 'SIFT', 'AKAZE'] and local_template_des is not None and local_detector is not None:
-                    if channels == 3:
-                        gray_frame = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                    else:
-                        gray_frame = img_np
-                    
                     kp_frame, des_frame = local_detector.detectAndCompute(gray_frame, None)
-                    
                     if des_frame is not None:
                         matches = local_bf.match(local_template_des, des_frame)
                         matches = sorted(matches, key=lambda x: x.distance)
                         good_matches = matches[:20]
                         
-                        res_img = cv2.drawMatches(local_template_img, local_template_kp, 
-                                                img_np if channels == 1 else cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR),
+                        # Note: drawMatches creates a NEW image (side-by-side)
+                        # We pass vis_img as 'img2' so contours drawn previously appear in the scene half
+                        vis_img = cv2.drawMatches(local_template_img, local_template_kp, 
+                                                vis_img,
                                                 kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-                        
-                        res_img_rgb = cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB)
-                        h, w, c = res_img_rgb.shape
-                        qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
-                        self.result_ready.emit(qimg)
-                        return
 
-            # Pass-through if not matching or failed
-            # Create QImage from the numpy array (which is a view of data_bytes)
-            # data_bytes is local to this call (sent via signal), so it persists.
-            # But QImage needs to survive emission. .copy() is safest.
-            qimg = QImage(img_np.data, width, height, bytes_per_line, QImage.Format(fmt)).copy()
+            # Convert final result to QImage
+            # vis_img is BGR (or BGR-like output from drawMatches)
+            # Need RGB for QImage
+            res_img_rgb = cv2.cvtColor(vis_img, cv2.COLOR_BGR2RGB)
+            h, w, c = res_img_rgb.shape
+            qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
             self.result_ready.emit(qimg)
 
         except Exception as e:
@@ -373,6 +388,11 @@ class MainWindow(QObject):
     set_worker_template_signal = Signal(str)
     # Signal to toggle matching
     toggle_worker_matching_signal = Signal(bool)
+
+    # Signal to toggle contours
+    toggle_worker_contours_signal = Signal(bool)
+    # Signal to update contour params
+    update_worker_contour_params_signal = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -410,6 +430,9 @@ class MainWindow(QObject):
         self.set_worker_template_signal.connect(self.worker.set_template)
         self.toggle_worker_matching_signal.connect(self.worker.toggle_matching)
         
+        self.toggle_worker_contours_signal.connect(self.worker.toggle_contours)
+        self.update_worker_contour_params_signal.connect(self.worker.update_contour_params)
+
         self.worker.result_ready.connect(self.update_frame)
         self.worker.log_signal.connect(self.log)
         
@@ -550,6 +573,65 @@ class MainWindow(QObject):
         self.ui.snapshot_btn.clicked.connect(self.on_snapshot_clicked)
         self.ui.btn_find_template.clicked.connect(self.on_find_template_clicked)
         
+        # --- Programmatic "Contours" Panel Setup (Independent) ---
+        self.group_contours = QGroupBox("Contour Detection")
+        self.contours_layout = QFormLayout(self.group_contours)
+        
+        self.btn_toggle_contours = QPushButton("Enable Contours")
+        self.btn_toggle_contours.setCheckable(True)
+        self.contours_layout.addRow(self.btn_toggle_contours)
+        
+        self.combo_contour_mode = QComboBox()
+        self.combo_contour_mode.addItems(["Canny", "Threshold"])
+        self.contours_layout.addRow("Mode:", self.combo_contour_mode)
+        
+        self.spin_threshold = QSpinBox()
+        self.spin_threshold.setRange(0, 255)
+        self.spin_threshold.setValue(127)
+        self.contours_layout.addRow("Threshold:", self.spin_threshold)
+
+        self.spin_canny_min = QSpinBox()
+        self.spin_canny_min.setRange(0, 255)
+        self.spin_canny_min.setValue(50)
+        self.contours_layout.addRow("Canny Min:", self.spin_canny_min)
+        
+        self.spin_canny_max = QSpinBox()
+        self.spin_canny_max.setRange(0, 255)
+        self.spin_canny_max.setValue(150)
+        self.contours_layout.addRow("Canny Max:", self.spin_canny_max)
+        
+        self.spin_min_area = QSpinBox()
+        self.spin_min_area.setRange(0, 100000)
+        self.spin_min_area.setValue(100)
+        self.contours_layout.addRow("Min Area:", self.spin_min_area)
+
+        self.spin_max_area = QSpinBox()
+        self.spin_max_area.setRange(0, 100000)
+        self.spin_max_area.setValue(100000)
+        self.contours_layout.addRow("Max Area:", self.spin_max_area)
+        
+        self.chk_fill_contours = QCheckBox("Fill Contours")
+        self.contours_layout.addRow("", self.chk_fill_contours)
+        
+        self.chk_show_box = QCheckBox("Show Bounding Box")
+        self.contours_layout.addRow("", self.chk_show_box)
+        
+        # Add to scroll layout right (append to end)
+        if hasattr(self.ui, 'scroll_layout_right'):
+            self.ui.scroll_layout_right.addWidget(self.group_contours)
+
+        # Connect Contour Signals
+        self.btn_toggle_contours.toggled.connect(self.on_toggle_contours_toggled)
+        self.combo_contour_mode.currentTextChanged.connect(self.on_contour_params_changed)
+        self.spin_threshold.valueChanged.connect(self.on_contour_params_changed)
+        self.spin_canny_min.valueChanged.connect(self.on_contour_params_changed)
+        self.spin_canny_max.valueChanged.connect(self.on_contour_params_changed)
+        self.spin_min_area.valueChanged.connect(self.on_contour_params_changed)
+        self.spin_max_area.valueChanged.connect(self.on_contour_params_changed)
+        self.chk_fill_contours.toggled.connect(self.on_contour_params_changed)
+        self.chk_show_box.toggled.connect(self.on_contour_params_changed)
+        # -----------------------------------------
+
         # Matching Tabs Connection
         self.ui.tabs_matching.currentChanged.connect(self.on_detector_params_changed)
 
@@ -809,6 +891,12 @@ class MainWindow(QObject):
         self.update_worker_params_signal.emit(params)
 
     def on_detector_params_changed(self):
+        # Update Button Text based on Tab
+        if self.is_matching_ui_active:
+            self.ui.btn_find_template.setText("Stop Matching")
+        else:
+            self.ui.btn_find_template.setText("Find template in image")
+
         self.update_detector()
 
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
@@ -950,7 +1038,7 @@ class MainWindow(QObject):
         # Mutual Exclusion
         if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
             self.ui.chk_aruco_enable.setChecked(False)
-            # Toggling it off will stop worker. We restart it below if file selected.
+            # Toggling it off will stop worker. We restart it below if needed.
 
         if self.is_matching_ui_active:
             self.is_matching_ui_active = False
@@ -965,6 +1053,36 @@ class MainWindow(QObject):
                 self.update_detector()
                 self.toggle_worker_matching_signal.emit(True)
                 self.ui.btn_find_template.setText("Stop Matching")
+
+    def on_toggle_contours_toggled(self, checked):
+        if checked:
+            self.btn_toggle_contours.setText("Disable Contours")
+        else:
+            self.btn_toggle_contours.setText("Enable Contours")
+        
+        self.on_contour_params_changed()
+        self.toggle_worker_contours_signal.emit(checked)
+
+    def on_contour_params_changed(self):
+        # Update visibility of controls based on mode
+        mode = self.combo_contour_mode.currentText()
+        is_canny = (mode == "Canny")
+        
+        self.spin_canny_min.setEnabled(is_canny)
+        self.spin_canny_max.setEnabled(is_canny)
+        self.spin_threshold.setEnabled(not is_canny)
+
+        params = {
+            'mode': mode,
+            'threshold': self.spin_threshold.value(),
+            'thresh_min': self.spin_canny_min.value(),
+            'thresh_max': self.spin_canny_max.value(),
+            'min_area': self.spin_min_area.value(),
+            'max_area': self.spin_max_area.value(),
+            'fill': self.chk_fill_contours.isChecked(),
+            'box': self.chk_show_box.isChecked()
+        }
+        self.update_worker_contour_params_signal.emit(params)
 
     def sync_ui(self):
         # Ranges

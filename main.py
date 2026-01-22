@@ -29,7 +29,7 @@ except ImportError:
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton, QFormLayout, QSpinBox, QCheckBox, QGroupBox, QComboBox, QSlider)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QImage, QPixmap, QAction
 from PySide6.QtUiTools import QUiLoader
 from range_slider import RangeSlider
 
@@ -581,11 +581,28 @@ class MainWindow(QObject):
         self.ui.spin_strobe_delay.valueChanged.connect(self.on_strobe_delay_changed)
         self.ui.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
         
-        self.ui.start_btn.clicked.connect(self.on_start_clicked)
-        self.ui.stop_btn.clicked.connect(self.on_stop_clicked)
-        self.ui.record_btn.clicked.connect(self.on_record_clicked)
-        self.ui.snapshot_btn.clicked.connect(self.on_snapshot_clicked)
-        self.ui.btn_find_template.clicked.connect(self.on_find_template_clicked)
+        # Retrieve Actions
+        self.ui.action_start_camera = self.ui.findChild(QAction, "action_start_camera")
+        self.ui.action_stop_camera = self.ui.findChild(QAction, "action_stop_camera")
+        self.ui.action_record = self.ui.findChild(QAction, "action_record")
+        self.ui.action_snapshot = self.ui.findChild(QAction, "action_snapshot")
+
+        self.ui.action_start_camera.triggered.connect(self.on_start_clicked)
+        self.ui.action_stop_camera.triggered.connect(self.on_stop_clicked)
+        self.ui.action_record.triggered.connect(self.on_record_clicked)
+        self.ui.action_snapshot.triggered.connect(self.on_snapshot_clicked)
+
+        # Template Matching UI
+        self.ui.btn_load_template = self.ui.findChild(QPushButton, "btn_load_template")
+        self.ui.chk_match_enable = self.ui.findChild(QCheckBox, "chk_match_enable")
+        self.ui.lbl_template_name = self.ui.findChild(QLabel, "lbl_template_name")
+        
+        if self.ui.btn_load_template:
+            self.ui.btn_load_template.clicked.connect(self.on_load_template_clicked)
+        if self.ui.chk_match_enable:
+            self.ui.chk_match_enable.toggled.connect(self.on_match_enable_toggled)
+            
+        self.template_loaded = False
         
         # --- Programmatic "Contours" Panel Setup (Independent) ---
         self.group_contours = QGroupBox("Contour Detection")
@@ -903,12 +920,6 @@ class MainWindow(QObject):
         self.update_worker_params_signal.emit(params)
 
     def on_detector_params_changed(self):
-        # Update Button Text based on Tab
-        if self.is_matching_ui_active:
-            self.ui.btn_find_template.setText("Stop Matching")
-        else:
-            self.ui.btn_find_template.setText("Find template in image")
-
         self.update_detector()
 
     def frame_callback(self, width, height, bytes_per_line, fmt, data):
@@ -951,7 +962,7 @@ class MainWindow(QObject):
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
                 self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
-                self.ui.record_btn.setText("Stop Recording")
+                self.ui.action_record.setText("Stop Recording")
                 self.log("Recording started: output.mkv")
             
             # Display
@@ -967,23 +978,21 @@ class MainWindow(QObject):
     def handle_error(self, message):
         self.log(f"Camera Error: {message}")
         self.ui.video_label.setText(f"Error: {message}")
-        self.ui.start_btn.setEnabled(True)
-        self.ui.stop_btn.setEnabled(False)
+        self.ui.action_start_camera.setEnabled(True)
+        self.ui.action_stop_camera.setEnabled(False)
         self.ui.controls_group.setEnabled(False)
         self.ui.trigger_group.setEnabled(False)
         self.ui.trigger_params_group.setEnabled(False)
         self.ui.ext_trigger_group.setEnabled(False)
         self.ui.strobe_group.setEnabled(False)
-        self.ui.btn_find_template.setEnabled(False)
 
     def on_start_clicked(self):
         if self.camera.open():
             if self.camera.start():
-                self.ui.start_btn.setEnabled(False)
-                self.ui.stop_btn.setEnabled(True)
-                self.ui.record_btn.setEnabled(True)
-                self.ui.snapshot_btn.setEnabled(True)
-                self.ui.btn_find_template.setEnabled(True)
+                self.ui.action_start_camera.setEnabled(False)
+                self.ui.action_stop_camera.setEnabled(True)
+                self.ui.action_record.setEnabled(True)
+                self.ui.action_snapshot.setEnabled(True)
                 self.ui.controls_group.setEnabled(True)
                 self.ui.trigger_group.setEnabled(True)
                 self.ui.strobe_group.setEnabled(True)
@@ -998,11 +1007,10 @@ class MainWindow(QObject):
         
         self.camera.stop()
         self.camera.close()
-        self.ui.start_btn.setEnabled(True)
-        self.ui.stop_btn.setEnabled(False)
-        self.ui.record_btn.setEnabled(False)
-        self.ui.snapshot_btn.setEnabled(False)
-        self.ui.btn_find_template.setEnabled(False)
+        self.ui.action_start_camera.setEnabled(True)
+        self.ui.action_stop_camera.setEnabled(False)
+        self.ui.action_record.setEnabled(False)
+        self.ui.action_snapshot.setEnabled(False)
         
         self.ui.controls_group.setEnabled(False)
         self.ui.trigger_group.setEnabled(False)
@@ -1021,7 +1029,7 @@ class MainWindow(QObject):
             self.log("Recording requested...")
         else:
             self.video_thread.stopRecording()
-            self.ui.record_btn.setText("Start Recording")
+            self.ui.action_record.setText("Start Recording")
             self.log("Recording stopped.")
 
     def on_snapshot_clicked(self):
@@ -1033,9 +1041,11 @@ class MainWindow(QObject):
     def on_aruco_enable_toggled(self, checked):
         if checked:
             # Mutual exclusion: disable template matching if active
-            if self.is_matching_ui_active:
+            if hasattr(self.ui, 'chk_match_enable') and self.ui.chk_match_enable.isChecked():
+                self.ui.chk_match_enable.blockSignals(True)
+                self.ui.chk_match_enable.setChecked(False)
+                self.ui.chk_match_enable.blockSignals(False)
                 self.is_matching_ui_active = False
-                self.ui.btn_find_template.setText("Find template in image")
             
             # Enable ArUco (update_detector picks up the checked state)
             self.update_detector()
@@ -1046,25 +1056,45 @@ class MainWindow(QObject):
             if not self.is_matching_ui_active:
                 self.toggle_worker_matching_signal.emit(False)
 
-    def on_find_template_clicked(self):
-        # Mutual Exclusion
-        if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
-            self.ui.chk_aruco_enable.setChecked(False)
-            # Toggling it off will stop worker. We restart it below if needed.
-
-        if self.is_matching_ui_active:
-            self.is_matching_ui_active = False
-            self.toggle_worker_matching_signal.emit(False)
-            self.ui.btn_find_template.setText("Find template in image")
-        else:
-            # Template Matching
-            file_path, _ = QFileDialog.getOpenFileName(self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)")
-            if file_path:
-                self.set_worker_template_signal.emit(file_path)
-                self.is_matching_ui_active = True
+    def on_load_template_clicked(self):
+        file_path, _ = QFileDialog.getOpenFileName(self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)")
+        if file_path:
+            self.set_worker_template_signal.emit(file_path)
+            self.template_loaded = True
+            
+            # Update Label
+            filename = os.path.basename(file_path)
+            if hasattr(self.ui, 'lbl_template_name'):
+                self.ui.lbl_template_name.setText(filename)
+                self.ui.lbl_template_name.setStyleSheet("color: black;")
+            
+            # If enabled, update worker
+            if hasattr(self.ui, 'chk_match_enable') and self.ui.chk_match_enable.isChecked():
                 self.update_detector()
                 self.toggle_worker_matching_signal.emit(True)
-                self.ui.btn_find_template.setText("Stop Matching")
+
+    def on_match_enable_toggled(self, checked):
+        if checked:
+            if not self.template_loaded:
+                # If no template, try to load one
+                self.on_load_template_clicked()
+                # If still not loaded (user cancelled), uncheck
+                if not self.template_loaded:
+                     self.ui.chk_match_enable.setChecked(False)
+                     return
+
+            # Mutual Exclusion: Disable ArUco
+            if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
+                 self.ui.chk_aruco_enable.blockSignals(True)
+                 self.ui.chk_aruco_enable.setChecked(False)
+                 self.ui.chk_aruco_enable.blockSignals(False)
+
+            self.is_matching_ui_active = True
+            self.update_detector()
+            self.toggle_worker_matching_signal.emit(True)
+        else:
+            self.is_matching_ui_active = False
+            self.toggle_worker_matching_signal.emit(False)
 
     def on_toggle_contours_toggled(self, checked):
         if checked:

@@ -420,6 +420,391 @@
          </item>
 
          <item>
+          <widget class="QGroupBox" name="group_serial">
+           <property name="title">
+            <string>Serial Controller</string>
+           </property>
+           <layout class="QVBoxLayout" name="serial_layout">
+            <item>
+             <layout class="QHBoxLayout" name="serial_conn_layout">
+              <item>
+               <widget class="QComboBox" name="combo_serial_port"/>
+              </item>
+              <item>
+               <widget class="QPushButton" name="btn_serial_refresh">
+                <property name="text">
+                 <string>↻</string>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>30</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="btn_serial_connect">
+                <property name="text">
+                 <string>Connect</string>
+                </property>
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QTabWidget" name="tabs_serial_cmds">
+              <property name="currentIndex">
+               <number>0</number>
+              </property>
+              <widget class="QWidget" name="tab_serial_gpio">
+               <attribute name="title">
+                <string>GPIO</string>
+               </attribute>
+               <layout class="QFormLayout" name="form_serial_gpio">
+                <item row="0" column="0" colspan="2">
+                 <widget class="QLabel" name="lbl_pulse">
+                  <property name="text">
+                   <string>Pulse: pin, val, dur(us)</string>
+                  </property>
+                  <property name="font">
+                    <font>
+                     <bold>true</bold>
+                    </font>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QSpinBox" name="spin_pulse_pin">
+                  <property name="toolTip"><string>Pin</string></property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <layout class="QHBoxLayout" name="layout_pulse_args">
+                  <item>
+                   <widget class="QSpinBox" name="spin_pulse_val">
+                    <property name="maximum"><number>1</number></property>
+                    <property name="toolTip"><string>Value (0/1)</string></property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spin_pulse_dur">
+                    <property name="maximum"><number>10000000</number></property>
+                    <property name="value"><number>1000</number></property>
+                    <property name="toolTip"><string>Duration (us)</string></property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item row="2" column="0" colspan="2">
+                 <widget class="QPushButton" name="btn_cmd_pulse">
+                  <property name="text"><string>Send Pulse</string></property>
+                 </widget>
+                </item>
+                
+                <item row="3" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_level">
+                   <property name="text"><string>Pin Levels (Click to Toggle)</string></property>
+                   <property name="font"><font><bold>true</bold></font></property>
+                  </widget>
+                </item>
+                <item row="4" column="0" colspan="2">
+                 <widget class="QWidget" name="widget_level_pins">
+                  <layout class="QGridLayout" name="layout_level_pins">
+                   <item row="0" column="0">
+                    <widget class="QPushButton" name="btn_pin_4">
+                     <property name="text"><string>Pin 4</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <widget class="QPushButton" name="btn_pin_13">
+                     <property name="text"><string>Pin 13</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="0" column="2">
+                    <widget class="QPushButton" name="btn_pin_14">
+                     <property name="text"><string>Pin 14</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="0" column="3">
+                    <widget class="QPushButton" name="btn_pin_15">
+                     <property name="text"><string>Pin 15</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0">
+                    <widget class="QPushButton" name="btn_pin_16">
+                     <property name="text"><string>Pin 16</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="1" column="1">
+                    <widget class="QPushButton" name="btn_pin_17">
+                     <property name="text"><string>Pin 17</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="1" column="2">
+                    <widget class="QPushButton" name="btn_pin_18">
+                     <property name="text"><string>Pin 18</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="1" column="3">
+                    <widget class="QPushButton" name="btn_pin_19">
+                     <property name="text"><string>Pin 19</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="2" column="0">
+                    <widget class="QPushButton" name="btn_pin_21">
+                     <property name="text"><string>Pin 21</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="2" column="1">
+                    <widget class="QPushButton" name="btn_pin_22">
+                     <property name="text"><string>Pin 22</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="2" column="2">
+                    <widget class="QPushButton" name="btn_pin_23">
+                     <property name="text"><string>Pin 23</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="2" column="3">
+                    <widget class="QPushButton" name="btn_pin_25">
+                     <property name="text"><string>Pin 25</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="3" column="0">
+                    <widget class="QPushButton" name="btn_pin_26">
+                     <property name="text"><string>Pin 26</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="3" column="1">
+                    <widget class="QPushButton" name="btn_pin_27">
+                     <property name="text"><string>Pin 27</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="3" column="2">
+                    <widget class="QPushButton" name="btn_pin_32">
+                     <property name="text"><string>Pin 32</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                   <item row="3" column="3">
+                    <widget class="QPushButton" name="btn_pin_33">
+                     <property name="text"><string>Pin 33</string></property>
+                     <property name="minimumHeight"><number>40</number></property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+ 
+              <widget class="QWidget" name="tab_serial_pwm">
+               <attribute name="title">
+                <string>PWM/Rep</string>
+               </attribute>
+               <layout class="QFormLayout" name="form_serial_pwm">
+                <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_pwm"><property name="text"><string>PWM: pin, hz, duty%</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QSpinBox" name="spin_pwm_pin"><property name="toolTip"><string>Pin</string></property></widget>
+                </item>
+                <item row="1" column="1">
+                 <layout class="QHBoxLayout" name="layout_pwm_args">
+                  <item>
+                   <widget class="QSpinBox" name="spin_pwm_freq">
+                    <property name="minimum"><number>1</number></property>
+                    <property name="maximum"><number>1000000</number></property>
+                    <property name="value"><number>1000</number></property>
+                    <property name="toolTip"><string>Freq (Hz)</string></property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spin_pwm_duty">
+                    <property name="maximum"><number>100</number></property>
+                    <property name="value"><number>50</number></property>
+                    <property name="toolTip"><string>Duty %</string></property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item row="2" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_pwm_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_pwm"><property name="text"><string>Start</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stoppwm"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+ 
+                <item row="3" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_repeat"><property name="text"><string>Repeat: pin, hz, dur</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="4" column="0">
+                 <widget class="QSpinBox" name="spin_repeat_pin"><property name="toolTip"><string>Pin</string></property></widget>
+                </item>
+                <item row="4" column="1">
+                 <layout class="QHBoxLayout" name="layout_repeat_args">
+                  <item>
+                   <widget class="QSpinBox" name="spin_repeat_freq">
+                    <property name="maximum"><number>1000000</number></property>
+                    <property name="value"><number>10</number></property>
+                    <property name="toolTip"><string>Freq (Hz)</string></property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spin_repeat_dur">
+                    <property name="maximum"><number>10000000</number></property>
+                    <property name="value"><number>1000</number></property>
+                    <property name="toolTip"><string>Duration (us)</string></property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item row="5" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_repeat_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_repeat"><property name="text"><string>Start</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stoprepeat"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+ 
+              <widget class="QWidget" name="tab_serial_adv">
+               <attribute name="title">
+                <string>Int/Throb</string>
+               </attribute>
+               <layout class="QFormLayout" name="form_serial_adv">
+                <item row="0" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_int"><property name="text"><string>Interrupt: pin, edge, tgt, w</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QSpinBox" name="spin_int_pin"><property name="toolTip"><string>Source Pin</string></property></widget>
+                </item>
+                <item row="1" column="1">
+                  <widget class="QComboBox" name="combo_int_edge">
+                   <item><property name="text"><string>RISING</string></property></item>
+                   <item><property name="text"><string>FALLING</string></property></item>
+                   <item><property name="text"><string>BOTH</string></property></item>
+                  </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QSpinBox" name="spin_int_target"><property name="toolTip"><string>Target Pin</string></property></widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QSpinBox" name="spin_int_width">
+                  <property name="maximum"><number>1000000</number></property>
+                  <property name="value"><number>1000</number></property>
+                  <property name="toolTip"><string>Pulse Width (us)</string></property>
+                 </widget>
+                </item>
+                <item row="3" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_int_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_interrupt"><property name="text"><string>Set</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stopinterrupt"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+ 
+                <item row="4" column="0" colspan="2">
+                  <widget class="QLabel" name="lbl_throb"><property name="text"><string>Throb: period, p1, p2, p3</string></property><property name="font"><font><bold>true</bold></font></property></widget>
+                </item>
+                <item row="5" column="0">
+                 <widget class="QSpinBox" name="spin_throb_period"><property name="minimum"><number>1</number></property><property name="value"><number>5</number></property><property name="toolTip"><string>Period (s)</string></property></widget>
+                </item>
+                <item row="5" column="1">
+                 <layout class="QHBoxLayout" name="layout_throb_pins">
+                  <item><widget class="QSpinBox" name="spin_throb_p1"><property name="value"><number>0</number></property></widget></item>
+                  <item><widget class="QSpinBox" name="spin_throb_p2"><property name="value"><number>1</number></property></widget></item>
+                  <item><widget class="QSpinBox" name="spin_throb_p3"><property name="value"><number>2</number></property></widget></item>
+                 </layout>
+                </item>
+                <item row="6" column="0" colspan="2">
+                 <layout class="QHBoxLayout" name="layout_throb_btns">
+                  <item><widget class="QPushButton" name="btn_cmd_throb"><property name="text"><string>Start</string></property></widget></item>
+                  <item><widget class="QPushButton" name="btn_cmd_stopthrob"><property name="text"><string>Stop</string></property></widget></item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+              
+              <widget class="QWidget" name="tab_serial_sys">
+               <attribute name="title">
+                <string>System</string>
+               </attribute>
+               <layout class="QVBoxLayout" name="layout_serial_sys">
+                <item>
+                 <widget class="QPushButton" name="btn_cmd_info"><property name="text"><string>System Info</string></property></widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btn_cmd_wifi"><property name="text"><string>WiFi Info</string></property></widget>
+                </item>
+                <item>
+                  <layout class="QHBoxLayout" name="layout_mem">
+                   <item><widget class="QLineEdit" name="edit_mem_addr"><property name="placeholderText"><string>Hex Address</string></property></widget></item>
+                   <item><widget class="QPushButton" name="btn_cmd_mem"><property name="text"><string>Read Mem</string></property></widget></item>
+                  </layout>
+                </item>
+                <item><spacer name="spacer_sys"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+               </layout>
+              </widget>
+ 
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_status">
+              <property name="text">
+               <string>Modified Pins:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="list_status">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>100</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_interrupts">
+              <property name="text">
+               <string>Interrupts:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="list_interrupts">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>80</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+
+         <item>
           <spacer name="verticalSpacer">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
@@ -594,6 +979,32 @@
              <widget class="QCheckBox" name="chk_aruco_show_rejected">
               <property name="text">
                <string>Show Rejected</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGroupBox" name="group_qrcode">
+           <property name="title">
+            <string>QR Code Detection</string>
+           </property>
+           <layout class="QVBoxLayout" name="layout_qrcode">
+            <item>
+             <widget class="QCheckBox" name="chk_qrcode_enable">
+              <property name="text">
+               <string>Enable QR Code Detection</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_qrcode_data">
+              <property name="text">
+               <string>Decoded Data: None</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
               </property>
              </widget>
             </item>
@@ -1015,287 +1426,133 @@
            </widget>
           </widget>
          </item>
+
          <item>
-          <widget class="QGroupBox" name="group_serial">
+          <widget class="QGroupBox" name="group_contours">
            <property name="title">
-            <string>Serial Controller</string>
+            <string>Contour Detection</string>
            </property>
-           <layout class="QVBoxLayout" name="serial_layout">
-            <item>
-             <layout class="QHBoxLayout" name="serial_conn_layout">
-              <item>
-               <widget class="QComboBox" name="combo_serial_port"/>
-              </item>
-              <item>
-               <widget class="QPushButton" name="btn_serial_refresh">
-                <property name="text">
-                 <string>↻</string>
-                </property>
-                <property name="maximumSize">
-                 <size>
-                  <width>30</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="btn_serial_connect">
-                <property name="text">
-                 <string>Connect</string>
-                </property>
-                <property name="checkable">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <widget class="QTabWidget" name="tabs_serial_cmds">
-              <property name="currentIndex">
-               <number>0</number>
-              </property>
-              <widget class="QWidget" name="tab_serial_gpio">
-               <attribute name="title">
-                <string>GPIO</string>
-               </attribute>
-               <layout class="QFormLayout" name="form_serial_gpio">
-                <item row="0" column="0" colspan="2">
-                 <widget class="QLabel" name="lbl_pulse">
-                  <property name="text">
-                   <string>Pulse: pin, val, dur(us)</string>
-                  </property>
-                  <property name="font">
-                    <font>
-                     <bold>true</bold>
-                    </font>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="0">
-                 <widget class="QSpinBox" name="spin_pulse_pin">
-                  <property name="toolTip"><string>Pin</string></property>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <layout class="QHBoxLayout" name="layout_pulse_args">
-                  <item>
-                   <widget class="QSpinBox" name="spin_pulse_val">
-                    <property name="maximum"><number>1</number></property>
-                    <property name="toolTip"><string>Value (0/1)</string></property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QSpinBox" name="spin_pulse_dur">
-                    <property name="maximum"><number>10000000</number></property>
-                    <property name="value"><number>1000</number></property>
-                    <property name="toolTip"><string>Duration (us)</string></property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-                <item row="2" column="0" colspan="2">
-                 <widget class="QPushButton" name="btn_cmd_pulse">
-                  <property name="text"><string>Send Pulse</string></property>
-                 </widget>
-                </item>
-                
-                <item row="3" column="0" colspan="2">
-                  <widget class="QLabel" name="lbl_level">
-                   <property name="text"><string>Pin Levels (Click to Toggle)</string></property>
-                   <property name="font"><font><bold>true</bold></font></property>
-                  </widget>
-                </item>
-                <item row="4" column="0" colspan="2">
-                 <widget class="QWidget" name="widget_level_pins">
-                  <layout class="QGridLayout" name="layout_level_pins"/>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
- 
-              <widget class="QWidget" name="tab_serial_pwm">
-               <attribute name="title">
-                <string>PWM/Rep</string>
-               </attribute>
-               <layout class="QFormLayout" name="form_serial_pwm">
-                <item row="0" column="0" colspan="2">
-                  <widget class="QLabel" name="lbl_pwm"><property name="text"><string>PWM: pin, hz, duty%</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-                </item>
-                <item row="1" column="0">
-                 <widget class="QSpinBox" name="spin_pwm_pin"><property name="toolTip"><string>Pin</string></property></widget>
-                </item>
-                <item row="1" column="1">
-                 <layout class="QHBoxLayout" name="layout_pwm_args">
-                  <item>
-                   <widget class="QSpinBox" name="spin_pwm_freq">
-                    <property name="minimum"><number>1</number></property>
-                    <property name="maximum"><number>1000000</number></property>
-                    <property name="value"><number>1000</number></property>
-                    <property name="toolTip"><string>Freq (Hz)</string></property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QSpinBox" name="spin_pwm_duty">
-                    <property name="maximum"><number>100</number></property>
-                    <property name="value"><number>50</number></property>
-                    <property name="toolTip"><string>Duty %</string></property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-                <item row="2" column="0" colspan="2">
-                 <layout class="QHBoxLayout" name="layout_pwm_btns">
-                  <item><widget class="QPushButton" name="btn_cmd_pwm"><property name="text"><string>Start</string></property></widget></item>
-                  <item><widget class="QPushButton" name="btn_cmd_stoppwm"><property name="text"><string>Stop</string></property></widget></item>
-                 </layout>
-                </item>
- 
-                <item row="3" column="0" colspan="2">
-                  <widget class="QLabel" name="lbl_repeat"><property name="text"><string>Repeat: pin, hz, dur</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-                </item>
-                <item row="4" column="0">
-                 <widget class="QSpinBox" name="spin_repeat_pin"><property name="toolTip"><string>Pin</string></property></widget>
-                </item>
-                <item row="4" column="1">
-                 <layout class="QHBoxLayout" name="layout_repeat_args">
-                  <item>
-                   <widget class="QSpinBox" name="spin_repeat_freq">
-                    <property name="maximum"><number>1000000</number></property>
-                    <property name="value"><number>10</number></property>
-                    <property name="toolTip"><string>Freq (Hz)</string></property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QSpinBox" name="spin_repeat_dur">
-                    <property name="maximum"><number>10000000</number></property>
-                    <property name="value"><number>1000</number></property>
-                    <property name="toolTip"><string>Duration (us)</string></property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-                <item row="5" column="0" colspan="2">
-                 <layout class="QHBoxLayout" name="layout_repeat_btns">
-                  <item><widget class="QPushButton" name="btn_cmd_repeat"><property name="text"><string>Start</string></property></widget></item>
-                  <item><widget class="QPushButton" name="btn_cmd_stoprepeat"><property name="text"><string>Stop</string></property></widget></item>
-                 </layout>
-                </item>
-               </layout>
-              </widget>
- 
-              <widget class="QWidget" name="tab_serial_adv">
-               <attribute name="title">
-                <string>Int/Throb</string>
-               </attribute>
-               <layout class="QFormLayout" name="form_serial_adv">
-                <item row="0" column="0" colspan="2">
-                  <widget class="QLabel" name="lbl_int"><property name="text"><string>Interrupt: pin, edge, tgt, w</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-                </item>
-                <item row="1" column="0">
-                 <widget class="QSpinBox" name="spin_int_pin"><property name="toolTip"><string>Source Pin</string></property></widget>
-                </item>
-                <item row="1" column="1">
-                  <widget class="QComboBox" name="combo_int_edge">
-                   <item><property name="text"><string>RISING</string></property></item>
-                   <item><property name="text"><string>FALLING</string></property></item>
-                   <item><property name="text"><string>BOTH</string></property></item>
-                  </widget>
-                </item>
-                <item row="2" column="0">
-                 <widget class="QSpinBox" name="spin_int_target"><property name="toolTip"><string>Target Pin</string></property></widget>
-                </item>
-                <item row="2" column="1">
-                 <widget class="QSpinBox" name="spin_int_width">
-                  <property name="maximum"><number>1000000</number></property>
-                  <property name="value"><number>1000</number></property>
-                  <property name="toolTip"><string>Pulse Width (us)</string></property>
-                 </widget>
-                </item>
-                <item row="3" column="0" colspan="2">
-                 <layout class="QHBoxLayout" name="layout_int_btns">
-                  <item><widget class="QPushButton" name="btn_cmd_interrupt"><property name="text"><string>Set</string></property></widget></item>
-                  <item><widget class="QPushButton" name="btn_cmd_stopinterrupt"><property name="text"><string>Stop</string></property></widget></item>
-                 </layout>
-                </item>
- 
-                <item row="4" column="0" colspan="2">
-                  <widget class="QLabel" name="lbl_throb"><property name="text"><string>Throb: period, p1, p2, p3</string></property><property name="font"><font><bold>true</bold></font></property></widget>
-                </item>
-                <item row="5" column="0">
-                 <widget class="QSpinBox" name="spin_throb_period"><property name="minimum"><number>1</number></property><property name="value"><number>5</number></property><property name="toolTip"><string>Period (s)</string></property></widget>
-                </item>
-                <item row="5" column="1">
-                 <layout class="QHBoxLayout" name="layout_throb_pins">
-                  <item><widget class="QSpinBox" name="spin_throb_p1"><property name="value"><number>0</number></property></widget></item>
-                  <item><widget class="QSpinBox" name="spin_throb_p2"><property name="value"><number>1</number></property></widget></item>
-                  <item><widget class="QSpinBox" name="spin_throb_p3"><property name="value"><number>2</number></property></widget></item>
-                 </layout>
-                </item>
-                <item row="6" column="0" colspan="2">
-                 <layout class="QHBoxLayout" name="layout_throb_btns">
-                  <item><widget class="QPushButton" name="btn_cmd_throb"><property name="text"><string>Start</string></property></widget></item>
-                  <item><widget class="QPushButton" name="btn_cmd_stopthrob"><property name="text"><string>Stop</string></property></widget></item>
-                 </layout>
-                </item>
-               </layout>
-              </widget>
-              
-              <widget class="QWidget" name="tab_serial_sys">
-               <attribute name="title">
-                <string>System</string>
-               </attribute>
-               <layout class="QVBoxLayout" name="layout_serial_sys">
-                <item>
-                 <widget class="QPushButton" name="btn_cmd_info"><property name="text"><string>System Info</string></property></widget>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="btn_cmd_wifi"><property name="text"><string>WiFi Info</string></property></widget>
-                </item>
-                <item>
-                  <layout class="QHBoxLayout" name="layout_mem">
-                   <item><widget class="QLineEdit" name="edit_mem_addr"><property name="placeholderText"><string>Hex Address</string></property></widget></item>
-                   <item><widget class="QPushButton" name="btn_cmd_mem"><property name="text"><string>Read Mem</string></property></widget></item>
-                  </layout>
-                </item>
-                <item><spacer name="spacer_sys"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
-               </layout>
-              </widget>
- 
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lbl_status">
+           <layout class="QFormLayout" name="formLayout_contours">
+            <item row="0" column="0" colspan="2">
+             <widget class="QPushButton" name="btn_toggle_contours">
               <property name="text">
-               <string>Modified Pins:</string>
+               <string>Enable Contours</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QListWidget" name="list_status">
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>100</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lbl_interrupts">
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_contour_mode">
               <property name="text">
-               <string>Interrupts:</string>
+               <string>Mode:</string>
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QListWidget" name="list_interrupts">
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>80</height>
-               </size>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="combo_contour_mode">
+              <item>
+               <property name="text">
+                <string>Canny</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Threshold</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_threshold">
+              <property name="text">
+               <string>Threshold:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSlider" name="slider_threshold">
+              <property name="maximum">
+               <number>255</number>
+              </property>
+              <property name="value">
+               <number>127</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLabel" name="lbl_threshold_val">
+              <property name="text">
+               <string>127</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_canny">
+              <property name="text">
+               <string>Canny Range:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="RangeSlider" name="slider_canny" native="true"/>
+            </item>
+            <item row="5" column="1">
+             <widget class="QLabel" name="lbl_canny_val">
+              <property name="text">
+               <string>50 - 150</string>
+              </property>
+             </widget>
+            </item>
+            <item row="6" column="0">
+             <widget class="QLabel" name="label_min_area">
+              <property name="text">
+               <string>Min Area:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="6" column="1">
+             <widget class="QSpinBox" name="spin_min_area">
+              <property name="maximum">
+               <number>100000</number>
+              </property>
+              <property name="value">
+               <number>100</number>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="0">
+             <widget class="QLabel" name="label_max_area">
+              <property name="text">
+               <string>Max Area:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="1">
+             <widget class="QSpinBox" name="spin_max_area">
+              <property name="maximum">
+               <number>100000</number>
+              </property>
+              <property name="value">
+               <number>100000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="8" column="1">
+             <widget class="QCheckBox" name="chk_fill_contours">
+              <property name="text">
+               <string>Fill Contours</string>
+              </property>
+             </widget>
+            </item>
+            <item row="9" column="1">
+             <widget class="QCheckBox" name="chk_show_box">
+              <property name="text">
+               <string>Show Bounding Box</string>
               </property>
              </widget>
             </item>
@@ -1401,6 +1658,13 @@
   </action>
 
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>RangeSlider</class>
+   <extends>QWidget</extends>
+   <header>range_slider</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -125,6 +125,7 @@ class SerialWorker(QObject):
 class MatchingWorker(QObject):
     result_ready = Signal(QImage)
     log_signal = Signal(str)
+    qr_found_signal = Signal(str)
     
     def __init__(self):
         super().__init__()
@@ -150,6 +151,9 @@ class MatchingWorker(QObject):
         }
         self.current_algo = 'ORB'
         self.is_contours_enabled = False
+
+        # QR Code
+        self.qr_detector = cv2.QRCodeDetector()
 
     @Slot(dict)
     def update_params(self, params):
@@ -214,6 +218,9 @@ class MatchingWorker(QObject):
                             self.log_signal.emit(f"Unknown ArUco dict: {dict_name}")
                             self.aruco_dict = None
                             self.aruco_obj = None
+                    elif self.current_algo == 'QRCODE':
+                        # QR Code detector is already initialized
+                        pass
 
                     # Recompute template if exists (feature matching)
                     if self.current_algo in ['ORB', 'SIFT', 'AKAZE'] and self.template_img is not None:
@@ -231,7 +238,7 @@ class MatchingWorker(QObject):
     def set_template(self, file_path):
         with QMutexLocker(self.mutex):
             if not file_path:
-                if self.current_algo != 'ARUCO':
+                if self.current_algo != 'ARUCO' and self.current_algo != 'QRCODE':
                     self.is_matching_enabled = False
                 self.template_img = None
                 return
@@ -239,7 +246,7 @@ class MatchingWorker(QObject):
             img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
             if img is not None:
                 self.template_img = img
-                if self.detector is not None and self.current_algo != 'ARUCO':
+                if self.detector is not None and self.current_algo not in ['ARUCO', 'QRCODE']:
                     self.template_kp, self.template_des = self.detector.detectAndCompute(img, None)
                     if self.template_des is not None:
                         self.is_matching_enabled = True
@@ -280,6 +287,7 @@ class MatchingWorker(QObject):
             local_aruco_obj = self.aruco_obj
             local_aruco_display = self.aruco_display.copy()
             local_contour_params = self.contour_params.copy()
+            local_qr_detector = self.qr_detector
         
         try:
             channels = bytes_per_line // width
@@ -328,7 +336,25 @@ class MatchingWorker(QObject):
 
             # --- 2. Matching Processing ---
             if matching_active:
-                if algo == 'ARUCO' and local_aruco_obj:
+                if algo == 'QRCODE' and local_qr_detector:
+                     retval, decoded_info, points, straight_qrcode = local_qr_detector.detectAndDecodeMulti(gray_frame)
+                     if retval:
+                         # points is a list of points for each QR code
+                         for i in range(len(decoded_info)):
+                             text = decoded_info[i]
+                             pts = points[i].astype(int)
+                             
+                             # Draw bounding box
+                             for j in range(4):
+                                 cv2.line(vis_img, tuple(pts[j]), tuple(pts[(j+1)%4]), (255, 0, 0), 2)
+                             
+                             # Draw text
+                             cv2.putText(vis_img, text, tuple(pts[0]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                             
+                             if text:
+                                 self.qr_found_signal.emit(text)
+
+                elif algo == 'ARUCO' and local_aruco_obj:
                      corners, ids, rejected = local_aruco_obj.detectMarkers(gray_frame)
                      if local_aruco_display['rejected'] and rejected:
                          cv2.aruco.drawDetectedMarkers(vis_img, rejected, borderColor=(100, 0, 255))
@@ -400,6 +426,7 @@ class MainWindow(QObject):
         
         # Load UI from file
         loader = QUiLoader()
+        loader.registerCustomWidget(RangeSlider)
         ui_file_path = os.path.join(script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
@@ -436,6 +463,7 @@ class MainWindow(QObject):
 
         self.worker.result_ready.connect(self.update_frame)
         self.worker.log_signal.connect(self.log)
+        self.worker.qr_found_signal.connect(self.handle_qr_found)
         
         self.matching_thread.start()
         
@@ -473,6 +501,15 @@ class MainWindow(QObject):
             self.ui.spin_aruco_border_bits = self.ui.findChild(QSpinBox, "spin_aruco_border_bits")
         if not hasattr(self.ui, 'chk_aruco_enable'):
             self.ui.chk_aruco_enable = self.ui.findChild(QCheckBox, "chk_aruco_enable")
+        
+        # QR Code Widgets
+        if not hasattr(self.ui, 'chk_qrcode_enable'):
+            self.ui.chk_qrcode_enable = self.ui.findChild(QCheckBox, "chk_qrcode_enable")
+        if not hasattr(self.ui, 'lbl_qrcode_data'):
+            self.ui.lbl_qrcode_data = self.ui.findChild(QLabel, "lbl_qrcode_data")
+        
+        if hasattr(self.ui, 'chk_qrcode_enable'):
+            self.ui.chk_qrcode_enable.toggled.connect(self.on_qrcode_enable_toggled)
 
         self.update_detector()
 
@@ -518,26 +555,13 @@ class MainWindow(QObject):
 
         # --- Setup Pin Level Buttons ---
         self.pin_buttons = {}
-        # List of valid pins as requested
         valid_pins = [4, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
-        # Access the layout from the widget defined in UI
-        # Note: In PySide6 loaded from .ui, the layout might need to be accessed via the widget
-        pin_layout = self.ui.widget_level_pins.layout()
         
-        for i, pin in enumerate(valid_pins):
-            btn = QPushButton(f"Pin {pin}")
-            btn.setCheckable(False) # We use color to indicate state, not checked state, or we can use both
-            btn.setMinimumHeight(40)
-            # Use style sheet for default state
-            btn.setStyleSheet("background-color: none;") 
-            # Capture 'pin' in lambda
-            btn.clicked.connect(lambda checked=False, p=pin: self.toggle_pin_level(p))
-            
-            # Grid layout: 4 columns
-            row = i // 4
-            col = i % 4
-            pin_layout.addWidget(btn, row, col)
-            self.pin_buttons[pin] = btn
+        for pin in valid_pins:
+            btn = self.ui.findChild(QPushButton, f"btn_pin_{pin}")
+            if btn:
+                btn.clicked.connect(lambda checked=False, p=pin: self.toggle_pin_level(p))
+                self.pin_buttons[pin] = btn
 
         
         # Disable serial tabs initially
@@ -604,51 +628,21 @@ class MainWindow(QObject):
             
         self.template_loaded = False
         
-        # --- Programmatic "Contours" Panel Setup (Independent) ---
-        self.group_contours = QGroupBox("Contour Detection")
-        self.contours_layout = QFormLayout(self.group_contours)
-        
-        self.btn_toggle_contours = QPushButton("Enable Contours")
-        self.btn_toggle_contours.setCheckable(True)
-        self.contours_layout.addRow(self.btn_toggle_contours)
-        
-        self.combo_contour_mode = QComboBox()
-        self.combo_contour_mode.addItems(["Canny", "Threshold"])
-        self.contours_layout.addRow("Mode:", self.combo_contour_mode)
-        
-        self.slider_threshold = QSlider(Qt.Horizontal)
-        self.slider_threshold.setRange(0, 255)
-        self.slider_threshold.setValue(127)
-        self.lbl_threshold_val = QLabel("127")
-        self.contours_layout.addRow("Threshold:", self.slider_threshold)
-        self.contours_layout.addRow("", self.lbl_threshold_val)
+        # --- Contour Controls ---
+        self.btn_toggle_contours = self.ui.findChild(QPushButton, "btn_toggle_contours")
+        self.combo_contour_mode = self.ui.findChild(QComboBox, "combo_contour_mode")
+        self.slider_threshold = self.ui.findChild(QSlider, "slider_threshold")
+        self.lbl_threshold_val = self.ui.findChild(QLabel, "lbl_threshold_val")
+        self.slider_canny = self.ui.findChild(RangeSlider, "slider_canny")
+        self.lbl_canny_val = self.ui.findChild(QLabel, "lbl_canny_val")
+        self.spin_min_area = self.ui.findChild(QSpinBox, "spin_min_area")
+        self.spin_max_area = self.ui.findChild(QSpinBox, "spin_max_area")
+        self.chk_fill_contours = self.ui.findChild(QCheckBox, "chk_fill_contours")
+        self.chk_show_box = self.ui.findChild(QCheckBox, "chk_show_box")
 
-        self.slider_canny = RangeSlider()
-        self.slider_canny.setRange(0, 255)
-        self.slider_canny.setValues(50, 150)
-        self.lbl_canny_val = QLabel("50 - 150")
-        self.contours_layout.addRow("Canny Range:", self.slider_canny)
-        self.contours_layout.addRow("", self.lbl_canny_val)
-        
-        self.spin_min_area = QSpinBox()
-        self.spin_min_area.setRange(0, 100000)
-        self.spin_min_area.setValue(100)
-        self.contours_layout.addRow("Min Area:", self.spin_min_area)
-
-        self.spin_max_area = QSpinBox()
-        self.spin_max_area.setRange(0, 100000)
-        self.spin_max_area.setValue(100000)
-        self.contours_layout.addRow("Max Area:", self.spin_max_area)
-        
-        self.chk_fill_contours = QCheckBox("Fill Contours")
-        self.contours_layout.addRow("", self.chk_fill_contours)
-        
-        self.chk_show_box = QCheckBox("Show Bounding Box")
-        self.contours_layout.addRow("", self.chk_show_box)
-        
-        # Add to scroll layout right (append to end)
-        if hasattr(self.ui, 'scroll_layout_right'):
-            self.ui.scroll_layout_right.addWidget(self.group_contours)
+        if self.slider_canny:
+            self.slider_canny.setRange(0, 255)
+            self.slider_canny.setValues(50, 150)
 
         # Connect Contour Signals
         self.btn_toggle_contours.toggled.connect(self.on_toggle_contours_toggled)
@@ -871,6 +865,12 @@ class MainWindow(QObject):
             self.interrupt_items_map[pin] = item
 
     def update_detector(self):
+        # QR Code Priority
+        if hasattr(self.ui, 'chk_qrcode_enable') and self.ui.chk_qrcode_enable.isChecked():
+            params = {'algo': 'QRCODE'}
+            self.update_worker_params_signal.emit(params)
+            return
+
         # ArUco Priority
         if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
             params = {'algo': 'ARUCO'}
@@ -1047,12 +1047,18 @@ class MainWindow(QObject):
                 self.ui.chk_match_enable.blockSignals(False)
                 self.is_matching_ui_active = False
             
+            # Mutual exclusion: disable QR Code if active
+            if hasattr(self.ui, 'chk_qrcode_enable') and self.ui.chk_qrcode_enable.isChecked():
+                self.ui.chk_qrcode_enable.blockSignals(True)
+                self.ui.chk_qrcode_enable.setChecked(False)
+                self.ui.chk_qrcode_enable.blockSignals(False)
+            
             # Enable ArUco (update_detector picks up the checked state)
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
         else:
             # Disable ArUco
-            # Only stop worker if not switching to template matching (which shouldn't happen here directly)
+            # Only stop worker if not switching to others (which shouldn't happen here directly)
             if not self.is_matching_ui_active:
                 self.toggle_worker_matching_signal.emit(False)
 
@@ -1089,12 +1095,44 @@ class MainWindow(QObject):
                  self.ui.chk_aruco_enable.setChecked(False)
                  self.ui.chk_aruco_enable.blockSignals(False)
 
+            # Mutual Exclusion: Disable QR Code
+            if hasattr(self.ui, 'chk_qrcode_enable') and self.ui.chk_qrcode_enable.isChecked():
+                 self.ui.chk_qrcode_enable.blockSignals(True)
+                 self.ui.chk_qrcode_enable.setChecked(False)
+                 self.ui.chk_qrcode_enable.blockSignals(False)
+
             self.is_matching_ui_active = True
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
         else:
             self.is_matching_ui_active = False
             self.toggle_worker_matching_signal.emit(False)
+
+    def on_qrcode_enable_toggled(self, checked):
+        if checked:
+            # Mutual exclusion: disable template matching if active
+            if hasattr(self.ui, 'chk_match_enable') and self.ui.chk_match_enable.isChecked():
+                self.ui.chk_match_enable.blockSignals(True)
+                self.ui.chk_match_enable.setChecked(False)
+                self.ui.chk_match_enable.blockSignals(False)
+                self.is_matching_ui_active = False
+
+            # Mutual exclusion: disable ArUco
+            if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
+                 self.ui.chk_aruco_enable.blockSignals(True)
+                 self.ui.chk_aruco_enable.setChecked(False)
+                 self.ui.chk_aruco_enable.blockSignals(False)
+            
+            self.update_detector()
+            self.toggle_worker_matching_signal.emit(True)
+        else:
+            if not self.is_matching_ui_active:
+                self.toggle_worker_matching_signal.emit(False)
+    
+    @Slot(str)
+    def handle_qr_found(self, text):
+        if hasattr(self.ui, 'lbl_qrcode_data'):
+            self.ui.lbl_qrcode_data.setText(f"Decoded Data: {text}")
 
     def on_toggle_contours_toggled(self, checked):
         if checked:

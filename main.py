@@ -601,14 +601,11 @@ class MainWindow(QObject):
         # Timer for polling serial read
         self.serial_poll_timer = QTimer()
         self.serial_poll_timer.timeout.connect(lambda: self.poll_serial_signal.emit())
-        self.serial_poll_timer.start(50)  # Poll every 50ms
+        self.serial_poll_timer.start(50) # Poll every 50ms
 
         # Initial Detector config
-
-        # Automatically bind all named UI elements to self.ui
-        self.bind_ui_elements(self.ui)
-
-        if hasattr(self.ui, "chk_qrcode_enable"):
+        
+        if hasattr(self.ui, 'chk_qrcode_enable'):
             self.ui.chk_qrcode_enable.toggled.connect(self.on_qrcode_enable_toggled)
 
         self.update_detector()
@@ -660,13 +657,12 @@ class MainWindow(QObject):
         # --- Setup Pin Level Buttons ---
         self.pin_buttons = {}
         valid_pins = [4, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
-
+        
         for pin in valid_pins:
-            btn = self.ui.findChild(QPushButton, f"btn_pin_{pin}")
-            if btn:
-                btn.clicked.connect(
-                    lambda checked=False, p=pin: self.toggle_pin_level(p)
-                )
+            btn_name = f"btn_pin_{pin}"
+            if hasattr(self.ui, btn_name):
+                btn = getattr(self.ui, btn_name)
+                btn.clicked.connect(lambda checked=False, p=pin: self.toggle_pin_level(p))
                 self.pin_buttons[pin] = btn
 
         # Disable serial tabs initially
@@ -709,50 +705,36 @@ class MainWindow(QObject):
         )
 
         # New Connections for Strobe Params
-        self.ui.combo_strobe_mode.currentIndexChanged.connect(
-            self.on_strobe_mode_changed
-        )
-        self.ui.combo_strobe_polarity.currentIndexChanged.connect(
-            self.on_strobe_polarity_changed
-        )
+        self.ui.combo_strobe_mode.currentIndexChanged.connect(self.on_strobe_mode_changed)
+        self.ui.combo_strobe_polarity.currentIndexChanged.connect(self.on_strobe_polarity_changed)
         self.ui.spin_strobe_delay.valueChanged.connect(self.on_strobe_delay_changed)
         self.ui.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
-
+        
         # Retrieve Actions
-        self.ui.action_start_camera = self.ui.findChild(QAction, "action_start_camera")
-        self.ui.action_stop_camera = self.ui.findChild(QAction, "action_stop_camera")
-        self.ui.action_record = self.ui.findChild(QAction, "action_record")
-        self.ui.action_snapshot = self.ui.findChild(QAction, "action_snapshot")
-
         self.ui.action_start_camera.triggered.connect(self.on_start_clicked)
         self.ui.action_stop_camera.triggered.connect(self.on_stop_clicked)
         self.ui.action_record.triggered.connect(self.on_record_clicked)
         self.ui.action_snapshot.triggered.connect(self.on_snapshot_clicked)
 
         # Template Matching UI
-        self.ui.btn_load_template = self.ui.findChild(QPushButton, "btn_load_template")
-        self.ui.chk_match_enable = self.ui.findChild(QCheckBox, "chk_match_enable")
-        self.ui.lbl_template_name = self.ui.findChild(QLabel, "lbl_template_name")
-
-        if self.ui.btn_load_template:
+        if hasattr(self.ui, 'btn_load_template'):
             self.ui.btn_load_template.clicked.connect(self.on_load_template_clicked)
-        if self.ui.chk_match_enable:
+        if hasattr(self.ui, 'chk_match_enable'):
             self.ui.chk_match_enable.toggled.connect(self.on_match_enable_toggled)
-
+            
         self.template_loaded = False
-
+        
         # --- Contour Controls ---
-        self.btn_toggle_contours = self.ui.findChild(QPushButton, "btn_toggle_contours")
-        self.combo_contour_mode = self.ui.findChild(QComboBox, "combo_contour_mode")
-        self.slider_threshold = self.ui.findChild(QSlider, "slider_threshold")
-        self.lbl_threshold_val = self.ui.findChild(QLabel, "lbl_threshold_val")
-        self.slider_canny = self.ui.findChild(RangeSlider, "slider_canny")
-        self.lbl_canny_val = self.ui.findChild(QLabel, "lbl_canny_val")
-        self.spin_min_area = self.ui.findChild(QSpinBox, "spin_min_area")
-        self.spin_max_area = self.ui.findChild(QSpinBox, "spin_max_area")
-        self.chk_fill_contours = self.ui.findChild(QCheckBox, "chk_fill_contours")
-        self.chk_show_box = self.ui.findChild(QCheckBox, "chk_show_box")
-
+        self.btn_toggle_contours = self.ui.btn_toggle_contours
+        self.combo_contour_mode = self.ui.combo_contour_mode
+        self.slider_threshold = self.ui.slider_threshold
+        self.lbl_threshold_val = self.ui.lbl_threshold_val
+        self.slider_canny = self.ui.slider_canny
+        self.lbl_canny_val = self.ui.lbl_canny_val
+        self.spin_min_area = self.ui.spin_min_area
+        self.spin_max_area = self.ui.spin_max_area
+        self.chk_fill_contours = self.ui.chk_fill_contours
+        self.chk_show_box = self.ui.chk_show_box
         if self.slider_canny:
             self.slider_canny.setRange(0, 255)
             self.slider_canny.setValues(50, 150)
@@ -832,11 +814,6 @@ class MainWindow(QObject):
         self.recording_requested = False
         self.current_fps = 30.0
         self.last_ui_update_time = 0
-
-    def bind_ui_elements(self, ui_element):
-        for child in ui_element.findChildren(QObject):
-            if child.objectName():
-                setattr(ui_element, child.objectName(), child)
 
     def show(self):
         self.ui.showMaximized()

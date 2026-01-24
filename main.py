@@ -19,16 +19,45 @@ import _mindvision_qobject_py
 import PySide6.QtWidgets
 import cv2
 import numpy as np
+
 try:
     import serial
     import serial.tools.list_ports
+
     HAS_SERIAL = True
 except ImportError:
     HAS_SERIAL = False
     print("Warning: pyserial not installed. Serial features disabled.")
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QButtonGroup, QFileDialog, QListWidget, QListWidgetItem, QVBoxLayout, QPushButton, QFormLayout, QSpinBox, QCheckBox, QGroupBox, QComboBox, QSlider)
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QFile, QObject, QEvent, QThread, QMutex
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QLabel,
+    QButtonGroup,
+    QFileDialog,
+    QListWidget,
+    QListWidgetItem,
+    QVBoxLayout,
+    QPushButton,
+    QFormLayout,
+    QSpinBox,
+    QCheckBox,
+    QGroupBox,
+    QComboBox,
+    QSlider,
+)
+from PySide6.QtCore import (
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
+    QFile,
+    QObject,
+    QEvent,
+    QThread,
+    QMutex,
+)
 from PySide6.QtGui import QImage, QPixmap, QAction
 from PySide6.QtUiTools import QUiLoader
 from range_slider import RangeSlider
@@ -39,10 +68,11 @@ except ImportError as e:
     print(f"Failed to import _mindvision_qobject_py: {e}")
     sys.exit(1)
 
+
 class SerialWorker(QObject):
     log_signal = Signal(str)
     connection_status = Signal(bool)
-    
+
     def __init__(self):
         super().__init__()
         self.serial_port = None
@@ -87,10 +117,10 @@ class SerialWorker(QObject):
             if not self.is_connected or not self.serial_port:
                 self.log_signal.emit("Error: Not connected to serial port.")
                 return
-            
+
             try:
                 full_cmd = cmd.strip() + "\n"
-                self.serial_port.write(full_cmd.encode('utf-8'))
+                self.serial_port.write(full_cmd.encode("utf-8"))
                 self.log_signal.emit(f"Tx: {cmd}")
             except Exception as e:
                 self.log_signal.emit(f"Send error: {e}")
@@ -114,7 +144,11 @@ class SerialWorker(QObject):
                     # Read up to 10 lines to catch up but not freeze UI
                     for _ in range(10):
                         if self.serial_port.in_waiting:
-                            line = self.serial_port.readline().decode('utf-8', errors='replace').strip()
+                            line = (
+                                self.serial_port.readline()
+                                .decode("utf-8", errors="replace")
+                                .strip()
+                            )
                             if line:
                                 self.log_signal.emit(f"Rx: {line}")
                         else:
@@ -122,11 +156,12 @@ class SerialWorker(QObject):
                 except Exception as e:
                     self.log_signal.emit(f"Read error: {e}")
 
+
 class MatchingWorker(QObject):
     result_ready = Signal(QImage)
     log_signal = Signal(str)
     qr_found_signal = Signal(str)
-    
+
     def __init__(self):
         super().__init__()
         self.detector = None
@@ -136,20 +171,23 @@ class MatchingWorker(QObject):
         self.template_des = None
         self.is_matching_enabled = False
         self.mutex = QMutex()
-        
+
         # ArUco
         self.aruco_dict = None
         self.aruco_params = None
         self.aruco_obj = None
-        self.aruco_display = {'ids': True, 'rejected': False}
+        self.aruco_display = {"ids": True, "rejected": False}
         self.contour_params = {
-            'mode': 'Canny',
-            'thresh_min': 50, 'thresh_max': 150,
-            'threshold': 127,
-            'min_area': 100, 'max_area': 100000,
-            'fill': False, 'box': False
+            "mode": "Canny",
+            "thresh_min": 50,
+            "thresh_max": 150,
+            "threshold": 127,
+            "min_area": 100,
+            "max_area": 100000,
+            "fill": False,
+            "box": False,
         }
-        self.current_algo = 'ORB'
+        self.current_algo = "ORB"
         self.is_contours_enabled = False
 
         # QR Code
@@ -161,70 +199,85 @@ class MatchingWorker(QObject):
         with QMutexLocker(self.mutex):
             try:
                 # If 'algo' is provided, we are updating the Matching Algo
-                if 'algo' in params:
-                    self.current_algo = params['algo']
-                    
-                    if self.current_algo == 'ORB':
+                if "algo" in params:
+                    self.current_algo = params["algo"]
+
+                    if self.current_algo == "ORB":
                         self.detector = cv2.ORB_create(
-                            nfeatures=params.get('nfeatures', 500),
-                            scaleFactor=params.get('scaleFactor', 1.2),
-                            nlevels=params.get('nlevels', 8),
-                            edgeThreshold=params.get('edgeThreshold', 31),
-                            firstLevel=params.get('firstLevel', 0),
-                            WTA_K=params.get('WTA_K', 2),
-                            scoreType=params.get('scoreType', 0),
-                            patchSize=params.get('patchSize', 31),
-                            fastThreshold=params.get('fastThreshold', 20)
+                            nfeatures=params.get("nfeatures", 500),
+                            scaleFactor=params.get("scaleFactor", 1.2),
+                            nlevels=params.get("nlevels", 8),
+                            edgeThreshold=params.get("edgeThreshold", 31),
+                            firstLevel=params.get("firstLevel", 0),
+                            WTA_K=params.get("WTA_K", 2),
+                            scoreType=params.get("scoreType", 0),
+                            patchSize=params.get("patchSize", 31),
+                            fastThreshold=params.get("fastThreshold", 20),
                         )
                         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-                    elif self.current_algo == 'SIFT':
+                    elif self.current_algo == "SIFT":
                         self.detector = cv2.SIFT_create(
-                            nfeatures=params.get('nfeatures', 0),
-                            nOctaveLayers=params.get('nOctaveLayers', 3),
-                            contrastThreshold=params.get('contrastThreshold', 0.04),
-                            edgeThreshold=params.get('edgeThreshold', 10),
-                            sigma=params.get('sigma', 1.6)
+                            nfeatures=params.get("nfeatures", 0),
+                            nOctaveLayers=params.get("nOctaveLayers", 3),
+                            contrastThreshold=params.get("contrastThreshold", 0.04),
+                            edgeThreshold=params.get("edgeThreshold", 10),
+                            sigma=params.get("sigma", 1.6),
                         )
                         self.bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
-                    elif self.current_algo == 'AKAZE':
+                    elif self.current_algo == "AKAZE":
                         self.detector = cv2.AKAZE_create(
-                            descriptor_type=params.get('descriptor_type', 5),
-                            threshold=params.get('threshold', 0.0012),
-                            nOctaves=params.get('nOctaves', 4),
-                            nOctaveLayers=params.get('nOctaveLayers', 4)
+                            descriptor_type=params.get("descriptor_type", 5),
+                            threshold=params.get("threshold", 0.0012),
+                            nOctaves=params.get("nOctaves", 4),
+                            nOctaveLayers=params.get("nOctaveLayers", 4),
                         )
                         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-                    elif self.current_algo == 'ARUCO':
-                        dict_name = params.get('dict', 'DICT_4X4_50')
+                    elif self.current_algo == "ARUCO":
+                        dict_name = params.get("dict", "DICT_4X4_50")
                         if hasattr(cv2.aruco, dict_name):
-                            self.aruco_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dict_name))
+                            self.aruco_dict = cv2.aruco.getPredefinedDictionary(
+                                getattr(cv2.aruco, dict_name)
+                            )
                             if self.aruco_params is None:
                                 self.aruco_params = cv2.aruco.DetectorParameters()
-                            
+
                             # Update ArUco Params
-                            if 'markerBorderBits' in params:
-                                self.aruco_params.markerBorderBits = params['markerBorderBits']
-                            
-                            self.aruco_display['ids'] = params.get('show_ids', True)
-                            self.aruco_display['rejected'] = params.get('show_rejected', False)
+                            if "markerBorderBits" in params:
+                                self.aruco_params.markerBorderBits = params[
+                                    "markerBorderBits"
+                                ]
+
+                            self.aruco_display["ids"] = params.get("show_ids", True)
+                            self.aruco_display["rejected"] = params.get(
+                                "show_rejected", False
+                            )
 
                             # Create ArucoDetector
                             try:
-                                self.aruco_obj = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+                                self.aruco_obj = cv2.aruco.ArucoDetector(
+                                    self.aruco_dict, self.aruco_params
+                                )
                             except AttributeError:
-                                self.aruco_obj = None 
-                                self.log_signal.emit("Error: cv2.aruco.ArucoDetector not found")
+                                self.aruco_obj = None
+                                self.log_signal.emit(
+                                    "Error: cv2.aruco.ArucoDetector not found"
+                                )
                         else:
                             self.log_signal.emit(f"Unknown ArUco dict: {dict_name}")
                             self.aruco_dict = None
                             self.aruco_obj = None
-                    elif self.current_algo == 'QRCODE':
+                    elif self.current_algo == "QRCODE":
                         # QR Code detector is already initialized
                         pass
 
                     # Recompute template if exists (feature matching)
-                    if self.current_algo in ['ORB', 'SIFT', 'AKAZE'] and self.template_img is not None:
-                        self.template_kp, self.template_des = self.detector.detectAndCompute(self.template_img, None)
+                    if (
+                        self.current_algo in ["ORB", "SIFT", "AKAZE"]
+                        and self.template_img is not None
+                    ):
+                        self.template_kp, self.template_des = (
+                            self.detector.detectAndCompute(self.template_img, None)
+                        )
 
             except Exception as e:
                 self.log_signal.emit(f"Worker update error: {e}")
@@ -238,7 +291,7 @@ class MatchingWorker(QObject):
     def set_template(self, file_path):
         with QMutexLocker(self.mutex):
             if not file_path:
-                if self.current_algo != 'ARUCO' and self.current_algo != 'QRCODE':
+                if self.current_algo != "ARUCO" and self.current_algo != "QRCODE":
                     self.is_matching_enabled = False
                 self.template_img = None
                 return
@@ -246,15 +299,22 @@ class MatchingWorker(QObject):
             img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
             if img is not None:
                 self.template_img = img
-                if self.detector is not None and self.current_algo not in ['ARUCO', 'QRCODE']:
-                    self.template_kp, self.template_des = self.detector.detectAndCompute(img, None)
+                if self.detector is not None and self.current_algo not in [
+                    "ARUCO",
+                    "QRCODE",
+                ]:
+                    self.template_kp, self.template_des = (
+                        self.detector.detectAndCompute(img, None)
+                    )
                     if self.template_des is not None:
                         self.is_matching_enabled = True
                         self.log_signal.emit(f"Worker: Template loaded {file_path}")
                     else:
                         self.log_signal.emit("Worker: No features in template")
                 else:
-                     self.log_signal.emit(f"Worker: Template loaded (not used for {self.current_algo})")
+                    self.log_signal.emit(
+                        f"Worker: Template loaded (not used for {self.current_algo})"
+                    )
             else:
                 self.log_signal.emit("Worker: Failed to load template")
 
@@ -275,7 +335,7 @@ class MatchingWorker(QObject):
             matching_active = self.is_matching_enabled
             contours_active = self.is_contours_enabled
             algo = self.current_algo
-            
+
             # Local refs
             local_detector = self.detector
             local_bf = self.bf
@@ -288,14 +348,18 @@ class MatchingWorker(QObject):
             local_aruco_display = self.aruco_display.copy()
             local_contour_params = self.contour_params.copy()
             local_qr_detector = self.qr_detector
-        
+
         try:
             channels = bytes_per_line // width
-            img_np = np.frombuffer(data_bytes, dtype=np.uint8).reshape((height, width, channels))
-            
+            img_np = np.frombuffer(data_bytes, dtype=np.uint8).reshape(
+                (height, width, channels)
+            )
+
             # If no processing is needed, return original
             if not matching_active and not contours_active:
-                qimg = QImage(img_np.data, width, height, bytes_per_line, QImage.Format(fmt)).copy()
+                qimg = QImage(
+                    img_np.data, width, height, bytes_per_line, QImage.Format(fmt)
+                ).copy()
                 self.result_ready.emit(qimg)
                 return
 
@@ -311,69 +375,116 @@ class MatchingWorker(QObject):
             if contours_active:
                 # Blur to reduce noise
                 blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0)
-                
+
                 # Binarize based on mode
-                if local_contour_params.get('mode') == 'Threshold':
+                if local_contour_params.get("mode") == "Threshold":
                     # Binary Threshold
-                    _, binary_img = cv2.threshold(blurred, local_contour_params.get('threshold', 127), 255, cv2.THRESH_BINARY)
-                    edges = binary_img # Treat binary result as input for findContours
+                    _, binary_img = cv2.threshold(
+                        blurred,
+                        local_contour_params.get("threshold", 127),
+                        255,
+                        cv2.THRESH_BINARY,
+                    )
+                    edges = binary_img  # Treat binary result as input for findContours
                 else:
                     # Default: Canny Edges
-                    edges = cv2.Canny(blurred, local_contour_params['thresh_min'], local_contour_params['thresh_max'])
-                
+                    edges = cv2.Canny(
+                        blurred,
+                        local_contour_params["thresh_min"],
+                        local_contour_params["thresh_max"],
+                    )
+
                 # Find Contours
-                contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                
+                contours, _ = cv2.findContours(
+                    edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+
                 # Draw on vis_img
                 for cnt in contours:
                     area = cv2.contourArea(cnt)
-                    if local_contour_params['min_area'] < area < local_contour_params['max_area']:
-                        thickness = -1 if local_contour_params['fill'] else 2
+                    if (
+                        local_contour_params["min_area"]
+                        < area
+                        < local_contour_params["max_area"]
+                    ):
+                        thickness = -1 if local_contour_params["fill"] else 2
                         cv2.drawContours(vis_img, [cnt], -1, (0, 255, 0), thickness)
-                        if local_contour_params['box']:
+                        if local_contour_params["box"]:
                             x, y, w, h = cv2.boundingRect(cnt)
-                            cv2.rectangle(vis_img, (x, y), (x+w, y+h), (0, 0, 255), 2)
+                            cv2.rectangle(
+                                vis_img, (x, y), (x + w, y + h), (0, 0, 255), 2
+                            )
 
             # --- 2. Matching Processing ---
             if matching_active:
-                if algo == 'QRCODE' and local_qr_detector:
-                     retval, decoded_info, points, straight_qrcode = local_qr_detector.detectAndDecodeMulti(gray_frame)
-                     if retval:
-                         # points is a list of points for each QR code
-                         for i in range(len(decoded_info)):
-                             text = decoded_info[i]
-                             pts = points[i].astype(int)
-                             
-                             # Draw bounding box
-                             for j in range(4):
-                                 cv2.line(vis_img, tuple(pts[j]), tuple(pts[(j+1)%4]), (255, 0, 0), 2)
-                             
-                             # Draw text
-                             cv2.putText(vis_img, text, tuple(pts[0]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-                             
-                             if text:
-                                 self.qr_found_signal.emit(text)
+                if algo == "QRCODE" and local_qr_detector:
+                    retval, decoded_info, points, straight_qrcode = (
+                        local_qr_detector.detectAndDecodeMulti(gray_frame)
+                    )
+                    if retval:
+                        # points is a list of points for each QR code
+                        for i in range(len(decoded_info)):
+                            text = decoded_info[i]
+                            pts = points[i].astype(int)
 
-                elif algo == 'ARUCO' and local_aruco_obj:
-                     corners, ids, rejected = local_aruco_obj.detectMarkers(gray_frame)
-                     if local_aruco_display['rejected'] and rejected:
-                         cv2.aruco.drawDetectedMarkers(vis_img, rejected, borderColor=(100, 0, 255))
-                     if ids is not None and len(ids) > 0:
-                         display_ids = ids if local_aruco_display['ids'] else None
-                         cv2.aruco.drawDetectedMarkers(vis_img, corners, display_ids)
+                            # Draw bounding box
+                            for j in range(4):
+                                cv2.line(
+                                    vis_img,
+                                    tuple(pts[j]),
+                                    tuple(pts[(j + 1) % 4]),
+                                    (255, 0, 0),
+                                    2,
+                                )
 
-                elif algo in ['ORB', 'SIFT', 'AKAZE'] and local_template_des is not None and local_detector is not None:
-                    kp_frame, des_frame = local_detector.detectAndCompute(gray_frame, None)
+                            # Draw text
+                            cv2.putText(
+                                vis_img,
+                                text,
+                                tuple(pts[0]),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                (255, 0, 0),
+                                2,
+                            )
+
+                            if text:
+                                self.qr_found_signal.emit(text)
+
+                elif algo == "ARUCO" and local_aruco_obj:
+                    corners, ids, rejected = local_aruco_obj.detectMarkers(gray_frame)
+                    if local_aruco_display["rejected"] and rejected:
+                        cv2.aruco.drawDetectedMarkers(
+                            vis_img, rejected, borderColor=(100, 0, 255)
+                        )
+                    if ids is not None and len(ids) > 0:
+                        display_ids = ids if local_aruco_display["ids"] else None
+                        cv2.aruco.drawDetectedMarkers(vis_img, corners, display_ids)
+
+                elif (
+                    algo in ["ORB", "SIFT", "AKAZE"]
+                    and local_template_des is not None
+                    and local_detector is not None
+                ):
+                    kp_frame, des_frame = local_detector.detectAndCompute(
+                        gray_frame, None
+                    )
                     if des_frame is not None:
                         matches = local_bf.match(local_template_des, des_frame)
                         matches = sorted(matches, key=lambda x: x.distance)
                         good_matches = matches[:20]
-                        
+
                         # Note: drawMatches creates a NEW image (side-by-side)
                         # We pass vis_img as 'img2' so contours drawn previously appear in the scene half
-                        vis_img = cv2.drawMatches(local_template_img, local_template_kp, 
-                                                vis_img,
-                                                kp_frame, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+                        vis_img = cv2.drawMatches(
+                            local_template_img,
+                            local_template_kp,
+                            vis_img,
+                            kp_frame,
+                            good_matches,
+                            None,
+                            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+                        )
 
             # Convert final result to QImage
             # vis_img is BGR (or BGR-like output from drawMatches)
@@ -391,8 +502,10 @@ class MatchingWorker(QObject):
 class QMutexLocker:
     def __init__(self, mutex):
         self.mutex = mutex
+
     def __enter__(self):
         self.mutex.lock()
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.mutex.unlock()
 
@@ -400,7 +513,7 @@ class QMutexLocker:
 class MainWindow(QObject):
     update_fps_signal = Signal(float)
     error_signal = Signal(str)
-    
+
     # Serial Signals
     connect_serial_signal = Signal(str, int)
     disconnect_serial_signal = Signal()
@@ -423,7 +536,7 @@ class MainWindow(QObject):
 
     def __init__(self):
         super().__init__()
-        
+
         # Load UI from file
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
@@ -432,7 +545,7 @@ class MainWindow(QObject):
         if not ui_file.open(QFile.ReadOnly):
             print(f"Cannot open {ui_file_path}: {ui_file.errorString()}")
             sys.exit(-1)
-        
+
         self.ui = loader.load(ui_file)
         ui_file.close()
 
@@ -446,69 +559,56 @@ class MainWindow(QObject):
         self.ui.video_label.installEventFilter(self)
 
         self.current_pixmap = None
-        
+
         # Setup Worker Thread
         self.matching_thread = QThread()
         self.worker = MatchingWorker()
         self.worker.moveToThread(self.matching_thread)
-        
+
         # Connect Signals
         self.process_frame_signal.connect(self.worker.process_frame)
         self.update_worker_params_signal.connect(self.worker.update_params)
         self.set_worker_template_signal.connect(self.worker.set_template)
         self.toggle_worker_matching_signal.connect(self.worker.toggle_matching)
-        
+
         self.toggle_worker_contours_signal.connect(self.worker.toggle_contours)
-        self.update_worker_contour_params_signal.connect(self.worker.update_contour_params)
+        self.update_worker_contour_params_signal.connect(
+            self.worker.update_contour_params
+        )
 
         self.worker.result_ready.connect(self.update_frame)
         self.worker.log_signal.connect(self.log)
         self.worker.qr_found_signal.connect(self.handle_qr_found)
-        
+
         self.matching_thread.start()
-        
+
         # --- Serial Worker Setup ---
         self.serial_thread = QThread()
         self.serial_worker = SerialWorker()
         self.serial_worker.moveToThread(self.serial_thread)
-        
+
         # Connect signals
         self.connect_serial_signal.connect(self.serial_worker.connect_serial)
         self.disconnect_serial_signal.connect(self.serial_worker.disconnect_serial)
         self.send_serial_cmd_signal.connect(self.serial_worker.send_command)
         self.poll_serial_signal.connect(self.serial_worker.poll_serial)
-        
+
         self.serial_worker.log_signal.connect(self.log)
         self.serial_worker.connection_status.connect(self.on_serial_status_changed)
-        
+
         self.serial_thread.start()
-        
+
         # Timer for polling serial read
         self.serial_poll_timer = QTimer()
         self.serial_poll_timer.timeout.connect(lambda: self.poll_serial_signal.emit())
-        self.serial_poll_timer.start(50) # Poll every 50ms
+        self.serial_poll_timer.start(50)  # Poll every 50ms
 
         # Initial Detector config
-        
-        # Patch: Ensure ArUco widgets are found (QUiLoader sometimes misses deep nesting)
-        if not hasattr(self.ui, 'aruco_dict'):
-            self.ui.aruco_dict = self.ui.findChild(QComboBox, "aruco_dict")
-        if not hasattr(self.ui, 'chk_aruco_show_ids'):
-            self.ui.chk_aruco_show_ids = self.ui.findChild(QCheckBox, "chk_aruco_show_ids")
-        if not hasattr(self.ui, 'chk_aruco_show_rejected'):
-            self.ui.chk_aruco_show_rejected = self.ui.findChild(QCheckBox, "chk_aruco_show_rejected")
-        if not hasattr(self.ui, 'spin_aruco_border_bits'):
-            self.ui.spin_aruco_border_bits = self.ui.findChild(QSpinBox, "spin_aruco_border_bits")
-        if not hasattr(self.ui, 'chk_aruco_enable'):
-            self.ui.chk_aruco_enable = self.ui.findChild(QCheckBox, "chk_aruco_enable")
-        
-        # QR Code Widgets
-        if not hasattr(self.ui, 'chk_qrcode_enable'):
-            self.ui.chk_qrcode_enable = self.ui.findChild(QCheckBox, "chk_qrcode_enable")
-        if not hasattr(self.ui, 'lbl_qrcode_data'):
-            self.ui.lbl_qrcode_data = self.ui.findChild(QLabel, "lbl_qrcode_data")
-        
-        if hasattr(self.ui, 'chk_qrcode_enable'):
+
+        # Automatically bind all named UI elements to self.ui
+        self.bind_ui_elements(self.ui)
+
+        if hasattr(self.ui, "chk_qrcode_enable"):
             self.ui.chk_qrcode_enable.toggled.connect(self.on_qrcode_enable_toggled)
 
         self.update_detector()
@@ -520,7 +620,7 @@ class MainWindow(QObject):
         # Status Bar (add permanent widget manually)
         self.fps_label = QLabel("FPS: 0.0")
         self.ui.statusBar().addPermanentWidget(self.fps_label)
-        
+
         # Log Window Setup
         self.ui.log_text_edit.setMaximumBlockCount(1000)
         self.ui.log_text_edit.setCenterOnScroll(True)
@@ -528,13 +628,13 @@ class MainWindow(QObject):
 
         # --- Status Widgets Setup (Programmatic) ---
         self.has_initialized_settings = False
-        self.status_items_map = {} # Map pin -> QListWidgetItem
-        self.interrupt_items_map = {} # Map pin -> QListWidgetItem
+        self.status_items_map = {}  # Map pin -> QListWidgetItem
+        self.interrupt_items_map = {}  # Map pin -> QListWidgetItem
 
         # Status List - already in UI
         # self.ui.list_status
         # self.ui.list_interrupts
-        
+
         # Serial UI Init
         self.refresh_serial_ports()
         self.ui.btn_serial_refresh.clicked.connect(self.refresh_serial_ports)
@@ -549,62 +649,75 @@ class MainWindow(QObject):
         self.ui.btn_cmd_stopinterrupt.clicked.connect(self.on_cmd_stopinterrupt)
         self.ui.btn_cmd_throb.clicked.connect(self.on_cmd_throb)
         self.ui.btn_cmd_stopthrob.clicked.connect(self.on_cmd_stopthrob)
-        self.ui.btn_cmd_info.clicked.connect(lambda: self.send_serial_cmd_signal.emit("info"))
-        self.ui.btn_cmd_wifi.clicked.connect(lambda: self.send_serial_cmd_signal.emit("wifi"))
+        self.ui.btn_cmd_info.clicked.connect(
+            lambda: self.send_serial_cmd_signal.emit("info")
+        )
+        self.ui.btn_cmd_wifi.clicked.connect(
+            lambda: self.send_serial_cmd_signal.emit("wifi")
+        )
         self.ui.btn_cmd_mem.clicked.connect(self.on_cmd_mem)
 
         # --- Setup Pin Level Buttons ---
         self.pin_buttons = {}
         valid_pins = [4, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
-        
+
         for pin in valid_pins:
             btn = self.ui.findChild(QPushButton, f"btn_pin_{pin}")
             if btn:
-                btn.clicked.connect(lambda checked=False, p=pin: self.toggle_pin_level(p))
+                btn.clicked.connect(
+                    lambda checked=False, p=pin: self.toggle_pin_level(p)
+                )
                 self.pin_buttons[pin] = btn
 
-        
         # Disable serial tabs initially
         self.ui.tabs_serial_cmds.setEnabled(False)
 
         # Connections
         self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
         self.ui.chk_roi.toggled.connect(self.on_roi_toggled)
-        
+
         self.ui.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
         self.ui.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
-        
+
         self.ui.spin_gain.valueChanged.connect(self.on_gain_changed)
         self.ui.slider_gain.valueChanged.connect(self.on_gain_slider_changed)
-        
+
         self.ui.spin_ae_target.valueChanged.connect(self.on_ae_target_changed)
         self.ui.slider_ae_target.valueChanged.connect(self.on_ae_slider_changed)
-        
+
         # Recreate ButtonGroup for logic
         self.trigger_bg = QButtonGroup(self.ui)
         self.trigger_bg.addButton(self.ui.rb_continuous, 0)
         self.trigger_bg.addButton(self.ui.rb_software, 1)
         self.trigger_bg.addButton(self.ui.rb_hardware, 2)
         self.trigger_bg.idToggled.connect(self.on_trigger_mode_changed)
-        
+
         self.ui.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
-        
+
         # New Connections for Trigger Params
         self.ui.spin_trigger_count.valueChanged.connect(self.on_trigger_count_changed)
         self.ui.spin_trigger_delay.valueChanged.connect(self.on_trigger_delay_changed)
-        self.ui.spin_trigger_interval.valueChanged.connect(self.on_trigger_interval_changed)
-        
+        self.ui.spin_trigger_interval.valueChanged.connect(
+            self.on_trigger_interval_changed
+        )
+
         # New Connections for External Trigger Params
         self.ui.combo_ext_mode.currentIndexChanged.connect(self.on_ext_mode_changed)
         self.ui.spin_ext_jitter.valueChanged.connect(self.on_ext_jitter_changed)
-        self.ui.combo_ext_shutter.currentIndexChanged.connect(self.on_ext_shutter_changed)
-        
+        self.ui.combo_ext_shutter.currentIndexChanged.connect(
+            self.on_ext_shutter_changed
+        )
+
         # New Connections for Strobe Params
-        self.ui.combo_strobe_mode.currentIndexChanged.connect(self.on_strobe_mode_changed)
-        self.ui.combo_strobe_polarity.currentIndexChanged.connect(self.on_strobe_polarity_changed)
+        self.ui.combo_strobe_mode.currentIndexChanged.connect(
+            self.on_strobe_mode_changed
+        )
+        self.ui.combo_strobe_polarity.currentIndexChanged.connect(
+            self.on_strobe_polarity_changed
+        )
         self.ui.spin_strobe_delay.valueChanged.connect(self.on_strobe_delay_changed)
         self.ui.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
-        
+
         # Retrieve Actions
         self.ui.action_start_camera = self.ui.findChild(QAction, "action_start_camera")
         self.ui.action_stop_camera = self.ui.findChild(QAction, "action_stop_camera")
@@ -620,14 +733,14 @@ class MainWindow(QObject):
         self.ui.btn_load_template = self.ui.findChild(QPushButton, "btn_load_template")
         self.ui.chk_match_enable = self.ui.findChild(QCheckBox, "chk_match_enable")
         self.ui.lbl_template_name = self.ui.findChild(QLabel, "lbl_template_name")
-        
+
         if self.ui.btn_load_template:
             self.ui.btn_load_template.clicked.connect(self.on_load_template_clicked)
         if self.ui.chk_match_enable:
             self.ui.chk_match_enable.toggled.connect(self.on_match_enable_toggled)
-            
+
         self.template_loaded = False
-        
+
         # --- Contour Controls ---
         self.btn_toggle_contours = self.ui.findChild(QPushButton, "btn_toggle_contours")
         self.combo_contour_mode = self.ui.findChild(QComboBox, "combo_contour_mode")
@@ -646,7 +759,9 @@ class MainWindow(QObject):
 
         # Connect Contour Signals
         self.btn_toggle_contours.toggled.connect(self.on_toggle_contours_toggled)
-        self.combo_contour_mode.currentTextChanged.connect(self.on_contour_params_changed)
+        self.combo_contour_mode.currentTextChanged.connect(
+            self.on_contour_params_changed
+        )
         self.slider_threshold.valueChanged.connect(self.on_contour_params_changed)
         self.slider_canny.valuesChanged.connect(self.on_contour_params_changed)
         self.spin_min_area.valueChanged.connect(self.on_contour_params_changed)
@@ -665,35 +780,45 @@ class MainWindow(QObject):
         self.ui.orb_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
         self.ui.orb_firstLevel.valueChanged.connect(self.on_detector_params_changed)
         self.ui.orb_wta_k.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_scoreType.currentIndexChanged.connect(self.on_detector_params_changed)
+        self.ui.orb_scoreType.currentIndexChanged.connect(
+            self.on_detector_params_changed
+        )
         self.ui.orb_patchSize.valueChanged.connect(self.on_detector_params_changed)
         self.ui.orb_fastThreshold.valueChanged.connect(self.on_detector_params_changed)
 
         # SIFT Parameter Connections
         self.ui.sift_nfeatures.valueChanged.connect(self.on_detector_params_changed)
         self.ui.sift_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.sift_contrastThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.sift_contrastThreshold.valueChanged.connect(
+            self.on_detector_params_changed
+        )
         self.ui.sift_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
         self.ui.sift_sigma.valueChanged.connect(self.on_detector_params_changed)
 
         # AKAZE Parameter Connections
-        self.ui.akaze_descriptor_type.currentIndexChanged.connect(self.on_detector_params_changed)
+        self.ui.akaze_descriptor_type.currentIndexChanged.connect(
+            self.on_detector_params_changed
+        )
         self.ui.akaze_threshold.valueChanged.connect(self.on_detector_params_changed)
         self.ui.akaze_nOctaves.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.akaze_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.akaze_nOctaveLayers.valueChanged.connect(
+            self.on_detector_params_changed
+        )
 
         # ArUco Parameter Connections
         self.ui.aruco_dict.currentTextChanged.connect(self.on_detector_params_changed)
         self.ui.chk_aruco_show_ids.toggled.connect(self.on_detector_params_changed)
         self.ui.chk_aruco_show_rejected.toggled.connect(self.on_detector_params_changed)
-        self.ui.spin_aruco_border_bits.valueChanged.connect(self.on_detector_params_changed)
-        
+        self.ui.spin_aruco_border_bits.valueChanged.connect(
+            self.on_detector_params_changed
+        )
+
         # New ArUco Enable Checkbox
         self.ui.chk_aruco_enable.toggled.connect(self.on_aruco_enable_toggled)
 
         # Camera Setup
         self.camera = MindVisionCamera()
-        
+
         # Register Callbacks
         self.camera.registerFrameCallback(self.frame_callback)
         self.camera.registerFpsCallback(self.fps_callback)
@@ -708,6 +833,11 @@ class MainWindow(QObject):
         self.current_fps = 30.0
         self.last_ui_update_time = 0
 
+    def bind_ui_elements(self, ui_element):
+        for child in ui_element.findChildren(QObject):
+            if child.objectName():
+                setattr(ui_element, child.objectName(), child)
+
     def show(self):
         self.ui.showMaximized()
 
@@ -719,12 +849,12 @@ class MainWindow(QObject):
         try:
             if watched is self.ui and event.type() == QEvent.Close:
                 self.on_stop_clicked()
-                
+
                 # Cleanup Matching Thread
                 if self.matching_thread.isRunning():
                     self.matching_thread.quit()
                     self.matching_thread.wait()
-                
+
                 # Cleanup Serial Thread
                 if self.serial_thread.isRunning():
                     self.serial_thread.quit()
@@ -743,15 +873,17 @@ class MainWindow(QObject):
 
     def refresh_video_label(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
-            scaled = self.current_pixmap.scaled(self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+            scaled = self.current_pixmap.scaled(
+                self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation
+            )
             self.ui.video_label.setPixmap(scaled)
 
     @Slot(str)
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
-        if hasattr(self.ui, 'log_text_edit'):
+        if hasattr(self.ui, "log_text_edit"):
             self.ui.log_text_edit.appendPlainText(f"[{timestamp}] {message}")
-        
+
         # Parse Rx messages
         if message.startswith("Rx: "):
             content = message[4:].strip()
@@ -761,41 +893,43 @@ class MainWindow(QObject):
         # Startup detection
         if "LED>" in line and not self.has_initialized_settings:
             self.has_initialized_settings = True
-            QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("printsettings"))
+            QTimer.singleShot(
+                500, lambda: self.send_serial_cmd_signal.emit("printsettings")
+            )
             return
 
         parts = line.split()
         if not parts:
             return
-        
+
         cmd = parts[0]
-        
+
         try:
             if cmd == "level" and len(parts) >= 3:
                 pin = int(parts[1])
                 val = int(parts[2])
                 # self.update_pin_status(pin, f"Level: {val}") # Removed per user request
-                
+
                 # If the pin was in the status list (e.g. PWM/Repeat), remove it as it's now just a simple level
                 if pin in self.status_items_map:
                     item = self.status_items_map.pop(pin)
                     row = self.ui.list_status.row(item)
                     self.ui.list_status.takeItem(row)
-                
+
                 # Update Pin Button State
-                if hasattr(self, 'pin_buttons') and pin in self.pin_buttons:
+                if hasattr(self, "pin_buttons") and pin in self.pin_buttons:
                     btn = self.pin_buttons[pin]
                     if val == 1:
                         btn.setStyleSheet("background-color: red; color: white;")
                     else:
                         btn.setStyleSheet("background-color: none;")
-                
+
                 # Update old UI setters if they exist (legacy/fallback)
-                if hasattr(self.ui, 'spin_level_pin'):
+                if hasattr(self.ui, "spin_level_pin"):
                     self.ui.spin_level_pin.setValue(pin)
-                if hasattr(self.ui, 'combo_level_val'):
+                if hasattr(self.ui, "combo_level_val"):
                     self.ui.combo_level_val.setCurrentIndex(val + 1)
-                
+
             elif cmd == "pwm" and len(parts) >= 4:
                 pin = int(parts[1])
                 freq = int(parts[2])
@@ -839,7 +973,8 @@ class MainWindow(QObject):
                 # Update UI setters
                 self.ui.spin_int_pin.setValue(pin)
                 idx = self.ui.combo_int_edge.findText(edge)
-                if idx >= 0: self.ui.combo_int_edge.setCurrentIndex(idx)
+                if idx >= 0:
+                    self.ui.combo_int_edge.setCurrentIndex(idx)
                 self.ui.spin_int_target.setValue(tgt)
                 self.ui.spin_int_width.setValue(width)
 
@@ -866,56 +1001,62 @@ class MainWindow(QObject):
 
     def update_detector(self):
         # QR Code Priority
-        if hasattr(self.ui, 'chk_qrcode_enable') and self.ui.chk_qrcode_enable.isChecked():
-            params = {'algo': 'QRCODE'}
+        if (
+            hasattr(self.ui, "chk_qrcode_enable")
+            and self.ui.chk_qrcode_enable.isChecked()
+        ):
+            params = {"algo": "QRCODE"}
             self.update_worker_params_signal.emit(params)
             return
 
         # ArUco Priority
-        if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
-            params = {'algo': 'ARUCO'}
-            if hasattr(self.ui, 'aruco_dict'):
-                params['dict'] = self.ui.aruco_dict.currentText()
-            if hasattr(self.ui, 'chk_aruco_show_ids'):
-                params['show_ids'] = self.ui.chk_aruco_show_ids.isChecked()
-            if hasattr(self.ui, 'chk_aruco_show_rejected'):
-                params['show_rejected'] = self.ui.chk_aruco_show_rejected.isChecked()
-            if hasattr(self.ui, 'spin_aruco_border_bits'):
-                params['markerBorderBits'] = self.ui.spin_aruco_border_bits.value()
+        if (
+            hasattr(self.ui, "chk_aruco_enable")
+            and self.ui.chk_aruco_enable.isChecked()
+        ):
+            params = {"algo": "ARUCO"}
+            if hasattr(self.ui, "aruco_dict"):
+                params["dict"] = self.ui.aruco_dict.currentText()
+            if hasattr(self.ui, "chk_aruco_show_ids"):
+                params["show_ids"] = self.ui.chk_aruco_show_ids.isChecked()
+            if hasattr(self.ui, "chk_aruco_show_rejected"):
+                params["show_rejected"] = self.ui.chk_aruco_show_rejected.isChecked()
+            if hasattr(self.ui, "spin_aruco_border_bits"):
+                params["markerBorderBits"] = self.ui.spin_aruco_border_bits.value()
             self.update_worker_params_signal.emit(params)
             return
 
         tab_index = self.ui.tabs_matching.currentIndex()
         params = {}
-        
-        if tab_index == 0: # ORB
-            params['algo'] = 'ORB'
-            params['nfeatures'] = self.ui.orb_nfeatures.value()
-            params['scaleFactor'] = self.ui.orb_scaleFactor.value()
-            params['nlevels'] = self.ui.orb_nlevels.value()
-            params['edgeThreshold'] = self.ui.orb_edgeThreshold.value()
-            params['firstLevel'] = self.ui.orb_firstLevel.value()
-            params['WTA_K'] = self.ui.orb_wta_k.value()
-            params['scoreType'] = self.ui.orb_scoreType.currentIndex()
-            params['patchSize'] = self.ui.orb_patchSize.value()
-            params['fastThreshold'] = self.ui.orb_fastThreshold.value()
 
-        elif tab_index == 1: # SIFT
-            params['algo'] = 'SIFT'
-            params['nfeatures'] = self.ui.sift_nfeatures.value()
-            params['nOctaveLayers'] = self.ui.sift_nOctaveLayers.value()
-            params['contrastThreshold'] = self.ui.sift_contrastThreshold.value()
-            params['edgeThreshold'] = self.ui.sift_edgeThreshold.value()
-            params['sigma'] = self.ui.sift_sigma.value()
+        if tab_index == 0:  # ORB
+            params["algo"] = "ORB"
+            params["nfeatures"] = self.ui.orb_nfeatures.value()
+            params["scaleFactor"] = self.ui.orb_scaleFactor.value()
+            params["nlevels"] = self.ui.orb_nlevels.value()
+            params["edgeThreshold"] = self.ui.orb_edgeThreshold.value()
+            params["firstLevel"] = self.ui.orb_firstLevel.value()
+            params["WTA_K"] = self.ui.orb_wta_k.value()
+            params["scoreType"] = self.ui.orb_scoreType.currentIndex()
+            params["patchSize"] = self.ui.orb_patchSize.value()
+            params["fastThreshold"] = self.ui.orb_fastThreshold.value()
 
-        elif tab_index == 2: # AKAZE
-            params['algo'] = 'AKAZE'
+        elif tab_index == 1:  # SIFT
+            params["algo"] = "SIFT"
+            params["nfeatures"] = self.ui.sift_nfeatures.value()
+            params["nOctaveLayers"] = self.ui.sift_nOctaveLayers.value()
+            params["contrastThreshold"] = self.ui.sift_contrastThreshold.value()
+            params["edgeThreshold"] = self.ui.sift_edgeThreshold.value()
+            params["sigma"] = self.ui.sift_sigma.value()
+
+        elif tab_index == 2:  # AKAZE
+            params["algo"] = "AKAZE"
             combo_idx = self.ui.akaze_descriptor_type.currentIndex()
             mapping = [2, 3, 4, 5]
-            params['descriptor_type'] = mapping[combo_idx]
-            params['threshold'] = self.ui.akaze_threshold.value()
-            params['nOctaves'] = self.ui.akaze_nOctaves.value()
-            params['nOctaveLayers'] = self.ui.akaze_nOctaveLayers.value()
+            params["descriptor_type"] = mapping[combo_idx]
+            params["threshold"] = self.ui.akaze_threshold.value()
+            params["nOctaves"] = self.ui.akaze_nOctaves.value()
+            params["nOctaveLayers"] = self.ui.akaze_nOctaveLayers.value()
 
         self.update_worker_params_signal.emit(params)
 
@@ -926,14 +1067,16 @@ class MainWindow(QObject):
         # 1. Recording (High Priority)
         if self.video_thread.isRunning():
             try:
-                self.video_thread.addFrameBytes(width, height, bytes_per_line, fmt, data)
+                self.video_thread.addFrameBytes(
+                    width, height, bytes_per_line, fmt, data
+                )
             except Exception as e:
                 self.log(f"Recording error in callback: {e}")
 
         # 2. UI Update (Throttled)
         current_time = time.time()
         # Cap sending to UI/Worker at ~30 FPS to avoid overwhelming event loop
-        if current_time - self.last_ui_update_time > 0.033: 
+        if current_time - self.last_ui_update_time > 0.033:
             self.last_ui_update_time = current_time
             try:
                 # Flow Control: Only send to worker if it's not busy
@@ -941,10 +1084,12 @@ class MainWindow(QObject):
                     self.worker_busy = True
                     # Copy data for worker thread
                     data_copy = bytes(data)
-                    self.process_frame_signal.emit(width, height, bytes_per_line, fmt, data_copy)
+                    self.process_frame_signal.emit(
+                        width, height, bytes_per_line, fmt, data_copy
+                    )
                 # Else: Drop frame for UI display to prevent backlog/latency
             except Exception as e:
-                self.worker_busy = False # Reset on error
+                self.worker_busy = False  # Reset on error
                 self.log(f"Error in frame callback (UI): {e}")
 
     def fps_callback(self, fps):
@@ -961,10 +1106,12 @@ class MainWindow(QObject):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                self.video_thread.startRecording(image.width(), image.height(), record_fps, "output.mkv")
+                self.video_thread.startRecording(
+                    image.width(), image.height(), record_fps, "output.mkv"
+                )
                 self.ui.action_record.setText("Stop Recording")
                 self.log("Recording started: output.mkv")
-            
+
             # Display
             self.current_pixmap = QPixmap.fromImage(image)
             self.refresh_video_label()
@@ -996,7 +1143,7 @@ class MainWindow(QObject):
                 self.ui.controls_group.setEnabled(True)
                 self.ui.trigger_group.setEnabled(True)
                 self.ui.strobe_group.setEnabled(True)
-                
+
                 self.ui.video_label.setText("Starting stream...")
                 self.sync_ui()
                 self.log("Camera started.")
@@ -1004,20 +1151,20 @@ class MainWindow(QObject):
     def on_stop_clicked(self):
         if self.video_thread.isRunning():
             self.on_record_clicked()
-        
+
         self.camera.stop()
         self.camera.close()
         self.ui.action_start_camera.setEnabled(True)
         self.ui.action_stop_camera.setEnabled(False)
         self.ui.action_record.setEnabled(False)
         self.ui.action_snapshot.setEnabled(False)
-        
+
         self.ui.controls_group.setEnabled(False)
         self.ui.trigger_group.setEnabled(False)
         self.ui.trigger_params_group.setEnabled(False)
         self.ui.ext_trigger_group.setEnabled(False)
         self.ui.strobe_group.setEnabled(False)
-        
+
         self.ui.video_label.clear()
         self.ui.video_label.setText("Camera Stopped")
         self.fps_label.setText("FPS: 0.0")
@@ -1041,18 +1188,24 @@ class MainWindow(QObject):
     def on_aruco_enable_toggled(self, checked):
         if checked:
             # Mutual exclusion: disable template matching if active
-            if hasattr(self.ui, 'chk_match_enable') and self.ui.chk_match_enable.isChecked():
+            if (
+                hasattr(self.ui, "chk_match_enable")
+                and self.ui.chk_match_enable.isChecked()
+            ):
                 self.ui.chk_match_enable.blockSignals(True)
                 self.ui.chk_match_enable.setChecked(False)
                 self.ui.chk_match_enable.blockSignals(False)
                 self.is_matching_ui_active = False
-            
+
             # Mutual exclusion: disable QR Code if active
-            if hasattr(self.ui, 'chk_qrcode_enable') and self.ui.chk_qrcode_enable.isChecked():
+            if (
+                hasattr(self.ui, "chk_qrcode_enable")
+                and self.ui.chk_qrcode_enable.isChecked()
+            ):
                 self.ui.chk_qrcode_enable.blockSignals(True)
                 self.ui.chk_qrcode_enable.setChecked(False)
                 self.ui.chk_qrcode_enable.blockSignals(False)
-            
+
             # Enable ArUco (update_detector picks up the checked state)
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
@@ -1063,19 +1216,24 @@ class MainWindow(QObject):
                 self.toggle_worker_matching_signal.emit(False)
 
     def on_load_template_clicked(self):
-        file_path, _ = QFileDialog.getOpenFileName(self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.ui, "Select Template Image", "", "Images (*.png *.jpg *.bmp)"
+        )
         if file_path:
             self.set_worker_template_signal.emit(file_path)
             self.template_loaded = True
-            
+
             # Update Label
             filename = os.path.basename(file_path)
-            if hasattr(self.ui, 'lbl_template_name'):
+            if hasattr(self.ui, "lbl_template_name"):
                 self.ui.lbl_template_name.setText(filename)
                 self.ui.lbl_template_name.setStyleSheet("color: black;")
-            
+
             # If enabled, update worker
-            if hasattr(self.ui, 'chk_match_enable') and self.ui.chk_match_enable.isChecked():
+            if (
+                hasattr(self.ui, "chk_match_enable")
+                and self.ui.chk_match_enable.isChecked()
+            ):
                 self.update_detector()
                 self.toggle_worker_matching_signal.emit(True)
 
@@ -1086,20 +1244,26 @@ class MainWindow(QObject):
                 self.on_load_template_clicked()
                 # If still not loaded (user cancelled), uncheck
                 if not self.template_loaded:
-                     self.ui.chk_match_enable.setChecked(False)
-                     return
+                    self.ui.chk_match_enable.setChecked(False)
+                    return
 
             # Mutual Exclusion: Disable ArUco
-            if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
-                 self.ui.chk_aruco_enable.blockSignals(True)
-                 self.ui.chk_aruco_enable.setChecked(False)
-                 self.ui.chk_aruco_enable.blockSignals(False)
+            if (
+                hasattr(self.ui, "chk_aruco_enable")
+                and self.ui.chk_aruco_enable.isChecked()
+            ):
+                self.ui.chk_aruco_enable.blockSignals(True)
+                self.ui.chk_aruco_enable.setChecked(False)
+                self.ui.chk_aruco_enable.blockSignals(False)
 
             # Mutual Exclusion: Disable QR Code
-            if hasattr(self.ui, 'chk_qrcode_enable') and self.ui.chk_qrcode_enable.isChecked():
-                 self.ui.chk_qrcode_enable.blockSignals(True)
-                 self.ui.chk_qrcode_enable.setChecked(False)
-                 self.ui.chk_qrcode_enable.blockSignals(False)
+            if (
+                hasattr(self.ui, "chk_qrcode_enable")
+                and self.ui.chk_qrcode_enable.isChecked()
+            ):
+                self.ui.chk_qrcode_enable.blockSignals(True)
+                self.ui.chk_qrcode_enable.setChecked(False)
+                self.ui.chk_qrcode_enable.blockSignals(False)
 
             self.is_matching_ui_active = True
             self.update_detector()
@@ -1111,27 +1275,33 @@ class MainWindow(QObject):
     def on_qrcode_enable_toggled(self, checked):
         if checked:
             # Mutual exclusion: disable template matching if active
-            if hasattr(self.ui, 'chk_match_enable') and self.ui.chk_match_enable.isChecked():
+            if (
+                hasattr(self.ui, "chk_match_enable")
+                and self.ui.chk_match_enable.isChecked()
+            ):
                 self.ui.chk_match_enable.blockSignals(True)
                 self.ui.chk_match_enable.setChecked(False)
                 self.ui.chk_match_enable.blockSignals(False)
                 self.is_matching_ui_active = False
 
             # Mutual exclusion: disable ArUco
-            if hasattr(self.ui, 'chk_aruco_enable') and self.ui.chk_aruco_enable.isChecked():
-                 self.ui.chk_aruco_enable.blockSignals(True)
-                 self.ui.chk_aruco_enable.setChecked(False)
-                 self.ui.chk_aruco_enable.blockSignals(False)
-            
+            if (
+                hasattr(self.ui, "chk_aruco_enable")
+                and self.ui.chk_aruco_enable.isChecked()
+            ):
+                self.ui.chk_aruco_enable.blockSignals(True)
+                self.ui.chk_aruco_enable.setChecked(False)
+                self.ui.chk_aruco_enable.blockSignals(False)
+
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
         else:
             if not self.is_matching_ui_active:
                 self.toggle_worker_matching_signal.emit(False)
-    
+
     @Slot(str)
     def handle_qr_found(self, text):
-        if hasattr(self.ui, 'lbl_qrcode_data'):
+        if hasattr(self.ui, "lbl_qrcode_data"):
             self.ui.lbl_qrcode_data.setText(f"Decoded Data: {text}")
 
     def on_toggle_contours_toggled(self, checked):
@@ -1139,32 +1309,32 @@ class MainWindow(QObject):
             self.btn_toggle_contours.setText("Disable Contours")
         else:
             self.btn_toggle_contours.setText("Enable Contours")
-        
+
         self.on_contour_params_changed()
         self.toggle_worker_contours_signal.emit(checked)
 
     def on_contour_params_changed(self):
         # Update visibility of controls based on mode
         mode = self.combo_contour_mode.currentText()
-        is_canny = (mode == "Canny")
-        
+        is_canny = mode == "Canny"
+
         self.slider_canny.setEnabled(is_canny)
         self.slider_threshold.setEnabled(not is_canny)
-        
+
         # Update labels
         self.lbl_threshold_val.setText(str(self.slider_threshold.value()))
         c_min, c_max = self.slider_canny.getValues()
         self.lbl_canny_val.setText(f"{c_min} - {c_max}")
 
         params = {
-            'mode': mode,
-            'threshold': self.slider_threshold.value(),
-            'thresh_min': c_min,
-            'thresh_max': c_max,
-            'min_area': self.spin_min_area.value(),
-            'max_area': self.spin_max_area.value(),
-            'fill': self.chk_fill_contours.isChecked(),
-            'box': self.chk_show_box.isChecked()
+            "mode": mode,
+            "threshold": self.slider_threshold.value(),
+            "thresh_min": c_min,
+            "thresh_max": c_max,
+            "min_area": self.spin_min_area.value(),
+            "max_area": self.spin_max_area.value(),
+            "fill": self.chk_fill_contours.isChecked(),
+            "box": self.chk_show_box.isChecked(),
         }
         self.update_worker_contour_params_signal.emit(params)
 
@@ -1179,11 +1349,11 @@ class MainWindow(QObject):
             self.ui.slider_exposure.setRange(0, int((max_exp - min_exp) / step_exp))
         else:
             self.ui.slider_exposure.setRange(0, 10000)
-        
+
         min_gain, max_gain = self.camera.getAnalogGainRange()
         self.ui.spin_gain.setRange(min_gain, max_gain)
         self.ui.slider_gain.setRange(min_gain, max_gain)
-        
+
         # Values
         is_auto = self.camera.getAutoExposure()
         self.ui.chk_auto_exposure.setChecked(is_auto)
@@ -1193,13 +1363,13 @@ class MainWindow(QObject):
         self.ui.slider_ae_target.setEnabled(is_auto)
 
         # AE Target
-        if hasattr(self.camera, 'getAutoExposureTarget'):
+        if hasattr(self.camera, "getAutoExposureTarget"):
             try:
-                if hasattr(self.camera, 'getAutoExposureTargetRange'):
+                if hasattr(self.camera, "getAutoExposureTargetRange"):
                     min_ae, max_ae = self.camera.getAutoExposureTargetRange()
                     self.ui.spin_ae_target.setRange(min_ae, max_ae)
                     self.ui.slider_ae_target.setRange(min_ae, max_ae)
-                
+
                 current_ae = self.camera.getAutoExposureTarget()
                 self.ui.spin_ae_target.blockSignals(True)
                 self.ui.spin_ae_target.setValue(current_ae)
@@ -1210,18 +1380,18 @@ class MainWindow(QObject):
                 self.ui.slider_ae_target.blockSignals(False)
             except Exception as e:
                 self.log(f"Error syncing AE target: {e}")
-        
+
         current_exp = self.camera.getExposureTime()
         self.ui.spin_exposure_time.blockSignals(True)
         self.ui.spin_exposure_time.setValue(current_exp)
         self.ui.spin_exposure_time.blockSignals(False)
-        
+
         self.update_slider_from_time(current_exp, min_exp, max_exp)
-        
+
         self.ui.spin_gain.blockSignals(True)
         self.ui.spin_gain.setValue(self.camera.getAnalogGain())
         self.ui.spin_gain.blockSignals(False)
-        
+
         self.ui.slider_gain.blockSignals(True)
         self.ui.slider_gain.setValue(self.camera.getAnalogGain())
         self.ui.slider_gain.blockSignals(False)
@@ -1265,7 +1435,7 @@ class MainWindow(QObject):
         self.ui.spin_exposure_time.blockSignals(True)
         self.ui.spin_exposure_time.setValue(actual)
         self.ui.spin_exposure_time.blockSignals(False)
-        
+
         min_exp = self.ui.spin_exposure_time.minimum()
         max_exp = self.ui.spin_exposure_time.maximum()
         self.update_slider_from_time(actual, min_exp, max_exp)
@@ -1291,7 +1461,7 @@ class MainWindow(QObject):
         self.ui.spin_gain.setValue(value)
 
     def on_ae_target_changed(self, value):
-        if hasattr(self.camera, 'setAutoExposureTarget'):
+        if hasattr(self.camera, "setAutoExposureTarget"):
             self.camera.setAutoExposureTarget(value)
             self.ui.slider_ae_target.blockSignals(True)
             self.ui.slider_ae_target.setValue(value)
@@ -1305,15 +1475,15 @@ class MainWindow(QObject):
             # 0=Continuous, 1=Software, 2=Hardware
             if self.camera.setTriggerMode(id):
                 self.ui.btn_soft_trigger.setEnabled(id == 1)
-                
+
                 # Logic for Trigger Params Group
                 # Enabled if Software (1) or Hardware (2)
                 self.ui.trigger_params_group.setEnabled(id in [1, 2])
-                
+
                 # Logic for External Trigger Params Group
                 # Enabled if Hardware (2)
                 self.ui.ext_trigger_group.setEnabled(id == 2)
-                
+
             else:
                 self.log(f"Failed to set trigger mode {id}")
 
@@ -1322,51 +1492,51 @@ class MainWindow(QObject):
 
     # Trigger Parameter Slots
     def on_trigger_count_changed(self, value):
-        if hasattr(self.camera, 'setTriggerCount'):
+        if hasattr(self.camera, "setTriggerCount"):
             self.camera.setTriggerCount(value)
 
     def on_trigger_delay_changed(self, value):
-        if hasattr(self.camera, 'setTriggerDelay'):
+        if hasattr(self.camera, "setTriggerDelay"):
             self.camera.setTriggerDelay(value)
 
     def on_trigger_interval_changed(self, value):
-        if hasattr(self.camera, 'setTriggerInterval'):
+        if hasattr(self.camera, "setTriggerInterval"):
             self.camera.setTriggerInterval(value)
 
     # External Trigger Slots
     def on_ext_mode_changed(self, index):
-        if hasattr(self.camera, 'setExternalTriggerSignalType'):
+        if hasattr(self.camera, "setExternalTriggerSignalType"):
             self.camera.setExternalTriggerSignalType(index)
 
     def on_ext_jitter_changed(self, value):
-        if hasattr(self.camera, 'setExternalTriggerJitterTime'):
+        if hasattr(self.camera, "setExternalTriggerJitterTime"):
             self.camera.setExternalTriggerJitterTime(value)
-    
+
     def on_ext_shutter_changed(self, index):
-        if hasattr(self.camera, 'setExternalTriggerShutterMode'):
+        if hasattr(self.camera, "setExternalTriggerShutterMode"):
             self.camera.setExternalTriggerShutterMode(index)
 
     # Strobe Slots
     def on_strobe_mode_changed(self, index):
         # 0 = Auto, 1 = Manual/Semi-Auto
-        if hasattr(self.camera, 'setStrobeMode'):
+        if hasattr(self.camera, "setStrobeMode"):
             self.camera.setStrobeMode(index)
             # Enable manual controls if index == 1
-            is_manual = (index == 1)
+            is_manual = index == 1
             self.ui.combo_strobe_polarity.setEnabled(is_manual)
             self.ui.spin_strobe_delay.setEnabled(is_manual)
             self.ui.spin_strobe_width.setEnabled(is_manual)
 
     def on_strobe_polarity_changed(self, index):
-        if hasattr(self.camera, 'setStrobePolarity'):
+        if hasattr(self.camera, "setStrobePolarity"):
             self.camera.setStrobePolarity(index)
 
     def on_strobe_delay_changed(self, value):
-        if hasattr(self.camera, 'setStrobeDelayTime'):
+        if hasattr(self.camera, "setStrobeDelayTime"):
             self.camera.setStrobeDelayTime(value)
 
     def on_strobe_width_changed(self, value):
-        if hasattr(self.camera, 'setStrobePulseWidth'):
+        if hasattr(self.camera, "setStrobePulseWidth"):
             self.camera.setStrobePulseWidth(value)
 
     # --- Serial Control Methods ---
@@ -1382,7 +1552,9 @@ class MainWindow(QObject):
 
     def on_btn_serial_connect_clicked(self, checked):
         if checked:
-            port = self.ui.combo_serial_port.currentText().split()[0] # Handle "COM3 - Desc" if needed
+            port = self.ui.combo_serial_port.currentText().split()[
+                0
+            ]  # Handle "COM3 - Desc" if needed
             if port:
                 self.connect_serial_signal.emit(port, 115200)
                 self.ui.btn_serial_connect.setText("Connecting...")
@@ -1398,7 +1570,7 @@ class MainWindow(QObject):
         self.ui.tabs_serial_cmds.setEnabled(connected)
         self.ui.combo_serial_port.setEnabled(not connected)
         self.ui.btn_serial_refresh.setEnabled(not connected)
-        
+
         if not connected:
             self.has_initialized_settings = False
             self.ui.list_status.clear()
@@ -1414,13 +1586,14 @@ class MainWindow(QObject):
 
     def toggle_pin_level(self, pin):
         btn = self.pin_buttons.get(pin)
-        if not btn: return
-        
+        if not btn:
+            return
+
         # Check current visual state (High=Red)
         is_high = "red" in btn.styleSheet()
         # Toggle: If high, set to 0. If low, set to 1.
         new_val = 0 if is_high else 1
-        
+
         self.send_serial_cmd_signal.emit(f"level {pin} {new_val}")
 
     def on_cmd_pwm(self):
@@ -1432,16 +1605,16 @@ class MainWindow(QObject):
     def on_cmd_stoppwm(self):
         pin = self.ui.spin_pwm_pin.value()
         self.send_serial_cmd_signal.emit(f"stoppwm {pin}")
-        
+
         # Remove from Modified Pins list
         if pin in self.status_items_map:
             item = self.status_items_map.pop(pin)
             row = self.ui.list_status.row(item)
             self.ui.list_status.takeItem(row)
-            
+
         # Reset button state
-        if hasattr(self, 'pin_buttons') and pin in self.pin_buttons:
-             self.pin_buttons[pin].setStyleSheet("background-color: none;")
+        if hasattr(self, "pin_buttons") and pin in self.pin_buttons:
+            self.pin_buttons[pin].setStyleSheet("background-color: none;")
 
     def on_cmd_repeat(self):
         pin = self.ui.spin_repeat_pin.value()
@@ -1452,16 +1625,16 @@ class MainWindow(QObject):
     def on_cmd_stoprepeat(self):
         pin = self.ui.spin_repeat_pin.value()
         self.send_serial_cmd_signal.emit(f"stoprepeat {pin}")
-        
+
         # Remove from Modified Pins list
         if pin in self.status_items_map:
             item = self.status_items_map.pop(pin)
             row = self.ui.list_status.row(item)
             self.ui.list_status.takeItem(row)
-            
+
         # Reset button state
-        if hasattr(self, 'pin_buttons') and pin in self.pin_buttons:
-             self.pin_buttons[pin].setStyleSheet("background-color: none;")
+        if hasattr(self, "pin_buttons") and pin in self.pin_buttons:
+            self.pin_buttons[pin].setStyleSheet("background-color: none;")
 
     def on_cmd_interrupt(self):
         pin = self.ui.spin_int_pin.value()
@@ -1473,7 +1646,7 @@ class MainWindow(QObject):
     def on_cmd_stopinterrupt(self):
         pin = self.ui.spin_int_pin.value()
         self.send_serial_cmd_signal.emit(f"stopinterrupt {pin}")
-        
+
         # Remove from Interrupts list
         if pin in self.interrupt_items_map:
             item = self.interrupt_items_map.pop(pin)
@@ -1494,6 +1667,7 @@ class MainWindow(QObject):
         addr = self.ui.edit_mem_addr.text().strip()
         if addr:
             self.send_serial_cmd_signal.emit(f"mem {addr}")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

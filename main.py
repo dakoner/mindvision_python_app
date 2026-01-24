@@ -3,6 +3,7 @@ import os
 import platform
 import time
 import signal
+import json
 
 # Add the directory containing the generated module to sys.path
 script_dir = os.path.dirname(__file__)
@@ -791,6 +792,8 @@ class MainWindow(QObject):
         self.ui.log_text_edit.setCenterOnScroll(True)
         self.log("Application started.")
 
+
+
         # --- Status Widgets Setup (Programmatic) ---
         self.has_initialized_settings = False
         self.status_items_map = {}  # Map pin -> QListWidgetItem
@@ -983,6 +986,8 @@ class MainWindow(QObject):
         self.current_fps = 30.0
         self.last_ui_update_time = 0
 
+        self.load_settings()
+
     def show(self):
         self.ui.showMaximized()
 
@@ -993,6 +998,7 @@ class MainWindow(QObject):
     def eventFilter(self, watched, event):
         try:
             if watched is self.ui and event.type() == QEvent.Close:
+                self.save_settings()
                 self.on_stop_clicked()
 
                 # Cleanup Matching Thread
@@ -1347,6 +1353,7 @@ class MainWindow(QObject):
 
                 self.ui.video_label.setText("Starting stream...")
                 self.sync_ui()
+                self.apply_camera_settings()
                 self.log("Camera started.")
 
     def on_stop_clicked(self):
@@ -2025,6 +2032,319 @@ class MainWindow(QObject):
         self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
         self.lbl_ruler_meas.setText(f"{known_len:.2f} mm") # Should match known length
         self.log(f"Ruler calibrated: {self.ruler_calibration:.2f} px/mm")
+
+    def save_settings(self):
+        settings = {}
+
+        # --- Camera Settings ---
+        settings["auto_exposure"] = self.ui.chk_auto_exposure.isChecked()
+        settings["exposure_time"] = self.ui.spin_exposure_time.value()
+        settings["gain"] = self.ui.spin_gain.value()
+        settings["ae_target"] = self.ui.spin_ae_target.value()
+        settings["roi"] = self.ui.chk_roi.isChecked()
+        settings["trigger_mode"] = self.trigger_bg.checkedId()
+        
+        # Trigger Params
+        settings["trigger_count"] = self.ui.spin_trigger_count.value()
+        settings["trigger_delay"] = self.ui.spin_trigger_delay.value()
+        settings["trigger_interval"] = self.ui.spin_trigger_interval.value()
+        
+        # External Trigger
+        settings["ext_mode"] = self.ui.combo_ext_mode.currentIndex()
+        settings["ext_jitter"] = self.ui.spin_ext_jitter.value()
+        settings["ext_shutter"] = self.ui.combo_ext_shutter.currentIndex()
+        
+        # Strobe
+        settings["strobe_mode"] = self.ui.combo_strobe_mode.currentIndex()
+        settings["strobe_polarity"] = self.ui.combo_strobe_polarity.currentIndex()
+        settings["strobe_delay"] = self.ui.spin_strobe_delay.value()
+        settings["strobe_width"] = self.ui.spin_strobe_width.value()
+
+        # --- Matching Settings ---
+        settings["match_enable"] = getattr(self.ui, "chk_match_enable", QCheckBox()).isChecked()
+        settings["aruco_enable"] = getattr(self.ui, "chk_aruco_enable", QCheckBox()).isChecked()
+        settings["qrcode_enable"] = getattr(self.ui, "chk_qrcode_enable", QCheckBox()).isChecked()
+        settings["ssim_enable"] = getattr(self.ui, "chk_ssim_enable", QCheckBox()).isChecked()
+        settings["match_tab_index"] = self.ui.tabs_matching.currentIndex()
+        
+        # ORB
+        settings["orb_nfeatures"] = self.ui.orb_nfeatures.value()
+        settings["orb_scaleFactor"] = self.ui.orb_scaleFactor.value()
+        settings["orb_nlevels"] = self.ui.orb_nlevels.value()
+        settings["orb_edgeThreshold"] = self.ui.orb_edgeThreshold.value()
+        settings["orb_firstLevel"] = self.ui.orb_firstLevel.value()
+        settings["orb_wta_k"] = self.ui.orb_wta_k.value()
+        settings["orb_scoreType"] = self.ui.orb_scoreType.currentIndex()
+        settings["orb_patchSize"] = self.ui.orb_patchSize.value()
+        settings["orb_fastThreshold"] = self.ui.orb_fastThreshold.value()
+        
+        # SIFT
+        settings["sift_nfeatures"] = self.ui.sift_nfeatures.value()
+        settings["sift_nOctaveLayers"] = self.ui.sift_nOctaveLayers.value()
+        settings["sift_contrastThreshold"] = self.ui.sift_contrastThreshold.value()
+        settings["sift_edgeThreshold"] = self.ui.sift_edgeThreshold.value()
+        settings["sift_sigma"] = self.ui.sift_sigma.value()
+        
+        # AKAZE
+        settings["akaze_descriptor_type"] = self.ui.akaze_descriptor_type.currentIndex()
+        settings["akaze_threshold"] = self.ui.akaze_threshold.value()
+        settings["akaze_nOctaves"] = self.ui.akaze_nOctaves.value()
+        settings["akaze_nOctaveLayers"] = self.ui.akaze_nOctaveLayers.value()
+        
+        # ArUco
+        if hasattr(self.ui, "aruco_dict"):
+            settings["aruco_dict"] = self.ui.aruco_dict.currentIndex()
+        if hasattr(self.ui, "spin_aruco_border_bits"):
+            settings["aruco_border_bits"] = self.ui.spin_aruco_border_bits.value()
+        if hasattr(self.ui, "chk_aruco_show_ids"):
+            settings["aruco_show_ids"] = self.ui.chk_aruco_show_ids.isChecked()
+        if hasattr(self.ui, "chk_aruco_show_rejected"):
+            settings["aruco_show_rejected"] = self.ui.chk_aruco_show_rejected.isChecked()
+
+        # --- Contours ---
+        settings["contours_enabled"] = self.btn_toggle_contours.isChecked()
+        settings["contour_mode"] = self.combo_contour_mode.currentIndex()
+        settings["threshold"] = self.slider_threshold.value()
+        settings["canny_values"] = self.slider_canny.getValues()
+        settings["min_area"] = self.spin_min_area.value()
+        settings["max_area"] = self.spin_max_area.value()
+        settings["fill_contours"] = self.chk_fill_contours.isChecked()
+        settings["show_box"] = self.chk_show_box.isChecked()
+
+        # --- Ruler ---
+        settings["ruler_active"] = self.action_ruler.isChecked()
+        settings["ruler_len"] = self.spin_ruler_len.value()
+        settings["ruler_calibration"] = self.ruler_calibration
+
+        # --- Paths ---
+        # Note: We can't easily save the loaded template/SSIM images, but we could save paths if we tracked them.
+        # The worker sets them, but MainWindow doesn't explicitly store the path unless we add it.
+        # For now, let's assume user re-loads them or we add path tracking.
+        # I'll rely on the user to reload images, but saving other params is key.
+
+        try:
+            with open(os.path.join(script_dir, "settings.json"), "w") as f:
+                json.dump(settings, f, indent=4)
+                self.log("Settings saved.")
+        except Exception as e:
+            self.log(f"Error saving settings: {e}")
+
+    def load_settings(self):
+        try:
+            path = os.path.join(script_dir, "settings.json")
+            if not os.path.exists(path):
+                return
+            
+            with open(path, "r") as f:
+                settings = json.load(f)
+
+            # --- Restore Software Settings (UI Only) ---
+            # Block signals where necessary to avoid triggering heavy logic prematurely
+            
+            # Matching
+            if "match_tab_index" in settings:
+                self.ui.tabs_matching.setCurrentIndex(settings["match_tab_index"])
+            
+            # ORB
+            self.ui.orb_nfeatures.setValue(settings.get("orb_nfeatures", 500))
+            self.ui.orb_scaleFactor.setValue(settings.get("orb_scaleFactor", 1.2))
+            self.ui.orb_nlevels.setValue(settings.get("orb_nlevels", 8))
+            self.ui.orb_edgeThreshold.setValue(settings.get("orb_edgeThreshold", 31))
+            self.ui.orb_firstLevel.setValue(settings.get("orb_firstLevel", 0))
+            self.ui.orb_wta_k.setValue(settings.get("orb_wta_k", 2))
+            if "orb_scoreType" in settings: self.ui.orb_scoreType.setCurrentIndex(settings["orb_scoreType"])
+            self.ui.orb_patchSize.setValue(settings.get("orb_patchSize", 31))
+            self.ui.orb_fastThreshold.setValue(settings.get("orb_fastThreshold", 20))
+            
+            # SIFT
+            self.ui.sift_nfeatures.setValue(settings.get("sift_nfeatures", 0))
+            self.ui.sift_nOctaveLayers.setValue(settings.get("sift_nOctaveLayers", 3))
+            self.ui.sift_contrastThreshold.setValue(settings.get("sift_contrastThreshold", 0.04))
+            self.ui.sift_edgeThreshold.setValue(settings.get("sift_edgeThreshold", 10))
+            self.ui.sift_sigma.setValue(settings.get("sift_sigma", 1.6))
+            
+            # AKAZE
+            if "akaze_descriptor_type" in settings: self.ui.akaze_descriptor_type.setCurrentIndex(settings["akaze_descriptor_type"])
+            self.ui.akaze_threshold.setValue(settings.get("akaze_threshold", 0.0012))
+            self.ui.akaze_nOctaves.setValue(settings.get("akaze_nOctaves", 4))
+            self.ui.akaze_nOctaveLayers.setValue(settings.get("akaze_nOctaveLayers", 4))
+            
+            # ArUco
+            if hasattr(self.ui, "aruco_dict") and "aruco_dict" in settings:
+                self.ui.aruco_dict.setCurrentIndex(settings["aruco_dict"])
+            if hasattr(self.ui, "spin_aruco_border_bits") and "aruco_border_bits" in settings:
+                self.ui.spin_aruco_border_bits.setValue(settings["aruco_border_bits"])
+            if hasattr(self.ui, "chk_aruco_show_ids") and "aruco_show_ids" in settings:
+                self.ui.chk_aruco_show_ids.setChecked(settings["aruco_show_ids"])
+            if hasattr(self.ui, "chk_aruco_show_rejected") and "aruco_show_rejected" in settings:
+                self.ui.chk_aruco_show_rejected.setChecked(settings["aruco_show_rejected"])
+
+            # Contours
+            if "contours_enabled" in settings: self.btn_toggle_contours.setChecked(settings["contours_enabled"])
+            if "contour_mode" in settings: self.combo_contour_mode.setCurrentIndex(settings["contour_mode"])
+            if "threshold" in settings: self.slider_threshold.setValue(settings["threshold"])
+            if "canny_values" in settings: self.slider_canny.setValues(*settings["canny_values"])
+            if "min_area" in settings: self.spin_min_area.setValue(settings["min_area"])
+            if "max_area" in settings: self.spin_max_area.setValue(settings["max_area"])
+            if "fill_contours" in settings: self.chk_fill_contours.setChecked(settings["fill_contours"])
+            if "show_box" in settings: self.chk_show_box.setChecked(settings["show_box"])
+
+            # Ruler
+            if "ruler_active" in settings: self.action_ruler.setChecked(settings["ruler_active"])
+            if "ruler_len" in settings: self.spin_ruler_len.setValue(settings["ruler_len"])
+            if "ruler_calibration" in settings: 
+                self.ruler_calibration = settings["ruler_calibration"]
+                if self.ruler_calibration:
+                    self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
+
+            # Enable Checkboxes (Last, to trigger updates if needed, though without camera open updates are partial)
+            # Note: Toggling these might auto-uncheck others due to mutual exclusion logic in handlers.
+            # We should set them in a specific order or just let the last one win.
+            if settings.get("match_enable"): 
+                if hasattr(self.ui, "chk_match_enable"): self.ui.chk_match_enable.setChecked(True)
+            elif settings.get("aruco_enable"):
+                if hasattr(self.ui, "chk_aruco_enable"): self.ui.chk_aruco_enable.setChecked(True)
+            elif settings.get("qrcode_enable"):
+                if hasattr(self.ui, "chk_qrcode_enable"): self.ui.chk_qrcode_enable.setChecked(True)
+            elif settings.get("ssim_enable"):
+                if hasattr(self.ui, "chk_ssim_enable"): self.ui.chk_ssim_enable.setChecked(True)
+
+            # --- Restore Camera UI (Do not trigger camera calls yet) ---
+            # We store these settings to apply them AFTER camera starts
+            self.saved_camera_settings = settings
+            
+            # Update UI to reflect saved settings immediately, but block signals for camera controls 
+            # so we don't try to set parameters on a closed camera (which might error or be ignored).
+            
+            self.ui.chk_auto_exposure.blockSignals(True)
+            self.ui.chk_auto_exposure.setChecked(settings.get("auto_exposure", True))
+            self.ui.chk_auto_exposure.blockSignals(False)
+
+            self.ui.spin_exposure_time.blockSignals(True)
+            self.ui.spin_exposure_time.setValue(settings.get("exposure_time", 2000))
+            self.ui.spin_exposure_time.blockSignals(False)
+
+            self.ui.spin_gain.blockSignals(True)
+            self.ui.spin_gain.setValue(settings.get("gain", 1))
+            self.ui.spin_gain.blockSignals(False)
+            
+            self.ui.spin_ae_target.blockSignals(True)
+            self.ui.spin_ae_target.setValue(settings.get("ae_target", 120))
+            self.ui.spin_ae_target.blockSignals(False)
+
+            self.ui.chk_roi.blockSignals(True)
+            self.ui.chk_roi.setChecked(settings.get("roi", False))
+            self.ui.chk_roi.blockSignals(False)
+
+            # Trigger Mode
+            tm = settings.get("trigger_mode", 0)
+            btn = self.trigger_bg.button(tm)
+            if btn:
+                self.trigger_bg.blockSignals(True)
+                btn.setChecked(True)
+                self.trigger_bg.blockSignals(False)
+                # Manually update UI enable states
+                self.on_trigger_mode_changed(tm, True)
+
+            # Trigger Params
+            self.ui.spin_trigger_count.blockSignals(True)
+            self.ui.spin_trigger_count.setValue(settings.get("trigger_count", 1))
+            self.ui.spin_trigger_count.blockSignals(False)
+            
+            self.ui.spin_trigger_delay.blockSignals(True)
+            self.ui.spin_trigger_delay.setValue(settings.get("trigger_delay", 0))
+            self.ui.spin_trigger_delay.blockSignals(False)
+
+            self.ui.spin_trigger_interval.blockSignals(True)
+            self.ui.spin_trigger_interval.setValue(settings.get("trigger_interval", 1000))
+            self.ui.spin_trigger_interval.blockSignals(False)
+
+            # Ext Trigger
+            self.ui.combo_ext_mode.blockSignals(True)
+            self.ui.combo_ext_mode.setCurrentIndex(settings.get("ext_mode", 0))
+            self.ui.combo_ext_mode.blockSignals(False)
+            
+            self.ui.spin_ext_jitter.blockSignals(True)
+            self.ui.spin_ext_jitter.setValue(settings.get("ext_jitter", 0))
+            self.ui.spin_ext_jitter.blockSignals(False)
+            
+            self.ui.combo_ext_shutter.blockSignals(True)
+            self.ui.combo_ext_shutter.setCurrentIndex(settings.get("ext_shutter", 0))
+            self.ui.combo_ext_shutter.blockSignals(False)
+
+            # Strobe
+            self.ui.combo_strobe_mode.blockSignals(True)
+            self.ui.combo_strobe_mode.setCurrentIndex(settings.get("strobe_mode", 0))
+            self.ui.combo_strobe_mode.blockSignals(False)
+            # Update UI state
+            self.on_strobe_mode_changed(settings.get("strobe_mode", 0))
+
+            self.ui.combo_strobe_polarity.blockSignals(True)
+            self.ui.combo_strobe_polarity.setCurrentIndex(settings.get("strobe_polarity", 0))
+            self.ui.combo_strobe_polarity.blockSignals(False)
+            
+            self.ui.spin_strobe_delay.blockSignals(True)
+            self.ui.spin_strobe_delay.setValue(settings.get("strobe_delay", 0))
+            self.ui.spin_strobe_delay.blockSignals(False)
+            
+            self.ui.spin_strobe_width.blockSignals(True)
+            self.ui.spin_strobe_width.setValue(settings.get("strobe_width", 0))
+            self.ui.spin_strobe_width.blockSignals(False)
+
+            self.log("Settings loaded.")
+        except Exception as e:
+            self.log(f"Error loading settings: {e}")
+
+    def apply_camera_settings(self):
+        # Applies settings to the camera hardware.
+        # This should be called after camera.start() and sync_ui()
+        if not hasattr(self, "saved_camera_settings") or not self.saved_camera_settings:
+            return
+
+        s = self.saved_camera_settings
+        
+        # Apply Trigger Mode first (might reset others?)
+        if "trigger_mode" in s:
+            self.camera.setTriggerMode(s["trigger_mode"])
+            # Update UI again to be sure
+            self.trigger_bg.button(s["trigger_mode"]).setChecked(True)
+
+        if "trigger_count" in s: self.camera.setTriggerCount(s["trigger_count"])
+        if "trigger_delay" in s: self.camera.setTriggerDelay(s["trigger_delay"])
+        if "trigger_interval" in s: self.camera.setTriggerInterval(s["trigger_interval"])
+        
+        if "ext_mode" in s: self.camera.setExternalTriggerSignalType(s["ext_mode"])
+        if "ext_jitter" in s: self.camera.setExternalTriggerJitterTime(s["ext_jitter"])
+        if "ext_shutter" in s: self.camera.setExternalTriggerShutterMode(s["ext_shutter"])
+
+        if "strobe_mode" in s: self.camera.setStrobeMode(s["strobe_mode"])
+        if "strobe_polarity" in s: self.camera.setStrobePolarity(s["strobe_polarity"])
+        if "strobe_delay" in s: self.camera.setStrobeDelayTime(s["strobe_delay"])
+        if "strobe_width" in s: self.camera.setStrobePulseWidth(s["strobe_width"])
+
+        # Exposure / Gain
+        # Note: Auto exposure setting might override manual time/gain
+        if "auto_exposure" in s:
+            self.camera.setAutoExposure(s["auto_exposure"])
+            self.ui.chk_auto_exposure.setChecked(s["auto_exposure"])
+            
+            if s["auto_exposure"]:
+                if "ae_target" in s: 
+                    self.camera.setAutoExposureTarget(s["ae_target"])
+                    self.ui.spin_ae_target.setValue(s["ae_target"])
+            else:
+                if "exposure_time" in s:
+                    self.camera.setExposureTime(s["exposure_time"])
+                    self.ui.spin_exposure_time.setValue(s["exposure_time"])
+                if "gain" in s:
+                    self.camera.setAnalogGain(s["gain"])
+                    self.ui.spin_gain.setValue(s["gain"])
+
+        if "roi" in s:
+            self.camera.setRoi(s["roi"])
+            self.ui.chk_roi.setChecked(s["roi"])
+
+        self.log("Saved camera settings applied.")
 
 
 if __name__ == "__main__":

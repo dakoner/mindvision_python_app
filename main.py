@@ -243,11 +243,18 @@ class MatchingWorker(QObject):
         # SSIM
         self.ssim_ref_img = None
         self.ssim_cache = None
+        
+        self.last_params = {}
 
     @Slot(dict)
     def update_params(self, params):
         # Update detector based on params
         with QMutexLocker(self.mutex):
+            # Check if params actually changed
+            if params == self.last_params:
+                return
+            self.last_params = params.copy()
+
             try:
                 # If 'algo' is provided, we are updating the Matching Algo
                 if "algo" in params:
@@ -561,28 +568,34 @@ class MatchingWorker(QObject):
 
                 elif (
                     algo in ["ORB", "SIFT", "AKAZE"]
-                    and local_template_des is not None
+                    and local_template_img is not None
                     and local_detector is not None
                 ):
+                    # Always attempt detection
                     kp_frame, des_frame = local_detector.detectAndCompute(
                         gray_frame, None
                     )
-                    if des_frame is not None:
+                    
+                    # Ensure iterable if None
+                    if kp_frame is None: kp_frame = []
+
+                    good_matches = []
+                    if local_template_des is not None and des_frame is not None:
                         matches = local_bf.match(local_template_des, des_frame)
                         matches = sorted(matches, key=lambda x: x.distance)
                         good_matches = matches[:20]
 
-                        # Note: drawMatches creates a NEW image (side-by-side)
-                        # We pass vis_img as 'img2' so contours drawn previously appear in the scene half
-                        vis_img = cv2.drawMatches(
-                            local_template_img,
-                            local_template_kp,
-                            vis_img,
-                            kp_frame,
-                            good_matches,
-                            None,
-                            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-                        )
+                    # Always draw, even if no matches, to show template and keypoints
+                    # Using flags=0 allows drawing single points (unmatched keypoints)
+                    vis_img = cv2.drawMatches(
+                        local_template_img,
+                        local_template_kp if local_template_kp else [],
+                        vis_img,
+                        kp_frame,
+                        good_matches,
+                        None,
+                        flags=0 
+                    )
 
             # Convert final result to QImage
             # vis_img is BGR (or BGR-like output from drawMatches)
@@ -1431,7 +1444,7 @@ class MainWindow(QObject):
                 hasattr(self.ui, "chk_match_enable")
                 and self.ui.chk_match_enable.isChecked()
             ):
-                self.update_detector()
+                # self.update_detector() # Redundant, worker should already be up to date
                 self.toggle_worker_matching_signal.emit(True)
 
     def on_match_enable_toggled(self, checked):

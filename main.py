@@ -64,6 +64,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QImage, QPixmap, QAction, QPainter, QPen, QColor, QIcon
 from PySide6.QtUiTools import QUiLoader
 from range_slider import RangeSlider
+from intensity_chart import IntensityChart
 
 try:
     from _mindvision_qobject_py import MindVisionCamera, VideoThread
@@ -769,6 +770,12 @@ class MainWindow(QObject):
         self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
         self.layout_ruler.addRow(self.btn_ruler_calibrate)
         
+        self.chk_show_profile = QCheckBox("Show Intensity Profile")
+        self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
+        self.layout_ruler.addRow(self.chk_show_profile)
+        
+        self.intensity_chart = IntensityChart()
+
         self.group_ruler.setLayout(self.layout_ruler)
         # Insert into Right Scroll Area at top
         self.ui.scroll_layout_right.insertWidget(0, self.group_ruler)
@@ -1058,7 +1065,7 @@ class MainWindow(QObject):
                 # Create a copy to draw on
                 display_pixmap = self.current_pixmap.copy()
                 painter = QPainter(display_pixmap)
-                pen = QPen(QColor(0, 255, 255), 4) # Cyan, 4px
+                pen = QPen(QColor(0, 255, 255), 2) # Cyan, 2px
                 painter.setPen(pen)
                 
                 start_pt = self.ruler_start
@@ -1067,7 +1074,7 @@ class MainWindow(QObject):
                 painter.drawLine(start_pt, end_pt)
                 
                 # Draw endpoints
-                pen.setWidth(8)
+                pen.setWidth(4)
                 painter.setPen(pen)
                 painter.drawPoint(start_pt)
                 painter.drawPoint(end_pt)
@@ -1956,6 +1963,15 @@ class MainWindow(QObject):
             self.ruler_start = None
             self.ruler_end = None
             self.refresh_video_label()
+            self.intensity_chart.hide()
+            self.chk_show_profile.setChecked(False)
+
+    def on_show_profile_toggled(self, checked):
+        if checked:
+            self.intensity_chart.show()
+            self.update_ruler_stats() # Initial update
+        else:
+            self.intensity_chart.hide()
 
     def get_image_coords(self, mouse_pos):
         if not self.current_pixmap:
@@ -2009,6 +2025,56 @@ class MainWindow(QObject):
             self.lbl_ruler_meas.setText(f"{dist_mm:.2f} mm")
         else:
             self.lbl_ruler_meas.setText("N/A")
+
+        # Update Intensity Chart if visible
+        if self.intensity_chart.isVisible() and self.current_pixmap:
+            # Get Image Data
+            # Note: current_pixmap is for display. We should ideally use the source image data if available.
+            # But converting QPixmap -> QImage is easiest here since we don't store the raw raw frame in MainWindow permanently (only temp).
+            # Actually we store self.current_pixmap. Let's convert to QImage.
+            
+            qimg = self.current_pixmap.toImage()
+            
+            # Sampling
+            num_samples = int(dist_px)
+            if num_samples < 2:
+                self.intensity_chart.set_data([])
+                return
+
+            x0, y0 = self.ruler_start.x(), self.ruler_start.y()
+            x1, y1 = self.ruler_end.x(), self.ruler_end.y()
+            
+            # Clamp to image bounds
+            w, h = qimg.width(), qimg.height()
+            
+            xs = np.linspace(x0, x1, num_samples)
+            ys = np.linspace(y0, y1, num_samples)
+            
+            data = []
+            
+            # Accessing pixels from QImage in Python loop is slow. 
+            # Better: convert QImage to numpy array first?
+            # Or assume we can just grab pixel color.
+            # QImage.pixelColor(x, y).value() gives grayscale for 8-bit or max component?
+            # Let's use simple QImage.pixel() for now, optimized later if needed.
+            # Actually, converting QImage to numpy is better.
+            
+            ptr = qimg.bits()
+            # If default format is RGB888
+            # Warning: This depends on format. Our worker emits Format_RGB888.
+            
+            # Fallback to slow pixel access for safety/robustness across formats
+            for x, y in zip(xs, ys):
+                ix, iy = int(x), int(y)
+                if 0 <= ix < w and 0 <= iy < h:
+                    c = qimg.pixelColor(ix, iy)
+                    # Use Lightness/Value or Gray
+                    val = (c.red() + c.green() + c.blue()) / 3.0
+                    data.append(val)
+                else:
+                    data.append(0)
+            
+            self.intensity_chart.set_data(data)
 
     def calibrate_ruler(self):
         if self.ruler_start is None or self.ruler_end is None:

@@ -1012,6 +1012,55 @@
           </widget>
          </item>
          <item>
+          <widget class="QGroupBox" name="group_ssim">
+           <property name="title">
+            <string>Structural Similarity (SSIM)</string>
+           </property>
+           <layout class="QVBoxLayout" name="layout_ssim">
+            <item>
+             <widget class="QCheckBox" name="chk_ssim_enable">
+              <property name="text">
+               <string>Enable SSIM</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_load_ssim_ref">
+              <property name="text">
+               <string>Load Reference Image...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_ssim_ref_name">
+              <property name="text">
+               <string>No reference loaded</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">color: gray;</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_ssim_score">
+              <property name="text">
+               <string>Score: --</string>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">font-weight: bold; font-size: 14px;</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
           <widget class="QGroupBox" name="group_template_match">
            <property name="title">
             <string>Template Matching</string>

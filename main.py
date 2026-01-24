@@ -57,8 +57,10 @@ from PySide6.QtCore import (
     QEvent,
     QThread,
     QMutex,
+    QPointF,
+    QLineF,
 )
-from PySide6.QtGui import QImage, QPixmap, QAction
+from PySide6.QtGui import QImage, QPixmap, QAction, QPainter, QPen, QColor, QIcon
 from PySide6.QtUiTools import QUiLoader
 from range_slider import RangeSlider
 
@@ -67,6 +69,50 @@ try:
 except ImportError as e:
     print(f"Failed to import _mindvision_qobject_py: {e}")
     sys.exit(1)
+
+def precompute_ssim_constants(img):
+    img = img.astype(np.float64)
+    kernel = cv2.getGaussianKernel(11, 1.5)
+    window = np.outer(kernel, kernel.transpose())
+    
+    mu = cv2.filter2D(img, -1, window)[5:-5, 5:-5]
+    mu_sq = mu ** 2
+    sigma_sq = cv2.filter2D(img ** 2, -1, window)[5:-5, 5:-5] - mu_sq
+    
+    return {
+        "img": img,
+        "mu": mu,
+        "mu_sq": mu_sq,
+        "sigma_sq": sigma_sq,
+        "window": window
+    }
+
+def compute_ssim_cached(img1, ref_stats):
+    C1 = 6.5025
+    C2 = 58.5225
+    
+    img1 = img1.astype(np.float64)
+    window = ref_stats["window"]
+    
+    mu1 = cv2.filter2D(img1, -1, window)[5:-5, 5:-5]
+    mu1_sq = mu1 ** 2
+    sigma1_sq = cv2.filter2D(img1 ** 2, -1, window)[5:-5, 5:-5] - mu1_sq
+    
+    mu2 = ref_stats["mu"]
+    mu2_sq = ref_stats["mu_sq"]
+    sigma2_sq = ref_stats["sigma_sq"]
+    img2 = ref_stats["img"]
+    
+    mu1_mu2 = mu1 * mu2
+    sigma12 = cv2.filter2D(img1 * img2, -1, window)[5:-5, 5:-5] - mu1_mu2
+    
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    return ssim_map.mean()
+
+def compute_ssim(img1, img2):
+    # Legacy wrapper for non-cached usage if needed, or we can just compute on the fly
+    stats = precompute_ssim_constants(img2)
+    return compute_ssim_cached(img1, stats)
 
 
 class SerialWorker(QObject):
@@ -161,6 +207,7 @@ class MatchingWorker(QObject):
     result_ready = Signal(QImage)
     log_signal = Signal(str)
     qr_found_signal = Signal(str)
+    ssim_score_signal = Signal(float)
 
     def __init__(self):
         super().__init__()
@@ -192,6 +239,10 @@ class MatchingWorker(QObject):
 
         # QR Code
         self.qr_detector = cv2.QRCodeDetector()
+        
+        # SSIM
+        self.ssim_ref_img = None
+        self.ssim_cache = None
 
     @Slot(dict)
     def update_params(self, params):
@@ -269,6 +320,8 @@ class MatchingWorker(QObject):
                     elif self.current_algo == "QRCODE":
                         # QR Code detector is already initialized
                         pass
+                    elif self.current_algo == "SSIM":
+                        pass
 
                     # Recompute template if exists (feature matching)
                     if (
@@ -288,10 +341,30 @@ class MatchingWorker(QObject):
             self.contour_params.update(params)
 
     @Slot(str)
+    def set_ssim_reference(self, file_path):
+        with QMutexLocker(self.mutex):
+            if not file_path:
+                self.ssim_ref_img = None
+                self.ssim_cache = None
+                if self.current_algo == 'SSIM':
+                    self.is_matching_enabled = False
+                return
+            
+            img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+            if img is not None:
+                self.ssim_ref_img = img
+                self.ssim_cache = None
+                self.log_signal.emit(f"Worker: SSIM reference loaded {file_path}")
+                if self.current_algo == 'SSIM':
+                    self.is_matching_enabled = True
+            else:
+                self.log_signal.emit("Worker: Failed to load SSIM reference")
+
+    @Slot(str)
     def set_template(self, file_path):
         with QMutexLocker(self.mutex):
             if not file_path:
-                if self.current_algo != "ARUCO" and self.current_algo != "QRCODE":
+                if self.current_algo != "ARUCO" and self.current_algo != "QRCODE" and self.current_algo != "SSIM":
                     self.is_matching_enabled = False
                 self.template_img = None
                 return
@@ -302,6 +375,7 @@ class MatchingWorker(QObject):
                 if self.detector is not None and self.current_algo not in [
                     "ARUCO",
                     "QRCODE",
+                    "SSIM",
                 ]:
                     self.template_kp, self.template_des = (
                         self.detector.detectAndCompute(img, None)
@@ -348,6 +422,8 @@ class MatchingWorker(QObject):
             local_aruco_display = self.aruco_display.copy()
             local_contour_params = self.contour_params.copy()
             local_qr_detector = self.qr_detector
+            local_ssim_ref = self.ssim_ref_img
+            local_ssim_cache = self.ssim_cache
 
         try:
             channels = bytes_per_line // width
@@ -417,7 +493,29 @@ class MatchingWorker(QObject):
 
             # --- 2. Matching Processing ---
             if matching_active:
-                if algo == "QRCODE" and local_qr_detector:
+                if algo == 'SSIM' and local_ssim_ref is not None:
+                    # Resize reference if dimensions don't match or cache is missing
+                    use_cache = local_ssim_cache
+                    
+                    if use_cache is None or use_cache["img"].shape != gray_frame.shape:
+                        if local_ssim_ref.shape != gray_frame.shape:
+                             resized_ref = cv2.resize(local_ssim_ref, (gray_frame.shape[1], gray_frame.shape[0]))
+                        else:
+                             resized_ref = local_ssim_ref
+                        
+                        use_cache = precompute_ssim_constants(resized_ref)
+                        
+                        # Update cache if ref hasn't changed
+                        with QMutexLocker(self.mutex):
+                            if self.ssim_ref_img is local_ssim_ref:
+                                self.ssim_cache = use_cache
+                    
+                    score = compute_ssim_cached(gray_frame, use_cache)
+                    self.ssim_score_signal.emit(score)
+                    
+                    cv2.putText(vis_img, f"SSIM: {score:.4f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+
+                elif algo == "QRCODE" and local_qr_detector:
                     retval, decoded_info, points, straight_qrcode = (
                         local_qr_detector.detectAndDecodeMulti(gray_frame)
                     )
@@ -526,6 +624,8 @@ class MainWindow(QObject):
     update_worker_params_signal = Signal(dict)
     # Signal to set template
     set_worker_template_signal = Signal(str)
+    # Signal to set SSIM reference
+    set_worker_ssim_ref_signal = Signal(str)
     # Signal to toggle matching
     toggle_worker_matching_signal = Signal(bool)
 
@@ -569,8 +669,9 @@ class MainWindow(QObject):
         self.process_frame_signal.connect(self.worker.process_frame)
         self.update_worker_params_signal.connect(self.worker.update_params)
         self.set_worker_template_signal.connect(self.worker.set_template)
+        self.set_worker_ssim_ref_signal.connect(self.worker.set_ssim_reference)
         self.toggle_worker_matching_signal.connect(self.worker.toggle_matching)
-
+        
         self.toggle_worker_contours_signal.connect(self.worker.toggle_contours)
         self.update_worker_contour_params_signal.connect(
             self.worker.update_contour_params
@@ -579,9 +680,9 @@ class MainWindow(QObject):
         self.worker.result_ready.connect(self.update_frame)
         self.worker.log_signal.connect(self.log)
         self.worker.qr_found_signal.connect(self.handle_qr_found)
-
+        self.worker.ssim_score_signal.connect(self.handle_ssim_score)
+        
         self.matching_thread.start()
-
         # --- Serial Worker Setup ---
         self.serial_thread = QThread()
         self.serial_worker = SerialWorker()
@@ -607,6 +708,60 @@ class MainWindow(QObject):
         
         if hasattr(self.ui, 'chk_qrcode_enable'):
             self.ui.chk_qrcode_enable.toggled.connect(self.on_qrcode_enable_toggled)
+
+        # SSIM UI
+        if hasattr(self.ui, 'btn_load_ssim_ref'):
+            self.ui.btn_load_ssim_ref.clicked.connect(self.on_load_ssim_ref_clicked)
+        if hasattr(self.ui, 'chk_ssim_enable'):
+            self.ui.chk_ssim_enable.toggled.connect(self.on_ssim_enable_toggled)
+            
+        self.ssim_ref_loaded = False
+
+        # --- Ruler / Measurement Tool Init ---
+        self.ruler_active = False
+        self.ruler_start = None
+        self.ruler_end = None
+        self.ruler_calibration = None # None or float (px per mm)
+
+        # Ruler Toolbar Action
+        self.action_ruler = QAction(QIcon(os.path.join(script_dir, "icons", "ruler.png")), "Ruler Tool", self)
+        self.action_ruler.setCheckable(True)
+        self.ui.main_toolbar.addAction(self.action_ruler)
+        self.action_ruler.toggled.connect(self.on_ruler_toggled)
+
+        # Ruler GroupBox
+        self.group_ruler = QGroupBox("Measurement / Ruler")
+        self.layout_ruler = QFormLayout()
+
+        self.spin_ruler_len = QSpinBox() # Using SpinBox for int or DoubleSpinBox? User said "specify length".
+        # Let's use QDoubleSpinBox for precision
+        self.spin_ruler_len = PySide6.QtWidgets.QDoubleSpinBox()
+        self.spin_ruler_len.setRange(0.0, 9999.0)
+        self.spin_ruler_len.setValue(10.0) # Default 10mm
+        self.spin_ruler_len.setSuffix(" mm")
+        self.layout_ruler.addRow("Known Length:", self.spin_ruler_len)
+
+        self.lbl_ruler_px = QLabel("0.0 px")
+        self.layout_ruler.addRow("Pixel Dist:", self.lbl_ruler_px)
+
+        self.lbl_ruler_calib = QLabel("Not Calibrated")
+        self.layout_ruler.addRow("Scale:", self.lbl_ruler_calib)
+
+        self.lbl_ruler_meas = QLabel("0.00 mm")
+        self.lbl_ruler_meas.setStyleSheet("font-weight: bold; font-size: 14px; color: blue;")
+        self.layout_ruler.addRow("Measured:", self.lbl_ruler_meas)
+
+        self.btn_ruler_calibrate = QPushButton("Calibrate from Line")
+        self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
+        self.layout_ruler.addRow(self.btn_ruler_calibrate)
+        
+        self.group_ruler.setLayout(self.layout_ruler)
+        # Insert into Right Scroll Area at top
+        self.ui.scroll_layout_right.insertWidget(0, self.group_ruler)
+        self.group_ruler.setVisible(False) # Hide initially until tool is active? Or just keep visible. 
+        # User said "Allows user to click-drag... There is a panel". Better to show panel when tool is active or always.
+        # I'll keep it visible but maybe disabled? No, let's just leave it visible.
+        self.group_ruler.setVisible(False)
 
         self.update_detector()
 
@@ -842,15 +997,65 @@ class MainWindow(QObject):
                     self.ui.video_label.removeEventFilter(self)
                 except RuntimeError:
                     pass
-            elif watched == self.ui.video_label and event.type() == QEvent.Resize:
-                self.refresh_video_label()
+            elif watched == self.ui.video_label:
+                if event.type() == QEvent.Resize:
+                    self.refresh_video_label()
+                elif self.ruler_active:
+                    if event.type() == QEvent.MouseButtonPress:
+                        if event.button() == Qt.LeftButton:
+                            pos = self.get_image_coords(event.position())
+                            if pos:
+                                self.ruler_start = pos
+                                self.ruler_end = pos
+                                self.refresh_video_label()
+                    elif event.type() == QEvent.MouseMove:
+                        if self.ruler_start is not None and event.buttons() & Qt.LeftButton:
+                            pos = self.get_image_coords(event.position())
+                            if pos:
+                                self.ruler_end = pos
+                                self.update_ruler_stats()
+                                self.refresh_video_label()
+                    elif event.type() == QEvent.MouseButtonRelease:
+                        if event.button() == Qt.LeftButton and self.ruler_start is not None:
+                            pos = self.get_image_coords(event.position())
+                            if pos:
+                                self.ruler_end = pos
+                                self.update_ruler_stats()
+                                self.refresh_video_label()
         except RuntimeError:
             pass
         return super().eventFilter(watched, event)
 
     def refresh_video_label(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
-            scaled = self.current_pixmap.scaled(
+            # If Ruler is active and we have points, draw them on a temporary pixmap
+            # We draw on the original resolution pixmap before scaling
+            
+            # Optimization: If we are just dragging, maybe we shouldn't clone the pixmap every time 
+            # if the image is huge (5MP+). But for UI responsiveness it's usually fine.
+            display_pixmap = self.current_pixmap
+            
+            if self.ruler_active and (self.ruler_start is not None):
+                # Create a copy to draw on
+                display_pixmap = self.current_pixmap.copy()
+                painter = QPainter(display_pixmap)
+                pen = QPen(QColor(0, 255, 255), 4) # Cyan, 4px
+                painter.setPen(pen)
+                
+                start_pt = self.ruler_start
+                end_pt = self.ruler_end if self.ruler_end is not None else start_pt
+                
+                painter.drawLine(start_pt, end_pt)
+                
+                # Draw endpoints
+                pen.setWidth(8)
+                painter.setPen(pen)
+                painter.drawPoint(start_pt)
+                painter.drawPoint(end_pt)
+                
+                painter.end()
+
+            scaled = display_pixmap.scaled(
                 self.ui.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation
             )
             self.ui.video_label.setPixmap(scaled)
@@ -977,6 +1182,12 @@ class MainWindow(QObject):
             self.interrupt_items_map[pin] = item
 
     def update_detector(self):
+        # SSIM Priority
+        if hasattr(self.ui, 'chk_ssim_enable') and self.ui.chk_ssim_enable.isChecked():
+            params = {'algo': 'SSIM'}
+            self.update_worker_params_signal.emit(params)
+            return
+
         # QR Code Priority
         if (
             hasattr(self.ui, "chk_qrcode_enable")
@@ -1183,6 +1394,15 @@ class MainWindow(QObject):
                 self.ui.chk_qrcode_enable.setChecked(False)
                 self.ui.chk_qrcode_enable.blockSignals(False)
 
+            # Mutual exclusion: disable SSIM if active
+            if (
+                hasattr(self.ui, "chk_ssim_enable")
+                and self.ui.chk_ssim_enable.isChecked()
+            ):
+                self.ui.chk_ssim_enable.blockSignals(True)
+                self.ui.chk_ssim_enable.setChecked(False)
+                self.ui.chk_ssim_enable.blockSignals(False)
+            
             # Enable ArUco (update_detector picks up the checked state)
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
@@ -1242,6 +1462,15 @@ class MainWindow(QObject):
                 self.ui.chk_qrcode_enable.setChecked(False)
                 self.ui.chk_qrcode_enable.blockSignals(False)
 
+            # Mutual Exclusion: Disable SSIM
+            if (
+                hasattr(self.ui, "chk_ssim_enable")
+                and self.ui.chk_ssim_enable.isChecked()
+            ):
+                self.ui.chk_ssim_enable.blockSignals(True)
+                self.ui.chk_ssim_enable.setChecked(False)
+                self.ui.chk_ssim_enable.blockSignals(False)
+
             self.is_matching_ui_active = True
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
@@ -1270,6 +1499,15 @@ class MainWindow(QObject):
                 self.ui.chk_aruco_enable.setChecked(False)
                 self.ui.chk_aruco_enable.blockSignals(False)
 
+            # Mutual exclusion: disable SSIM
+            if (
+                hasattr(self.ui, "chk_ssim_enable")
+                and self.ui.chk_ssim_enable.isChecked()
+            ):
+                self.ui.chk_ssim_enable.blockSignals(True)
+                self.ui.chk_ssim_enable.setChecked(False)
+                self.ui.chk_ssim_enable.blockSignals(False)
+            
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
         else:
@@ -1280,6 +1518,52 @@ class MainWindow(QObject):
     def handle_qr_found(self, text):
         if hasattr(self.ui, "lbl_qrcode_data"):
             self.ui.lbl_qrcode_data.setText(f"Decoded Data: {text}")
+
+    @Slot(float)
+    def handle_ssim_score(self, score):
+        if hasattr(self.ui, "lbl_ssim_score"):
+            self.ui.lbl_ssim_score.setText(f"Score: {score:.4f}")
+
+    def on_load_ssim_ref_clicked(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.ui, "Select Reference Image", "", "Images (*.png *.jpg *.bmp)"
+        )
+        if file_path:
+            self.set_worker_ssim_ref_signal.emit(file_path)
+            self.ssim_ref_loaded = True
+            
+            filename = os.path.basename(file_path)
+            if hasattr(self.ui, "lbl_ssim_ref_name"):
+                self.ui.lbl_ssim_ref_name.setText(filename)
+                self.ui.lbl_ssim_ref_name.setStyleSheet("color: black;")
+            
+            if hasattr(self.ui, "chk_ssim_enable") and self.ui.chk_ssim_enable.isChecked():
+                self.update_detector()
+                self.toggle_worker_matching_signal.emit(True)
+
+    def on_ssim_enable_toggled(self, checked):
+        if checked:
+            if not self.ssim_ref_loaded:
+                self.on_load_ssim_ref_clicked()
+                if not self.ssim_ref_loaded:
+                    self.ui.chk_ssim_enable.setChecked(False)
+                    return
+
+            # Mutual Exclusion
+            for chk_name in ["chk_match_enable", "chk_aruco_enable", "chk_qrcode_enable"]:
+                if hasattr(self.ui, chk_name):
+                    chk = getattr(self.ui, chk_name)
+                    if chk.isChecked():
+                        chk.blockSignals(True)
+                        chk.setChecked(False)
+                        chk.blockSignals(False)
+            
+            self.is_matching_ui_active = True
+            self.update_detector()
+            self.toggle_worker_matching_signal.emit(True)
+        else:
+            self.is_matching_ui_active = False
+            self.toggle_worker_matching_signal.emit(False)
 
     def on_toggle_contours_toggled(self, checked):
         if checked:
@@ -1644,6 +1928,90 @@ class MainWindow(QObject):
         addr = self.ui.edit_mem_addr.text().strip()
         if addr:
             self.send_serial_cmd_signal.emit(f"mem {addr}")
+
+    def on_ruler_toggled(self, checked):
+        self.ruler_active = checked
+        self.group_ruler.setVisible(checked)
+        if not checked:
+            self.ruler_start = None
+            self.ruler_end = None
+            self.refresh_video_label()
+
+    def get_image_coords(self, mouse_pos):
+        if not self.current_pixmap:
+            return None
+        
+        # Helper to map mouse position on label to image coordinates
+        lbl_w = self.ui.video_label.width()
+        lbl_h = self.ui.video_label.height()
+        
+        img_w = self.current_pixmap.width()
+        img_h = self.current_pixmap.height()
+        
+        if img_w == 0 or img_h == 0:
+            return None
+
+        # Calculate scale and offsets (KeepAspectRatio)
+        ratio_w = lbl_w / img_w
+        ratio_h = lbl_h / img_h
+        scale = min(ratio_w, ratio_h)
+        
+        disp_w = img_w * scale
+        disp_h = img_h * scale
+        
+        off_x = (lbl_w - disp_w) / 2
+        off_y = (lbl_h - disp_h) / 2
+        
+        # Mouse relative to image rect
+        rx = mouse_pos.x() - off_x
+        ry = mouse_pos.y() - off_y
+        
+        # Check bounds (optional, or clamp)
+        # rx = max(0, min(rx, disp_w))
+        # ry = max(0, min(ry, disp_h))
+        
+        ox = rx / scale
+        oy = ry / scale
+        
+        return QPointF(ox, oy)
+
+    def update_ruler_stats(self):
+        if self.ruler_start is None or self.ruler_end is None:
+            return
+            
+        line = QLineF(self.ruler_start, self.ruler_end)
+        dist_px = line.length()
+        
+        self.lbl_ruler_px.setText(f"{dist_px:.2f} px")
+        
+        if self.ruler_calibration:
+            dist_mm = dist_px / self.ruler_calibration
+            self.lbl_ruler_meas.setText(f"{dist_mm:.2f} mm")
+        else:
+            self.lbl_ruler_meas.setText("N/A")
+
+    def calibrate_ruler(self):
+        if self.ruler_start is None or self.ruler_end is None:
+            self.log("Ruler: Draw a line first to calibrate.")
+            return
+            
+        line = QLineF(self.ruler_start, self.ruler_end)
+        dist_px = line.length()
+        
+        if dist_px < 1.0:
+            self.log("Ruler: Line too short for calibration.")
+            return
+            
+        known_len = self.spin_ruler_len.value()
+        if known_len <= 0:
+            self.log("Ruler: Known length must be > 0.")
+            return
+            
+        self.ruler_calibration = dist_px / known_len # px per mm
+        
+        self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
+        self.lbl_ruler_meas.setText(f"{known_len:.2f} mm") # Should match known length
+        self.log(f"Ruler calibrated: {self.ruler_calibration:.2f} px/mm")
 
 
 if __name__ == "__main__":

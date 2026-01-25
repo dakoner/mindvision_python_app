@@ -1320,11 +1320,18 @@ class MainWindow(QObject):
             if self.recording_requested:
                 self.recording_requested = False
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
+                
+                # Create videos dir
+                video_dir = os.path.join(script_dir, "videos")
+                os.makedirs(video_dir, exist_ok=True)
+                
+                filename = os.path.join(video_dir, f"recording_{int(time.time())}.mkv")
+                
                 self.video_thread.startRecording(
-                    image.width(), image.height(), record_fps, "output.mkv"
+                    image.width(), image.height(), record_fps, filename
                 )
                 self.ui.action_record.setText("Stop Recording")
-                self.log("Recording started: output.mkv")
+                self.log(f"Recording started: {os.path.basename(filename)}")
 
             # Display
             self.current_pixmap = QPixmap.fromImage(image)
@@ -1396,9 +1403,12 @@ class MainWindow(QObject):
 
     def on_snapshot_clicked(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
-            filename = f"snapshot_{int(time.time())}.png"
+            snap_dir = os.path.join(script_dir, "snapshots")
+            os.makedirs(snap_dir, exist_ok=True)
+            
+            filename = os.path.join(snap_dir, f"snapshot_{int(time.time())}.png")
             self.current_pixmap.save(filename)
-            self.log(f"Snapshot saved: {filename}")
+            self.log(f"Snapshot saved: {os.path.basename(filename)}")
 
     def on_aruco_enable_toggled(self, checked):
         if checked:

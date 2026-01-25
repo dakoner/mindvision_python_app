@@ -172,7 +172,8 @@ class MatchingWorker(QObject):
                     elif self.current_algo == "QRCODE":
                         # QR Code detector is already initialized
                         pass
-                    elif self.current_algo == "SSIM":
+                    elif self.current_algo == "HOUGH_CIRCLE":
+                        # Hough Circle does not require a detector object, just params
                         pass
 
                     # Recompute template if exists (feature matching)
@@ -410,6 +411,31 @@ class MatchingWorker(QObject):
                     if ids is not None and len(ids) > 0:
                         display_ids = ids if local_aruco_display["ids"] else None
                         cv2.aruco.drawDetectedMarkers(vis_img, corners, display_ids)
+
+                elif algo == "HOUGH_CIRCLE":
+                    # Hough Circles
+                    # Use gray_frame
+                    # Apply blur to reduce noise
+                    blur_gray = cv2.medianBlur(gray_frame, 5)
+                    
+                    circles = cv2.HoughCircles(
+                        blur_gray,
+                        cv2.HOUGH_GRADIENT,
+                        dp=params.get("dp", 1.0),
+                        minDist=params.get("minDist", 50.0),
+                        param1=params.get("param1", 100.0),
+                        param2=params.get("param2", 30.0),
+                        minRadius=params.get("minRadius", 1),
+                        maxRadius=params.get("maxRadius", 100)
+                    )
+                    
+                    if circles is not None:
+                        circles = np.uint16(np.around(circles))
+                        for i in circles[0, :]:
+                            # draw the outer circle
+                            cv2.circle(vis_img, (i[0], i[1]), i[2], (0, 255, 0), 2)
+                            # draw the center of the circle
+                            cv2.circle(vis_img, (i[0], i[1]), 2, (0, 0, 255), 3)
 
                 elif (
                     algo in ["ORB", "SIFT", "AKAZE"]

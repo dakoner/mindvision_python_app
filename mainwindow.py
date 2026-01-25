@@ -140,6 +140,10 @@ class MainWindow(QObject):
         self.serial_poll_timer.timeout.connect(lambda: self.poll_serial_signal.emit())
         self.serial_poll_timer.start(50) # Poll every 50ms
 
+        # Parameter Poll Timer (for Auto Exposure updates)
+        self.param_poll_timer = QTimer()
+        self.param_poll_timer.timeout.connect(self.poll_camera_params)
+
         # Initial Detector config
         
         if hasattr(self.ui, 'chk_qrcode_enable'):
@@ -384,6 +388,14 @@ class MainWindow(QObject):
             self.on_detector_params_changed
         )
 
+        # Hough Circle Parameter Connections
+        self.ui.hough_dp.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.hough_minDist.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.hough_param1.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.hough_param2.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.hough_minRadius.valueChanged.connect(self.on_detector_params_changed)
+        self.ui.hough_maxRadius.valueChanged.connect(self.on_detector_params_changed)
+
         # ArUco Parameter Connections
         self.ui.aruco_dict.currentTextChanged.connect(self.on_detector_params_changed)
         self.ui.chk_aruco_show_ids.toggled.connect(self.on_detector_params_changed)
@@ -411,6 +423,7 @@ class MainWindow(QObject):
         self.recording_requested = False
         self.current_fps = 30.0
         self.last_ui_update_time = 0
+        self.is_camera_running = False
 
         self.load_settings()
 
@@ -691,6 +704,15 @@ class MainWindow(QObject):
             params["nOctaves"] = self.ui.akaze_nOctaves.value()
             params["nOctaveLayers"] = self.ui.akaze_nOctaveLayers.value()
 
+        elif tab_index == 3:  # Hough Circle
+            params["algo"] = "HOUGH_CIRCLE"
+            params["dp"] = self.ui.hough_dp.value()
+            params["minDist"] = self.ui.hough_minDist.value()
+            params["param1"] = self.ui.hough_param1.value()
+            params["param2"] = self.ui.hough_param2.value()
+            params["minRadius"] = self.ui.hough_minRadius.value()
+            params["maxRadius"] = self.ui.hough_maxRadius.value()
+
         self.update_worker_params_signal.emit(params)
 
     def on_detector_params_changed(self):
@@ -731,7 +753,6 @@ class MainWindow(QObject):
     def error_callback(self, msg):
         self.error_signal.emit(msg)
 
-    @Slot(QImage)
     def update_frame(self, image):
         self.worker_busy = False
         if not image.isNull():
@@ -755,6 +776,11 @@ class MainWindow(QObject):
             # Display
             self.current_pixmap = QPixmap.fromImage(image)
             self.refresh_video_label()
+            
+            # Real-time Intensity Profile Update
+            if self.ruler_active and self.chk_show_profile.isChecked() and self.ruler_start:
+                end_pt = self.ruler_end if self.ruler_end is not None else self.ruler_start
+                self.update_intensity_profile(self.ruler_start, end_pt, image)
 
     @Slot(float)
     def update_fps(self, fps):
@@ -776,6 +802,7 @@ class MainWindow(QObject):
     def on_start_clicked(self):
         if self.camera.open():
             if self.camera.start():
+                self.is_camera_running = True
                 self.ui.action_start_camera.setEnabled(False)
                 self.ui.action_stop_camera.setEnabled(True)
                 self.ui.action_record.setEnabled(True)
@@ -787,9 +814,12 @@ class MainWindow(QObject):
                 self.ui.video_label.setText("Starting stream...")
                 self.sync_ui()
                 self.apply_camera_settings()
+                self.param_poll_timer.start(200) # Poll every 200ms
                 self.log("Camera started.")
 
     def on_stop_clicked(self):
+        self.param_poll_timer.stop()
+        self.is_camera_running = False
         if self.video_thread.isRunning():
             self.on_record_clicked()
 
@@ -810,6 +840,42 @@ class MainWindow(QObject):
         self.ui.video_label.setText("Camera Stopped")
         self.fps_label.setText("FPS: 0.0")
         self.log("Camera stopped.")
+    
+    def poll_camera_params(self):
+        if not self.is_camera_running:
+            return
+
+        # 1. Exposure Time
+        # Always read from camera
+        try:
+            current_exp = self.camera.getExposureTime()
+            # Update UI only if not interacting (or if disabled/auto)
+            if not self.ui.slider_exposure.isSliderDown() and not self.ui.spin_exposure_time.hasFocus():
+                if abs(self.ui.spin_exposure_time.value() - current_exp) > 1.0: # Threshold
+                    self.ui.spin_exposure_time.blockSignals(True)
+                    self.ui.spin_exposure_time.setValue(current_exp)
+                    self.ui.spin_exposure_time.blockSignals(False)
+                    
+                    min_exp = self.ui.spin_exposure_time.minimum()
+                    max_exp = self.ui.spin_exposure_time.maximum()
+                    self.update_slider_from_time(current_exp, min_exp, max_exp)
+        except Exception:
+            pass
+
+        # 2. Gain
+        try:
+            current_gain = self.camera.getAnalogGain()
+            if not self.ui.slider_gain.isSliderDown() and not self.ui.spin_gain.hasFocus():
+                if abs(self.ui.spin_gain.value() - current_gain) > 0.1:
+                    self.ui.spin_gain.blockSignals(True)
+                    self.ui.spin_gain.setValue(current_gain)
+                    self.ui.spin_gain.blockSignals(False)
+
+                    self.ui.slider_gain.blockSignals(True)
+                    self.ui.slider_gain.setValue(current_gain)
+                    self.ui.slider_gain.blockSignals(False)
+        except Exception:
+            pass
 
     def on_record_clicked(self):
         if not self.video_thread.isRunning():
@@ -1080,14 +1146,20 @@ class MainWindow(QObject):
         self.ui.slider_ae_target.setEnabled(is_auto)
 
         # AE Target
-        if hasattr(self.camera, "getAutoExposureTarget"):
+        if hasattr(self.camera, "getAeTarget"):
+            # Enable controls
+            self.ui.spin_ae_target.setEnabled(is_auto)
+            self.ui.slider_ae_target.setEnabled(is_auto)
+            self.ui.spin_ae_target.setToolTip("")
+            self.ui.slider_ae_target.setToolTip("")
+            
             try:
-                if hasattr(self.camera, "getAutoExposureTargetRange"):
-                    min_ae, max_ae = self.camera.getAutoExposureTargetRange()
-                    self.ui.spin_ae_target.setRange(min_ae, max_ae)
-                    self.ui.slider_ae_target.setRange(min_ae, max_ae)
+                # Set range if available or default 0-255 (typical byte range)
+                # MindVision AE target is often around 120 default.
+                self.ui.spin_ae_target.setRange(0, 255)
+                self.ui.slider_ae_target.setRange(0, 255)
 
-                current_ae = self.camera.getAutoExposureTarget()
+                current_ae = self.camera.getAeTarget()
                 self.ui.spin_ae_target.blockSignals(True)
                 self.ui.spin_ae_target.setValue(current_ae)
                 self.ui.spin_ae_target.blockSignals(False)
@@ -1097,6 +1169,12 @@ class MainWindow(QObject):
                 self.ui.slider_ae_target.blockSignals(False)
             except Exception as e:
                 self.log(f"Error syncing AE target: {e}")
+        else:
+            # Feature not supported by current MindVisionCamera wrapper
+            self.ui.spin_ae_target.setEnabled(False)
+            self.ui.slider_ae_target.setEnabled(False)
+            self.ui.spin_ae_target.setToolTip("Not supported by current camera wrapper")
+            self.ui.slider_ae_target.setToolTip("Not supported by current camera wrapper")
 
         current_exp = self.camera.getExposureTime()
         self.ui.spin_exposure_time.blockSignals(True)
@@ -1178,11 +1256,13 @@ class MainWindow(QObject):
         self.ui.spin_gain.setValue(value)
 
     def on_ae_target_changed(self, value):
-        if hasattr(self.camera, "setAutoExposureTarget"):
-            self.camera.setAutoExposureTarget(value)
+        if hasattr(self.camera, "setAeTarget"):
+            self.camera.setAeTarget(value)
             self.ui.slider_ae_target.blockSignals(True)
             self.ui.slider_ae_target.setValue(value)
             self.ui.slider_ae_target.blockSignals(False)
+        else:
+            self.log("Error: Camera does not support setAeTarget")
 
     def on_ae_slider_changed(self, value):
         self.ui.spin_ae_target.setValue(value)
@@ -1482,11 +1562,14 @@ class MainWindow(QObject):
         if self.chk_show_profile.isChecked() and self.current_pixmap:
             self.update_intensity_profile(self.ruler_start, end_pt)
 
-    def update_intensity_profile(self, p1, p2):
+    def update_intensity_profile(self, p1, p2, image=None):
         # We need the underlying image data (grayscale preferably)
-        # self.current_pixmap is for display.
-        # We can convert pixmap to image
-        qimg = self.current_pixmap.toImage()
+        if image:
+             qimg = image
+        elif self.current_pixmap:
+             qimg = self.current_pixmap.toImage()
+        else:
+             return
         
         # Sample points along the line
         line = QLineF(p1, p2)

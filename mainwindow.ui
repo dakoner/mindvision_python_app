@@ -885,6 +885,106 @@
        <property name="currentIndex">
         <number>0</number>
        </property>
+
+       <widget class="QWidget" name="tab_measurement">
+        <attribute name="title">
+         <string>Measurement</string>
+        </attribute>
+        <layout class="QFormLayout" name="layout_ruler">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_ruler_len">
+           <property name="text">
+            <string>Known Length:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QDoubleSpinBox" name="spin_ruler_len">
+           <property name="maximum">
+            <double>9999.0</double>
+           </property>
+           <property name="value">
+            <double>10.0</double>
+           </property>
+           <property name="suffix">
+            <string> mm</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_ruler_px">
+           <property name="text">
+            <string>Pixel Dist:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLabel" name="lbl_ruler_px">
+           <property name="text">
+            <string>0.0 px</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_ruler_calib">
+           <property name="text">
+            <string>Scale:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLabel" name="lbl_ruler_calib">
+           <property name="text">
+            <string>Not Calibrated</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_ruler_meas">
+           <property name="text">
+            <string>Measured:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLabel" name="lbl_ruler_meas">
+           <property name="text">
+            <string>0.00 mm</string>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">font-weight: bold; font-size: 14px; color: blue;</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0" colspan="2">
+          <widget class="QPushButton" name="btn_ruler_calibrate">
+           <property name="text">
+            <string>Calibrate from Line</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="0" colspan="2">
+          <widget class="QCheckBox" name="chk_show_profile">
+           <property name="text">
+            <string>Show Intensity Profile</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="0" colspan="2">
+          <widget class="IntensityChart" name="intensity_chart" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>200</height>
+            </size>
+           </property>
+           <property name="visible">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
        
        <widget class="QWidget" name="tab_aruco">
         <attribute name="title">
@@ -1795,6 +1895,7 @@
    <addaction name="action_stop_camera"/>
    <addaction name="action_record"/>
    <addaction name="action_snapshot"/>
+   <addaction name="action_ruler"/>
   </widget>
   <action name="action_start_camera">
    <property name="icon">
@@ -1857,6 +1958,22 @@
     <string>Take Snapshot</string>
    </property>
   </action>
+  <action name="action_ruler">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/ruler.png</normaloff>icons/ruler.png
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Ruler Tool</string>
+   </property>
+   <property name="toolTip">
+    <string>Ruler Tool</string>
+   </property>
+  </action>
 
  </widget>
  <customwidgets>
@@ -1864,6 +1981,11 @@
    <class>RangeSlider</class>
    <extends>QWidget</extends>
    <header>range_slider</header>
+  </customwidget>
+  <customwidget>
+   <class>IntensityChart</class>
+   <extends>QWidget</extends>
+   <header>intensity_chart</header>
   </customwidget>
  </customwidgets>
  <resources/>

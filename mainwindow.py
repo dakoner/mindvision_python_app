@@ -76,6 +76,7 @@ class MainWindow(QObject):
         # Load UI from file
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
+        loader.registerCustomWidget(IntensityChart)
         ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
@@ -163,57 +164,25 @@ class MainWindow(QObject):
         self.ruler_end = None
         self.ruler_calibration = None # None or float (px per mm)
 
-        # Ruler Toolbar Action
-        self.action_ruler = QAction(QIcon(os.path.join(self.script_dir, "icons", "ruler.png")), "Ruler Tool", self)
-        self.action_ruler.setCheckable(True)
-        self.ui.main_toolbar.addAction(self.action_ruler)
+        # Retrieve UI elements
+        self.action_ruler = self.ui.action_ruler
+        self.spin_ruler_len = self.ui.spin_ruler_len
+        self.lbl_ruler_px = self.ui.lbl_ruler_px
+        self.lbl_ruler_calib = self.ui.lbl_ruler_calib
+        self.lbl_ruler_meas = self.ui.lbl_ruler_meas
+        self.btn_ruler_calibrate = self.ui.btn_ruler_calibrate
+        self.chk_show_profile = self.ui.chk_show_profile
+        self.intensity_chart = self.ui.intensity_chart
+
+        # Connect Signals
         self.action_ruler.toggled.connect(self.on_ruler_toggled)
-
-        # Ruler GroupBox
-        self.group_ruler = QGroupBox("Measurement / Ruler")
-        self.layout_ruler = QFormLayout()
-
-        self.spin_ruler_len = QSpinBox() # Using SpinBox for int or DoubleSpinBox? User said "specify length".
-        # Let's use QDoubleSpinBox for precision
-        self.spin_ruler_len = PySide6.QtWidgets.QDoubleSpinBox()
-        self.spin_ruler_len.setRange(0.0, 9999.0)
-        self.spin_ruler_len.setValue(10.0) # Default 10mm
-        self.spin_ruler_len.setSuffix(" mm")
-        self.layout_ruler.addRow("Known Length:", self.spin_ruler_len)
-
-        self.lbl_ruler_px = QLabel("0.0 px")
-        self.layout_ruler.addRow("Pixel Dist:", self.lbl_ruler_px)
-
-        self.lbl_ruler_calib = QLabel("Not Calibrated")
-        self.layout_ruler.addRow("Scale:", self.lbl_ruler_calib)
-
-        self.lbl_ruler_meas = QLabel("0.00 mm")
-        self.lbl_ruler_meas.setStyleSheet("font-weight: bold; font-size: 14px; color: blue;")
-        self.layout_ruler.addRow("Measured:", self.lbl_ruler_meas)
-
-        self.btn_ruler_calibrate = QPushButton("Calibrate from Line")
         self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
-        self.layout_ruler.addRow(self.btn_ruler_calibrate)
-        
-        self.chk_show_profile = QCheckBox("Show Intensity Profile")
         self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
-        self.layout_ruler.addRow(self.chk_show_profile)
-        
-        self.intensity_chart = IntensityChart()
-        self.intensity_chart.setVisible(False)
-        self.intensity_chart.setMinimumHeight(200)
-        self.layout_ruler.addRow(self.intensity_chart)
 
-        self.group_ruler.setLayout(self.layout_ruler)
-        # Insert into Right Tab Widget at index 0 (Measurement)
+        # Measurement Tab Setup (Index 0)
+        self.ruler_tab_index = 0
         if hasattr(self.ui, 'right_tab_widget'):
-            self.ui.right_tab_widget.insertTab(0, self.group_ruler, "Measurement")
-            self.ruler_tab_index = 0
             self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, False)
-        else:
-             # Fallback if UI not reloaded correctly or mismatch
-             self.ui.scroll_layout_right.insertWidget(0, self.group_ruler)
-             self.group_ruler.setVisible(False)
 
         self.update_detector()
 
@@ -1538,8 +1507,6 @@ class MainWindow(QObject):
             self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, checked)
             if checked:
                 self.ui.right_tab_widget.setCurrentIndex(self.ruler_tab_index)
-        else:
-             self.group_ruler.setVisible(checked) # Fallback if UI not updated
              
         if not checked:
             self.ruler_start = None

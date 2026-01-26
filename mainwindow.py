@@ -200,14 +200,20 @@ class MainWindow(QObject):
         self.layout_ruler.addRow(self.chk_show_profile)
         
         self.intensity_chart = IntensityChart()
+        self.intensity_chart.setVisible(False)
+        self.intensity_chart.setMinimumHeight(200)
+        self.layout_ruler.addRow(self.intensity_chart)
 
         self.group_ruler.setLayout(self.layout_ruler)
-        # Insert into Right Scroll Area at top
-        self.ui.scroll_layout_right.insertWidget(0, self.group_ruler)
-        self.group_ruler.setVisible(False) # Hide initially until tool is active? Or just keep visible. 
-        # User said "Allows user to click-drag... There is a panel". Better to show panel when tool is active or always.
-        # I'll keep it visible but maybe disabled? No, let's just leave it visible.
-        self.group_ruler.setVisible(False)
+        # Insert into Right Tab Widget at index 0 (Measurement)
+        if hasattr(self.ui, 'right_tab_widget'):
+            self.ui.right_tab_widget.insertTab(0, self.group_ruler, "Measurement")
+            self.ruler_tab_index = 0
+            self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, False)
+        else:
+             # Fallback if UI not reloaded correctly or mismatch
+             self.ui.scroll_layout_right.insertWidget(0, self.group_ruler)
+             self.group_ruler.setVisible(False)
 
         self.update_detector()
 
@@ -355,6 +361,9 @@ class MainWindow(QObject):
 
         # Matching Tabs Connection
         self.ui.tabs_matching.currentChanged.connect(self.on_detector_params_changed)
+        # Sync initial enabled state with checkbox
+        if hasattr(self.ui, 'chk_match_enable'):
+             self.ui.tabs_matching.setEnabled(self.ui.chk_match_enable.isChecked())
 
         # ORB Parameter Connections
         self.ui.orb_nfeatures.valueChanged.connect(self.on_detector_params_changed)
@@ -1041,10 +1050,12 @@ class MainWindow(QObject):
                 self.ui.chk_hough_enable.blockSignals(False)
 
             self.is_matching_ui_active = True
+            self.ui.tabs_matching.setEnabled(True)
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
         else:
             self.is_matching_ui_active = False
+            self.ui.tabs_matching.setEnabled(False)
             self.toggle_worker_matching_signal.emit(False)
 
     def on_qrcode_enable_toggled(self, checked):
@@ -1523,7 +1534,13 @@ class MainWindow(QObject):
 
     def on_ruler_toggled(self, checked):
         self.ruler_active = checked
-        self.group_ruler.setVisible(checked)
+        if hasattr(self.ui, 'right_tab_widget'):
+            self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, checked)
+            if checked:
+                self.ui.right_tab_widget.setCurrentIndex(self.ruler_tab_index)
+        else:
+             self.group_ruler.setVisible(checked) # Fallback if UI not updated
+             
         if not checked:
             self.ruler_start = None
             self.ruler_end = None

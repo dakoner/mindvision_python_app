@@ -862,7 +862,8 @@
         </property>
        </widget>
       </widget>
-      <widget class="QScrollArea" name="scrollArea_right">
+      
+      <widget class="QTabWidget" name="right_tab_widget">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
          <horstretch>0</horstretch>
@@ -871,7 +872,7 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>220</width>
+         <width>320</width>
          <height>0</height>
         </size>
        </property>
@@ -881,219 +882,229 @@
          <height>16777215</height>
         </size>
        </property>
-       <property name="widgetResizable">
-        <bool>true</bool>
+       <property name="currentIndex">
+        <number>0</number>
        </property>
-       <widget class="QWidget" name="scrollAreaWidgetContents_right">
-        <property name="geometry">
-         <rect>
-          <x>0</x>
-          <y>0</y>
-          <width>298</width>
-          <height>800</height>
-         </rect>
-        </property>
-        <layout class="QVBoxLayout" name="scroll_layout_right">
-         <item>
-          <widget class="QGroupBox" name="group_aruco">
-           <property name="title">
-            <string>ArUco Detection</string>
+       
+       <widget class="QWidget" name="tab_aruco">
+        <attribute name="title">
+         <string>ArUco</string>
+        </attribute>
+        <layout class="QFormLayout" name="formLayout_aruco">
+         <item row="0" column="0" colspan="2">
+          <widget class="QCheckBox" name="chk_aruco_enable">
+           <property name="text">
+            <string>Enable ArUco Detection</string>
            </property>
-           <layout class="QFormLayout" name="formLayout_aruco">
-            <item row="0" column="0" colspan="2">
-             <widget class="QCheckBox" name="chk_aruco_enable">
-              <property name="text">
-               <string>Enable ArUco Detection</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_aruco_dict">
-              <property name="text">
-               <string>Dictionary:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QComboBox" name="aruco_dict">
-              <item>
-               <property name="text">
-                <string>DICT_4X4_50</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>DICT_4X4_100</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>DICT_4X4_250</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>DICT_5X5_100</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>DICT_6X6_250</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>DICT_APRILTAG_36h11</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_aruco_border">
-              <property name="text">
-               <string>Border Bits:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QSpinBox" name="spin_aruco_border_bits">
-              <property name="minimum">
-               <number>1</number>
-              </property>
-              <property name="value">
-               <number>1</number>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="0" colspan="2">
-             <widget class="QCheckBox" name="chk_aruco_show_ids">
-              <property name="text">
-               <string>Show IDs</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="0" colspan="2">
-             <widget class="QCheckBox" name="chk_aruco_show_rejected">
-              <property name="text">
-               <string>Show Rejected</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_aruco_dict">
+           <property name="text">
+            <string>Dictionary:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="aruco_dict">
+           <item>
+            <property name="text">
+             <string>DICT_4X4_50</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>DICT_4X4_100</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>DICT_4X4_250</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>DICT_5X5_100</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>DICT_6X6_250</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>DICT_APRILTAG_36h11</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_aruco_border">
+           <property name="text">
+            <string>Border Bits:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QSpinBox" name="spin_aruco_border_bits">
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="value">
+            <number>1</number>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0" colspan="2">
+          <widget class="QCheckBox" name="chk_aruco_show_ids">
+           <property name="text">
+            <string>Show IDs</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0" colspan="2">
+          <widget class="QCheckBox" name="chk_aruco_show_rejected">
+           <property name="text">
+            <string>Show Rejected</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+
+       <widget class="QWidget" name="tab_qrcode">
+        <attribute name="title">
+         <string>QR Code</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="layout_qrcode">
+         <item>
+          <widget class="QCheckBox" name="chk_qrcode_enable">
+           <property name="text">
+            <string>Enable QR Code Detection</string>
+           </property>
           </widget>
          </item>
          <item>
-          <widget class="QGroupBox" name="group_qrcode">
-           <property name="title">
-            <string>QR Code Detection</string>
+          <widget class="QLabel" name="lbl_qrcode_data">
+           <property name="text">
+            <string>Decoded Data: None</string>
            </property>
-           <layout class="QVBoxLayout" name="layout_qrcode">
-            <item>
-             <widget class="QCheckBox" name="chk_qrcode_enable">
-              <property name="text">
-               <string>Enable QR Code Detection</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lbl_qrcode_data">
-              <property name="text">
-               <string>Decoded Data: None</string>
-              </property>
-              <property name="wordWrap">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <property name="wordWrap">
+            <bool>true</bool>
+           </property>
           </widget>
          </item>
          <item>
-          <widget class="QGroupBox" name="group_ssim">
-           <property name="title">
-            <string>Structural Similarity (SSIM)</string>
+          <spacer name="spacer_qrcode">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
            </property>
-           <layout class="QVBoxLayout" name="layout_ssim">
-            <item>
-             <widget class="QCheckBox" name="chk_ssim_enable">
-              <property name="text">
-               <string>Enable SSIM</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btn_load_ssim_ref">
-              <property name="text">
-               <string>Load Reference Image...</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lbl_ssim_ref_name">
-              <property name="text">
-               <string>No reference loaded</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">color: gray;</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lbl_ssim_score">
-              <property name="text">
-               <string>Score: --</string>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">font-weight: bold; font-size: 14px;</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+
+       <widget class="QWidget" name="tab_ssim">
+        <attribute name="title">
+         <string>SSIM</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="layout_ssim">
+         <item>
+          <widget class="QCheckBox" name="chk_ssim_enable">
+           <property name="text">
+            <string>Enable SSIM</string>
+           </property>
           </widget>
          </item>
          <item>
-          <widget class="QGroupBox" name="group_template_match">
-           <property name="title">
-            <string>Template Matching</string>
+          <widget class="QPushButton" name="btn_load_ssim_ref">
+           <property name="text">
+            <string>Load Reference Image...</string>
            </property>
-           <layout class="QVBoxLayout" name="layout_template_match">
-            <item>
-             <widget class="QCheckBox" name="chk_match_enable">
-              <property name="text">
-               <string>Enable Template Matching</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btn_load_template">
-              <property name="text">
-               <string>Load Template Image...</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="lbl_template_name">
-              <property name="text">
-               <string>No template loaded</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">color: gray;</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lbl_ssim_ref_name">
+           <property name="text">
+            <string>No reference loaded</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">color: gray;</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lbl_ssim_score">
+           <property name="text">
+            <string>Score: --</string>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">font-weight: bold; font-size: 14px;</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="spacer_ssim">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+
+       <widget class="QWidget" name="tab_template">
+        <attribute name="title">
+         <string>Template</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="layout_template_match">
+         <item>
+          <widget class="QCheckBox" name="chk_match_enable">
+           <property name="text">
+            <string>Enable Template Matching</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btn_load_template">
+           <property name="text">
+            <string>Load Template Image...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lbl_template_name">
+           <property name="text">
+            <string>No template loaded</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">color: gray;</string>
+           </property>
           </widget>
          </item>
          <item>
@@ -1196,7 +1207,7 @@
              <item row="4" column="1">
               <widget class="QSpinBox" name="orb_firstLevel">
                <property name="maximum">
-                <number>10</number>
+                <number>1</number>
                </property>
                <property name="value">
                 <number>0</number>
@@ -1318,7 +1329,7 @@
                 <number>1</number>
                </property>
                <property name="maximum">
-                <number>10</number>
+                <number>1</number>
                </property>
                <property name="value">
                 <number>3</number>
@@ -1464,7 +1475,7 @@
                 <number>1</number>
                </property>
                <property name="maximum">
-                <number>10</number>
+                <number>1</number>
                </property>
                <property name="value">
                 <number>4</number>
@@ -1475,273 +1486,8 @@
            </widget>
           </widget>
          </item>
-
          <item>
-          <widget class="QGroupBox" name="group_hough">
-           <property name="title">
-            <string>Hough Circle</string>
-           </property>
-           <layout class="QVBoxLayout" name="hough_v_layout">
-            <item>
-             <widget class="QCheckBox" name="chk_hough_enable">
-              <property name="text">
-               <string>Enable Hough Circle</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <layout class="QFormLayout" name="hough_form_layout">
-              <item row="0" column="0">
-               <widget class="QLabel" name="label_hough_dp">
-                <property name="text">
-                 <string>dp:</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="1">
-               <widget class="QDoubleSpinBox" name="hough_dp">
-                <property name="minimum">
-                 <double>0.1</double>
-                </property>
-                <property name="maximum">
-                 <double>10.0</double>
-                </property>
-                <property name="singleStep">
-                 <double>0.1</double>
-                </property>
-                <property name="value">
-                 <double>1.0</double>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="0">
-               <widget class="QLabel" name="label_hough_minDist">
-                <property name="text">
-                 <string>minDist:</string>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="1">
-               <widget class="QDoubleSpinBox" name="hough_minDist">
-                <property name="minimum">
-                 <double>1.0</double>
-                </property>
-                <property name="maximum">
-                 <double>1000.0</double>
-                </property>
-                <property name="value">
-                 <double>50.0</double>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="0">
-               <widget class="QLabel" name="label_hough_param1">
-                <property name="text">
-                 <string>param1 (Canny):</string>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="1">
-               <widget class="QDoubleSpinBox" name="hough_param1">
-                <property name="maximum">
-                 <double>500.0</double>
-                </property>
-                <property name="value">
-                 <double>100.0</double>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="0">
-               <widget class="QLabel" name="label_hough_param2">
-                <property name="text">
-                 <string>param2 (Vote):</string>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="1">
-               <widget class="QDoubleSpinBox" name="hough_param2">
-                <property name="maximum">
-                 <double>200.0</double>
-                </property>
-                <property name="value">
-                 <double>30.0</double>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="0">
-               <widget class="QLabel" name="label_hough_minRadius">
-                <property name="text">
-                 <string>minRadius:</string>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="1">
-               <widget class="QSpinBox" name="hough_minRadius">
-                <property name="maximum">
-                 <number>1000</number>
-                </property>
-                <property name="value">
-                 <number>1</number>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="0">
-               <widget class="QLabel" name="label_hough_maxRadius">
-                <property name="text">
-                 <string>maxRadius:</string>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="1">
-               <widget class="QSpinBox" name="hough_maxRadius">
-                <property name="maximum">
-                 <number>1000</number>
-                </property>
-                <property name="value">
-                 <number>100</number>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-           </layout>
-          </widget>
-         </item>
-
-         <item>
-          <widget class="QGroupBox" name="group_contours">
-           <property name="title">
-            <string>Contour Detection</string>
-           </property>
-           <layout class="QFormLayout" name="formLayout_contours">
-            <item row="0" column="0" colspan="2">
-             <widget class="QPushButton" name="btn_toggle_contours">
-              <property name="text">
-               <string>Enable Contours</string>
-              </property>
-              <property name="checkable">
-               <bool>true</bool>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_contour_mode">
-              <property name="text">
-               <string>Mode:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QComboBox" name="combo_contour_mode">
-              <item>
-               <property name="text">
-                <string>Canny</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Threshold</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="label_threshold">
-              <property name="text">
-               <string>Threshold:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QSlider" name="slider_threshold">
-              <property name="maximum">
-               <number>255</number>
-              </property>
-              <property name="value">
-               <number>127</number>
-              </property>
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QLabel" name="lbl_threshold_val">
-              <property name="text">
-               <string>127</string>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="0">
-             <widget class="QLabel" name="label_canny">
-              <property name="text">
-               <string>Canny Range:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="1">
-             <widget class="RangeSlider" name="slider_canny" native="true"/>
-            </item>
-            <item row="5" column="1">
-             <widget class="QLabel" name="lbl_canny_val">
-              <property name="text">
-               <string>50 - 150</string>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="0">
-             <widget class="QLabel" name="label_min_area">
-              <property name="text">
-               <string>Min Area:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="1">
-             <widget class="QSpinBox" name="spin_min_area">
-              <property name="maximum">
-               <number>100000</number>
-              </property>
-              <property name="value">
-               <number>100</number>
-              </property>
-             </widget>
-            </item>
-            <item row="7" column="0">
-             <widget class="QLabel" name="label_max_area">
-              <property name="text">
-               <string>Max Area:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="7" column="1">
-             <widget class="QSpinBox" name="spin_max_area">
-              <property name="maximum">
-               <number>100000</number>
-              </property>
-              <property name="value">
-               <number>100000</number>
-              </property>
-             </widget>
-            </item>
-            <item row="8" column="1">
-             <widget class="QCheckBox" name="chk_fill_contours">
-              <property name="text">
-               <string>Fill Contours</string>
-              </property>
-             </widget>
-            </item>
-            <item row="9" column="1">
-             <widget class="QCheckBox" name="chk_show_box">
-              <property name="text">
-               <string>Show Bounding Box</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <spacer name="verticalSpacer_right">
+          <spacer name="spacer_template">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
            </property>
@@ -1752,6 +1498,280 @@
             </size>
            </property>
           </spacer>
+         </item>
+        </layout>
+       </widget>
+
+       <widget class="QWidget" name="tab_hough">
+        <attribute name="title">
+         <string>Hough</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="hough_v_layout">
+         <item>
+          <widget class="QCheckBox" name="chk_hough_enable">
+           <property name="text">
+            <string>Enable Hough Circle</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QFormLayout" name="hough_form_layout">
+           <item row="0" column="0">
+            <widget class="QLabel" name="label_hough_dp">
+             <property name="text">
+              <string>dp:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QDoubleSpinBox" name="hough_dp">
+             <property name="minimum">
+              <double>0.1</double>
+             </property>
+             <property name="maximum">
+              <double>10.0</double>
+             </property>
+             <property name="singleStep">
+              <double>0.1</double>
+             </property>
+             <property name="value">
+              <double>1.0</double>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_hough_minDist">
+             <property name="text">
+              <string>minDist:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QDoubleSpinBox" name="hough_minDist">
+             <property name="minimum">
+              <double>1.0</double>
+             </property>
+             <property name="maximum">
+              <double>1000.0</double>
+             </property>
+             <property name="value">
+              <double>50.0</double>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_hough_param1">
+             <property name="text">
+              <string>param1 (Canny):</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QDoubleSpinBox" name="hough_param1">
+             <property name="maximum">
+              <double>500.0</double>
+             </property>
+             <property name="value">
+              <double>100.0</double>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0">
+            <widget class="QLabel" name="label_hough_param2">
+             <property name="text">
+              <string>param2 (Vote):</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QDoubleSpinBox" name="hough_param2">
+             <property name="maximum">
+              <double>200.0</double>
+             </property>
+             <property name="value">
+              <double>30.0</double>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0">
+            <widget class="QLabel" name="label_hough_minRadius">
+             <property name="text">
+              <string>minRadius:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="1">
+            <widget class="QSpinBox" name="hough_minRadius">
+             <property name="maximum">
+              <number>1000</number>
+             </property>
+             <property name="value">
+              <number>1</number>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="0">
+            <widget class="QLabel" name="label_hough_maxRadius">
+             <property name="text">
+              <string>maxRadius:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="1">
+            <widget class="QSpinBox" name="hough_maxRadius">
+             <property name="maximum">
+              <number>1000</number>
+             </property>
+             <property name="value">
+              <number>100</number>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <spacer name="spacer_hough">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+
+       <widget class="QWidget" name="tab_contours">
+        <attribute name="title">
+         <string>Contours</string>
+        </attribute>
+        <layout class="QFormLayout" name="formLayout_contours">
+         <item row="0" column="0" colspan="2">
+          <widget class="QPushButton" name="btn_toggle_contours">
+           <property name="text">
+            <string>Enable Contours</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_contour_mode">
+           <property name="text">
+            <string>Mode:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="combo_contour_mode">
+           <item>
+            <property name="text">
+             <string>Canny</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Threshold</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_threshold">
+           <property name="text">
+            <string>Threshold:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QSlider" name="slider_threshold">
+           <property name="maximum">
+            <number>255</number>
+           </property>
+           <property name="value">
+            <number>127</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLabel" name="lbl_threshold_val">
+           <property name="text">
+            <string>127</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="label_canny">
+           <property name="text">
+            <string>Canny Range:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="RangeSlider" name="slider_canny" native="true"/>
+         </item>
+         <item row="5" column="1">
+          <widget class="QLabel" name="lbl_canny_val">
+           <property name="text">
+            <string>50 - 150</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="0">
+          <widget class="QLabel" name="label_min_area">
+           <property name="text">
+            <string>Min Area:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="QSpinBox" name="spin_min_area">
+           <property name="maximum">
+            <number>100000</number>
+           </property>
+           <property name="value">
+            <number>100</number>
+           </property>
+          </widget>
+         </item>
+         <item row="7" column="0">
+          <widget class="QLabel" name="label_max_area">
+           <property name="text">
+            <string>Max Area:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="7" column="1">
+          <widget class="QSpinBox" name="spin_max_area">
+           <property name="maximum">
+            <number>100000</number>
+           </property>
+           <property name="value">
+            <number>100000</number>
+           </property>
+          </widget>
+         </item>
+         <item row="8" column="1">
+          <widget class="QCheckBox" name="chk_fill_contours">
+           <property name="text">
+            <string>Fill Contours</string>
+           </property>
+          </widget>
+         </item>
+         <item row="9" column="1">
+          <widget class="QCheckBox" name="chk_show_box">
+           <property name="text">
+            <string>Show Bounding Box</string>
+           </property>
+          </widget>
          </item>
         </layout>
        </widget>

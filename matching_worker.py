@@ -277,6 +277,7 @@ class MatchingWorker(QObject):
             local_qr_detector = self.qr_detector
             local_ssim_ref = self.ssim_ref_img
             local_ssim_cache = self.ssim_cache
+            local_params = self.last_params.copy()
 
         try:
             channels = bytes_per_line // width
@@ -421,12 +422,12 @@ class MatchingWorker(QObject):
                     circles = cv2.HoughCircles(
                         blur_gray,
                         cv2.HOUGH_GRADIENT,
-                        dp=params.get("dp", 1.0),
-                        minDist=params.get("minDist", 50.0),
-                        param1=params.get("param1", 100.0),
-                        param2=params.get("param2", 30.0),
-                        minRadius=params.get("minRadius", 1),
-                        maxRadius=params.get("maxRadius", 100)
+                        dp=local_params.get("dp", 1.0),
+                        minDist=local_params.get("minDist", 50.0),
+                        param1=local_params.get("param1", 100.0),
+                        param2=local_params.get("param2", 30.0),
+                        minRadius=int(local_params.get("minRadius", 1)),
+                        maxRadius=int(local_params.get("maxRadius", 100))
                     )
                     
                     if circles is not None:

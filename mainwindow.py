@@ -406,6 +406,9 @@ class MainWindow(QObject):
 
         # New ArUco Enable Checkbox
         self.ui.chk_aruco_enable.toggled.connect(self.on_aruco_enable_toggled)
+        
+        # Hough Enable Checkbox
+        self.ui.chk_hough_enable.toggled.connect(self.on_hough_enable_toggled)
 
         # Camera Setup
         self.camera = MindVisionCamera()
@@ -672,6 +675,23 @@ class MainWindow(QObject):
             self.update_worker_params_signal.emit(params)
             return
 
+        # Hough Circle Priority
+        if (
+            hasattr(self.ui, "chk_hough_enable")
+            and self.ui.chk_hough_enable.isChecked()
+        ):
+            params = {
+                "algo": "HOUGH_CIRCLE",
+                "dp": self.ui.hough_dp.value(),
+                "minDist": self.ui.hough_minDist.value(),
+                "param1": self.ui.hough_param1.value(),
+                "param2": self.ui.hough_param2.value(),
+                "minRadius": self.ui.hough_minRadius.value(),
+                "maxRadius": self.ui.hough_maxRadius.value()
+            }
+            self.update_worker_params_signal.emit(params)
+            return
+
         tab_index = self.ui.tabs_matching.currentIndex()
         params = {}
 
@@ -703,15 +723,6 @@ class MainWindow(QObject):
             params["threshold"] = self.ui.akaze_threshold.value()
             params["nOctaves"] = self.ui.akaze_nOctaves.value()
             params["nOctaveLayers"] = self.ui.akaze_nOctaveLayers.value()
-
-        elif tab_index == 3:  # Hough Circle
-            params["algo"] = "HOUGH_CIRCLE"
-            params["dp"] = self.ui.hough_dp.value()
-            params["minDist"] = self.ui.hough_minDist.value()
-            params["param1"] = self.ui.hough_param1.value()
-            params["param2"] = self.ui.hough_param2.value()
-            params["minRadius"] = self.ui.hough_minRadius.value()
-            params["maxRadius"] = self.ui.hough_maxRadius.value()
 
         self.update_worker_params_signal.emit(params)
 
@@ -924,6 +935,15 @@ class MainWindow(QObject):
                 self.ui.chk_ssim_enable.blockSignals(True)
                 self.ui.chk_ssim_enable.setChecked(False)
                 self.ui.chk_ssim_enable.blockSignals(False)
+
+            # Mutual exclusion: disable Hough if active
+            if (
+                hasattr(self.ui, "chk_hough_enable")
+                and self.ui.chk_hough_enable.isChecked()
+            ):
+                self.ui.chk_hough_enable.blockSignals(True)
+                self.ui.chk_hough_enable.setChecked(False)
+                self.ui.chk_hough_enable.blockSignals(False)
             
             # Enable ArUco (update_detector picks up the checked state)
             self.update_detector()
@@ -933,6 +953,24 @@ class MainWindow(QObject):
             # Only stop worker if not switching to others (which shouldn't happen here directly)
             if not self.is_matching_ui_active:
                 self.toggle_worker_matching_signal.emit(False)
+
+    def on_hough_enable_toggled(self, checked):
+        if checked:
+            # Mutual exclusion
+            for chk_name in ["chk_match_enable", "chk_aruco_enable", "chk_qrcode_enable", "chk_ssim_enable"]:
+                if hasattr(self.ui, chk_name):
+                    chk = getattr(self.ui, chk_name)
+                    if chk.isChecked():
+                        chk.blockSignals(True)
+                        chk.setChecked(False)
+                        chk.blockSignals(False)
+            
+            self.is_matching_ui_active = True
+            self.update_detector()
+            self.toggle_worker_matching_signal.emit(True)
+        else:
+            self.is_matching_ui_active = False
+            self.toggle_worker_matching_signal.emit(False)
 
     def on_load_template_clicked(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -993,6 +1031,15 @@ class MainWindow(QObject):
                 self.ui.chk_ssim_enable.setChecked(False)
                 self.ui.chk_ssim_enable.blockSignals(False)
 
+            # Mutual Exclusion: Disable Hough
+            if (
+                hasattr(self.ui, "chk_hough_enable")
+                and self.ui.chk_hough_enable.isChecked()
+            ):
+                self.ui.chk_hough_enable.blockSignals(True)
+                self.ui.chk_hough_enable.setChecked(False)
+                self.ui.chk_hough_enable.blockSignals(False)
+
             self.is_matching_ui_active = True
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
@@ -1029,6 +1076,15 @@ class MainWindow(QObject):
                 self.ui.chk_ssim_enable.blockSignals(True)
                 self.ui.chk_ssim_enable.setChecked(False)
                 self.ui.chk_ssim_enable.blockSignals(False)
+
+            # Mutual Exclusion: Disable Hough
+            if (
+                hasattr(self.ui, "chk_hough_enable")
+                and self.ui.chk_hough_enable.isChecked()
+            ):
+                self.ui.chk_hough_enable.blockSignals(True)
+                self.ui.chk_hough_enable.setChecked(False)
+                self.ui.chk_hough_enable.blockSignals(False)
             
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
@@ -1072,7 +1128,7 @@ class MainWindow(QObject):
                     return
 
             # Mutual Exclusion
-            for chk_name in ["chk_match_enable", "chk_aruco_enable", "chk_qrcode_enable"]:
+            for chk_name in ["chk_match_enable", "chk_aruco_enable", "chk_qrcode_enable", "chk_hough_enable"]:
                 if hasattr(self.ui, chk_name):
                     chk = getattr(self.ui, chk_name)
                     if chk.isChecked():

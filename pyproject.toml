@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mindvision_python_app"
+version = "0.1.0"
+description = "A Python application for the MindVision microscope."
+readme = "README.md"
+requires-python = "==3.11.11"
+
+dependencies = [
+    "numpy",
+    "pyside6",
+    "tifffile",
+    "ffmpeg",
+    "pyserial",
+    "opencv-python",
+    "pillow",
+    "qimage2ndarray",
+]
+
+[project.scripts]
+mindvision = "mindvision_python_app.main:main"

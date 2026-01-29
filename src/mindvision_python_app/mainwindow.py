@@ -36,8 +36,10 @@ from PySide6.QtUiTools import QUiLoader
 from _mindvision_qobject_py import MindVisionCamera, VideoThread
 from range_slider import RangeSlider
 from intensity_chart import IntensityChart
+from color_picker_widget import ColorPickerWidget
 from matching_worker import MatchingWorker
 from serial_worker import SerialWorker, HAS_SERIAL
+from cnc_control_panel import CNCControlPanel
 
 class MainWindow(QObject):
     update_fps_signal = Signal(float)
@@ -77,6 +79,7 @@ class MainWindow(QObject):
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
         loader.registerCustomWidget(IntensityChart)
+        loader.registerCustomWidget(ColorPickerWidget)
         ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
@@ -145,6 +148,11 @@ class MainWindow(QObject):
         self.param_poll_timer = QTimer()
         self.param_poll_timer.timeout.connect(self.poll_camera_params)
 
+        # --- CNC Control Panel Setup ---
+        self.cnc_control_panel = CNCControlPanel()
+        self.ui.addDockWidget(Qt.BottomDockWidgetArea, self.cnc_control_panel)
+        self.cnc_control_panel.log_signal.connect(self.log)
+
         # Initial Detector config
         
         if hasattr(self.ui, 'chk_qrcode_enable'):
@@ -158,13 +166,11 @@ class MainWindow(QObject):
             
         self.ssim_ref_loaded = False
 
-        # --- Ruler / Measurement Tool Init ---
-        self.ruler_active = False
-        self.ruler_start = None
-        self.ruler_end = None
-        self.ruler_calibration = None # None or float (px per mm)
-
-        # Retrieve UI elements
+        self.intensity_chart = self.ui.intensity_chart
+        self.action_color_picker = self.ui.action_color_picker
+        self.tab_color_picker = self.ui.tab_color_picker
+        
+        # Restore Ruler UI Elements
         self.action_ruler = self.ui.action_ruler
         self.spin_ruler_len = self.ui.spin_ruler_len
         self.lbl_ruler_px = self.ui.lbl_ruler_px
@@ -172,10 +178,19 @@ class MainWindow(QObject):
         self.lbl_ruler_meas = self.ui.lbl_ruler_meas
         self.btn_ruler_calibrate = self.ui.btn_ruler_calibrate
         self.chk_show_profile = self.ui.chk_show_profile
-        self.intensity_chart = self.ui.intensity_chart
+
+        # Ruler / Measurement Tool Init
+        self.ruler_active = False
+        self.ruler_start = None
+        self.ruler_end = None
+        self.ruler_calibration = None 
+        
+        # Color Picker Init
+        self.color_picker_active = False
 
         # Connect Signals
         self.action_ruler.toggled.connect(self.on_ruler_toggled)
+        self.action_color_picker.toggled.connect(self.on_color_picker_toggled)
         self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
         self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
 
@@ -183,6 +198,8 @@ class MainWindow(QObject):
         self.ruler_tab_index = 0
         if hasattr(self.ui, 'right_tab_widget'):
             self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, False)
+            self.color_picker_tab_index = self.ui.right_tab_widget.indexOf(self.tab_color_picker)
+            self.ui.right_tab_widget.setTabVisible(self.color_picker_tab_index, False)
 
         self.update_detector()
 
@@ -461,6 +478,11 @@ class MainWindow(QObject):
                                 self.ruler_end = pos
                                 self.update_ruler_stats()
                                 self.refresh_video_label()
+                elif self.color_picker_active:
+                    if event.type() == QEvent.MouseMove or event.type() == QEvent.MouseButtonPress:
+                        pos = self.get_image_coords(event.position())
+                        if pos:
+                            self.update_color_picker(pos)
         except RuntimeError:
             pass
         return super().eventFilter(watched, event)
@@ -1501,12 +1523,40 @@ class MainWindow(QObject):
         if addr:
             self.send_serial_cmd_signal.emit(f"mem {addr}")
 
+    def on_color_picker_toggled(self, checked):
+        self.color_picker_active = checked
+        
+        if hasattr(self.ui, 'right_tab_widget'):
+            self.ui.right_tab_widget.setTabVisible(self.color_picker_tab_index, checked)
+            if checked:
+                self.ui.right_tab_widget.setCurrentIndex(self.color_picker_tab_index)
+                
+                # Disable Ruler if active
+                if self.ruler_active:
+                    self.action_ruler.setChecked(False)
+
+    def update_color_picker(self, pos):
+        if not self.current_pixmap:
+            return
+            
+        x = int(pos.x())
+        y = int(pos.y())
+        
+        if 0 <= x < self.current_pixmap.width() and 0 <= y < self.current_pixmap.height():
+            img = self.current_pixmap.toImage()
+            color = QColor(img.pixel(x, y))
+            self.tab_color_picker.update_color(x, y, color.red(), color.green(), color.blue())
+
     def on_ruler_toggled(self, checked):
         self.ruler_active = checked
         if hasattr(self.ui, 'right_tab_widget'):
             self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, checked)
             if checked:
                 self.ui.right_tab_widget.setCurrentIndex(self.ruler_tab_index)
+                
+                # Disable Color Picker if active
+                if self.color_picker_active:
+                    self.action_color_picker.setChecked(False)
              
         if not checked:
             self.ruler_start = None

@@ -1,0 +1,8 @@
+{
+    "exposure_time": 5.1627,
+    "gain": 6,
+    "detector": {
+        "orb_nfeatures": 500
+    },
+    "ruler_calibration": null
+}

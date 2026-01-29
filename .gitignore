@@ -1,3 +1,5 @@
 snapshot/*
 videos/*
 settings.json
+__pycache__/
+Camera/

@@ -8,6 +8,8 @@ script_dir = os.path.dirname(__file__)
 release_dir = os.path.join(r"/home/dek/src/microtools/mindvision_qobject", "release")
 sys.path.insert(0, release_dir)
 
+
+
 from mainwindow import MainWindow
 
 def main():

@@ -428,7 +428,7 @@ class MainWindow(QObject):
         self.last_ui_update_time = 0
         self.is_camera_running = False
 
-        self.load_settings()
+        QTimer.singleShot(0, self.load_settings)
 
     def show(self):
         self.ui.showMaximized()
@@ -828,8 +828,8 @@ class MainWindow(QObject):
                 self.ui.strobe_group.setEnabled(True)
 
                 self.ui.video_label.setText("Starting stream...")
-                self.sync_ui()
                 self.apply_camera_settings()
+                self.sync_ui()
                 self.param_poll_timer.start(200) # Poll every 200ms
                 self.log("Camera started.")
 
@@ -1268,6 +1268,8 @@ class MainWindow(QObject):
         self.ui.slider_exposure.blockSignals(False)
 
     def on_auto_exposure_toggled(self, checked):
+        if not self.is_camera_running:
+            return
         if self.camera.setAutoExposure(checked):
             self.ui.spin_exposure_time.setEnabled(not checked)
             self.ui.slider_exposure.setEnabled(not checked)
@@ -1288,6 +1290,8 @@ class MainWindow(QObject):
             self.ui.chk_roi.setChecked(not checked)
 
     def on_exposure_time_changed(self, value):
+        if not self.is_camera_running:
+            return
         self.camera.setExposureTime(value)
         actual = self.camera.getExposureTime()
         self.ui.spin_exposure_time.blockSignals(True)
@@ -1310,6 +1314,8 @@ class MainWindow(QObject):
         self.ui.spin_exposure_time.setValue(new_time)
 
     def on_gain_changed(self, value):
+        if not self.is_camera_running:
+            return
         self.camera.setAnalogGain(value)
         self.ui.slider_gain.blockSignals(True)
         self.ui.slider_gain.setValue(value)
@@ -1319,6 +1325,8 @@ class MainWindow(QObject):
         self.ui.spin_gain.setValue(value)
 
     def on_ae_target_changed(self, value):
+        if not self.is_camera_running:
+            return
         if hasattr(self.camera, "setAeTarget"):
             self.camera.setAeTarget(value)
             self.ui.slider_ae_target.blockSignals(True)
@@ -1689,7 +1697,7 @@ class MainWindow(QObject):
         self.intensity_chart.set_data(data)
 
     def load_settings(self):
-        settings_file = os.path.join(self.script_dir, "camera_settings.json")
+        settings_file = "camera_settings.json"
         if os.path.exists(settings_file):
             try:
                 with open(settings_file, "r") as f:
@@ -1738,7 +1746,7 @@ class MainWindow(QObject):
         if hasattr(self, 'cnc_control_panel'):
             settings["cnc_controller_port"] = self.cnc_control_panel.serial_port_combo.currentText()
         
-        settings_file = os.path.join(self.script_dir, "camera_settings.json")
+        settings_file = "camera_settings.json"
         try:
             with open(settings_file, "w") as f:
                 json.dump(settings, f, indent=4)

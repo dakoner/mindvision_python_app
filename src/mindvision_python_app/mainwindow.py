@@ -150,7 +150,12 @@ class MainWindow(QObject):
 
         # --- CNC Control Panel Setup ---
         self.cnc_control_panel = CNCControlPanel()
-        self.ui.addDockWidget(Qt.BottomDockWidgetArea, self.cnc_control_panel)
+        # Find the scroll_layout and the group_serial widget (now LED Controller)
+        scroll_layout = self.ui.scroll_layout
+        group_serial = self.ui.group_serial
+        # Get the index of the group_serial widget and insert the cnc_control_panel after it
+        index = scroll_layout.indexOf(group_serial)
+        scroll_layout.insertWidget(index + 1, self.cnc_control_panel)
         self.cnc_control_panel.log_signal.connect(self.log)
 
         # Initial Detector config

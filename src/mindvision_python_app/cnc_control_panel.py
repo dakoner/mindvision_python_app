@@ -4,7 +4,7 @@ import serial.tools.list_ports
 
 from serial_worker import SerialWorker, HAS_SERIAL
 
-class CNCControlPanel(QtWidgets.QDockWidget):
+class CNCControlPanel(QtWidgets.QGroupBox):
     log_signal = Signal(str)
     connect_serial_signal = Signal(str, int)
     disconnect_serial_signal = Signal()
@@ -37,13 +37,9 @@ class CNCControlPanel(QtWidgets.QDockWidget):
         self.serial_poll_timer.timeout.connect(self.poll_serial_signal.emit)
         self.serial_poll_timer.start(50) # Poll every 50ms
 
-        # Create a widget to hold the layout
-        self.control_widget = QtWidgets.QWidget()
-        self.setWidget(self.control_widget)
-        
         # Create a grid layout
         self.grid_layout = QtWidgets.QGridLayout()
-        self.control_widget.setLayout(self.grid_layout)
+        self.setLayout(self.grid_layout)
         self.grid_layout.setSpacing(5)
         self.grid_layout.setContentsMargins(5, 5, 5, 5)
 

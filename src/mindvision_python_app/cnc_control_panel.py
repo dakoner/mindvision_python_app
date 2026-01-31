@@ -15,6 +15,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         super().__init__("CNC Control", *args, **kwargs)
         
         self.step_size = 0.1
+        self.z_step_size = 0.01
 
         # --- Serial Worker Setup ---
         self.serial_thread = QThread()
@@ -74,7 +75,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         self.grid_layout.addWidget(self.home_button, 3, 3)
 
         # Step size controls
-        self.step_label = QtWidgets.QLabel("Step (mm):")
+        self.step_label = QtWidgets.QLabel("X/Y Step (mm):")
         self.step_input = QtWidgets.QDoubleSpinBox()
         self.step_input.setDecimals(3)
         self.step_input.setSingleStep(0.1)
@@ -82,6 +83,15 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         
         self.grid_layout.addWidget(self.step_label, 4, 0, 1, 1)
         self.grid_layout.addWidget(self.step_input, 4, 1, 1, 1)
+
+        self.z_step_label = QtWidgets.QLabel("Z Step (mm):")
+        self.z_step_input = QtWidgets.QDoubleSpinBox()
+        self.z_step_input.setDecimals(3)
+        self.z_step_input.setSingleStep(0.01)
+        self.z_step_input.setValue(self.z_step_size)
+
+        self.grid_layout.addWidget(self.z_step_label, 5, 0, 1, 1)
+        self.grid_layout.addWidget(self.z_step_input, 5, 1, 1, 1)
 
         # Set size policies for tighter layout
         for button in self.findChildren(QtWidgets.QPushButton):
@@ -98,6 +108,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         self.back_button.clicked.connect(self.move_back)
         self.home_button.clicked.connect(self.home)
         self.step_input.valueChanged.connect(self.on_step_size_changed)
+        self.z_step_input.valueChanged.connect(self.on_z_step_size_changed)
 
         self.refresh_serial_ports()
         self.on_serial_status_changed(False) # Initial state
@@ -140,11 +151,14 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     def on_step_size_changed(self, value):
         self.step_size = value
     
+    def on_z_step_size_changed(self, value):
+        self.z_step_size = value
+
     def move_up(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F4000")
 
     def move_down(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F4000")
 
     def move_left(self):
         self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F4000")

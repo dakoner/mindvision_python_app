@@ -1706,6 +1706,20 @@ class MainWindow(QObject):
                     if "ruler_calibration" in settings:
                         self.ruler_calibration = settings["ruler_calibration"]
                         self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
+
+                    if "led_controller_port" in settings:
+                        led_port = settings["led_controller_port"]
+                        if led_port:
+                            index = self.ui.combo_serial_port.findText(led_port)
+                            if index != -1:
+                                self.ui.combo_serial_port.setCurrentIndex(index)
+                    
+                    if "cnc_controller_port" in settings and hasattr(self, 'cnc_control_panel'):
+                        cnc_port = settings["cnc_controller_port"]
+                        if cnc_port:
+                            index = self.cnc_control_panel.serial_port_combo.findText(cnc_port)
+                            if index != -1:
+                                self.cnc_control_panel.serial_port_combo.setCurrentIndex(index)
                         
                     self.log("Settings loaded.")
             except Exception as e:
@@ -1718,6 +1732,11 @@ class MainWindow(QObject):
             "detector": self.get_detector_settings(),
             "ruler_calibration": self.ruler_calibration
         }
+        
+        if hasattr(self.ui, 'combo_serial_port'):
+            settings["led_controller_port"] = self.ui.combo_serial_port.currentText()
+        if hasattr(self, 'cnc_control_panel'):
+            settings["cnc_controller_port"] = self.cnc_control_panel.serial_port_combo.currentText()
         
         settings_file = os.path.join(self.script_dir, "camera_settings.json")
         try:

@@ -422,7 +422,7 @@
          <item>
           <widget class="QGroupBox" name="group_serial">
            <property name="title">
-            <string>Serial Controller</string>
+            <string>LED Controller</string>
            </property>
            <layout class="QVBoxLayout" name="serial_layout">
             <item>

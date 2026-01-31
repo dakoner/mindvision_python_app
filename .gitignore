@@ -3,3 +3,4 @@ videos/*
 settings.json
 __pycache__/
 Camera/
+__pycache__

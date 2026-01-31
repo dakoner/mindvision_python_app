@@ -69,6 +69,21 @@ class SerialWorker(QObject):
                 self.log_signal.emit(f"Send error: {e}")
                 self.disconnect_serial()
 
+    @Slot(str)
+    def send_raw_command(self, cmd):
+        with QMutexLocker(self.mutex):
+            if not self.is_connected or not self.serial_port:
+                self.log_signal.emit("Error: Not connected to serial port.")
+                return
+
+            try:
+                self.serial_port.write(cmd.encode("utf-8"))
+                # Do not log raw commands to avoid spamming the log with '?'
+                # self.log_signal.emit(f"Tx (raw): {cmd}")
+            except Exception as e:
+                self.log_signal.emit(f"Send error: {e}")
+                self.disconnect_serial()
+
     @Slot()
     def read_loop(self):
         # This is intended to be called periodically or run in a loop if we had a dedicated thread loop

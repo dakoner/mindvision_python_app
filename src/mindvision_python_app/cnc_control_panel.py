@@ -13,6 +13,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     send_serial_cmd_signal = Signal(str)
     send_raw_serial_cmd_signal = Signal(str)
     poll_serial_signal = Signal()
+    position_updated_signal = Signal(float, float)
 
     def __init__(self, cnc_group_box_widget: QtWidgets.QGroupBox, parent=None):
         super().__init__(parent)
@@ -161,6 +162,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
                 self.wpos_x_label.setText(f"{x:.3f}")
                 self.wpos_y_label.setText(f"{y:.3f}")
                 self.wpos_z_label.setText(f"{z:.3f}")
+                self.position_updated_signal.emit(x, y)
             except (ValueError, IndexError):
                 # This might happen if the regex matches something that isn't a valid float
                 pass

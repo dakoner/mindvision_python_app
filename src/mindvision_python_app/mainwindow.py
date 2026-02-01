@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QCheckBox,
     QGroupBox,
+    QScrollArea,
     QPushButton,
 )
 from PySide6.QtCore import (
@@ -35,6 +36,7 @@ from _mindvision_qobject_py import MindVisionCamera, VideoThread
 from range_slider import RangeSlider
 from intensity_chart import IntensityChart
 from color_picker_widget import ColorPickerWidget
+from mosaic_window import MosaicWindow # New import
 from matching_worker import MatchingWorker
 from cnc_control_panel import CNCControlPanel
 from led_controller import LEDController
@@ -160,6 +162,10 @@ class MainWindow(QObject):
         self.ruler_start = None
         self.ruler_end = None
         self.ruler_calibration = None 
+
+        self.mosaic_window = None
+        self.current_cnc_x_mm = None
+        self.current_cnc_y_mm = None
         
         # Stage Settings
         self.stage_settings = {}
@@ -174,6 +180,10 @@ class MainWindow(QObject):
         self.action_color_picker.toggled.connect(self.on_color_picker_toggled)
         self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
         self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
+        
+        # Connect CNC position updates for mosaic
+        if self.cnc_control_panel:
+            self.cnc_control_panel.position_updated_signal.connect(self.on_cnc_position_updated)
 
         # Measurement Tab Setup (Index 0)
         self.ruler_tab_index = 0
@@ -181,6 +191,9 @@ class MainWindow(QObject):
             self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, True)
             self.color_picker_tab_index = self.ui.right_tab_widget.indexOf(self.tab_color_picker)
             self.ui.right_tab_widget.setTabVisible(self.color_picker_tab_index, False)
+
+        # Mosaic Window Action
+        self.ui.action_show_mosaic.triggered.connect(self.on_show_mosaic_triggered)
 
         self.update_detector()
 
@@ -619,6 +632,11 @@ class MainWindow(QObject):
             if self.ruler_active and self.chk_show_profile.isChecked() and self.ruler_start:
                 end_pt = self.ruler_end if self.ruler_end is not None else self.ruler_start
                 self.update_intensity_profile(self.ruler_start, end_pt, image)
+
+            # Update Mosaic Window
+            if self.mosaic_window and self.mosaic_window.isVisible() and \
+               self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
+                self.mosaic_window.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
 
     @Slot(float)
     def update_fps(self, fps):
@@ -1279,6 +1297,10 @@ class MainWindow(QObject):
             self.intensity_chart.hide()
 
     def get_image_coords(self, mouse_pos):
+        """
+        Converts mouse position on video_label to pixel coordinates on the original image.
+        Handles aspect ratio scaling.
+        """
         if not self.current_pixmap:
             return None
         
@@ -1293,8 +1315,6 @@ class MainWindow(QObject):
             return None
 
         # Calculate scale and offsets (KeepAspectRatio)
-        # The QPixmap.scaled uses Qt.KeepAspectRatio, so we need to replicate that logic to find the rect where image is drawn.
-        
         scale_w = lbl_w / img_w
         scale_h = lbl_h / img_h
         scale = min(scale_w, scale_h)
@@ -1389,6 +1409,37 @@ class MainWindow(QObject):
                 
         self.intensity_chart.set_data(data)
 
+    @Slot()
+    def on_show_mosaic_triggered(self):
+        """Handles the action to show/hide the mosaic window."""
+        if self.mosaic_window is None:
+            if not self.ruler_calibration or self.ruler_calibration <= 0:
+                self.log("Cannot create mosaic: Ruler not calibrated or calibration is invalid.")
+                self.ui.action_show_mosaic.setChecked(False)
+                return
+            if not self.stage_settings or "stage_width_mm" not in self.stage_settings or "stage_height_mm" not in self.stage_settings:
+                self.log("Cannot create mosaic: Stage settings not loaded or incomplete.")
+                self.ui.action_show_mosaic.setChecked(False)
+                return
+
+            stage_width_mm = self.stage_settings["stage_width_mm"]
+            stage_height_mm = self.stage_settings["stage_height_mm"]
+
+            self.mosaic_window = MosaicWindow(stage_width_mm, stage_height_mm, self.ruler_calibration)
+            self.mosaic_window.closed_signal.connect(lambda: self.ui.action_show_mosaic.setChecked(False))
+            self.mosaic_window.show()
+        else:
+            if self.mosaic_window.isVisible():
+                self.mosaic_window.hide()
+            else:
+                self.mosaic_window.show()
+
+    @Slot(float, float)
+    def on_cnc_position_updated(self, x_mm: float, y_mm: float):
+        """Receives updated CNC position from the CNCControlPanel."""
+        self.current_cnc_x_mm = x_mm
+        self.current_cnc_y_mm = y_mm
+
     def load_settings(self):
         settings_file = "camera_settings.json"
         if os.path.exists(settings_file):
@@ -1421,8 +1472,6 @@ class MainWindow(QObject):
                                 self.cnc_control_panel.serial_port_combo.setCurrentIndex(index)
                         
                     self.log("Settings loaded.")
-            except Exception as e:
-                self.log(f"Error loading settings: {e}")
             except Exception as e:
                 self.log(f"Error loading settings: {e}")
         

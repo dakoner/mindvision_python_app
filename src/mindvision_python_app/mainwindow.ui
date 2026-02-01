@@ -2279,6 +2279,22 @@
     <string>Pixel Color Inspector</string>
    </property>
   </action>
+  <action name="action_show_mosaic">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/mosaic.png</normaloff>icons/mosaic.png
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Show Mosaic</string>
+   </property>
+   <property name="toolTip">
+    <string>Show Stage Mosaic View</string>
+   </property>
+  </action>
 
  </widget>
  <customwidgets>

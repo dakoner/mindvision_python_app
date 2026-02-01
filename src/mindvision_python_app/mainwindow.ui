@@ -651,7 +651,7 @@
                 <item row="4" column="0">
                  <widget class="QSpinBox" name="spin_repeat_pin"><property name="toolTip"><string>Pin</string></property></widget>
                 </item>
-                <item row="4" column="1">
+                <item row="5" column="1">
                  <layout class="QHBoxLayout" name="layout_repeat_args">
                   <item>
                    <widget class="QSpinBox" name="spin_repeat_freq">
@@ -669,7 +669,7 @@
                   </item>
                  </layout>
                 </item>
-                <item row="5" column="0" colspan="2">
+                <item row="6" column="0" colspan="2">
                  <layout class="QHBoxLayout" name="layout_repeat_btns">
                   <item><widget class="QPushButton" name="btn_cmd_repeat"><property name="text"><string>Start</string></property></widget></item>
                   <item><widget class="QPushButton" name="btn_cmd_stoprepeat"><property name="text"><string>Stop</string></property></widget></item>
@@ -1132,21 +1132,51 @@
            </property>
           </widget>
          </item>
-         <item row="4" column="0" colspan="2">
+         <item row="4" column="0">
+          <widget class="QLabel" name="label_stage_width">
+           <property name="text">
+            <string>Stage Width:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="QLabel" name="lbl_stage_width_mm">
+           <property name="text">
+            <string>N/A</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="0">
+          <widget class="QLabel" name="label_stage_height">
+           <property name="text">
+            <string>Stage Height:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="1">
+          <widget class="QLabel" name="lbl_stage_height_mm">
+           <property name="text">
+            <string>N/A</string>
+           </property>
+          </widget>
+         </item>
+         <!-- End Stage Dimensions -->
+
+         <item row="6" column="0" colspan="2">
           <widget class="QPushButton" name="btn_ruler_calibrate">
            <property name="text">
             <string>Calibrate from Line</string>
            </property>
           </widget>
          </item>
-         <item row="5" column="0" colspan="2">
+         <item row="7" column="0" colspan="2">
           <widget class="QCheckBox" name="chk_show_profile">
            <property name="text">
             <string>Show Intensity Profile</string>
            </property>
           </widget>
          </item>
-         <item row="6" column="0" colspan="2">
+         <item row="8" column="0" colspan="2">
           <widget class="IntensityChart" name="intensity_chart" native="true">
            <property name="minimumSize">
             <size>

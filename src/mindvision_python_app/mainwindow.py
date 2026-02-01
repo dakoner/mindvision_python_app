@@ -71,6 +71,7 @@ class MainWindow(QObject):
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
         loader.registerCustomWidget(IntensityChart)
+        loader.registerCustomWidget(ColorPickerWidget)
         ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
@@ -160,6 +161,11 @@ class MainWindow(QObject):
         self.ruler_end = None
         self.ruler_calibration = None 
         
+        # Stage Settings
+        self.stage_settings = {}
+        self.lbl_stage_width_mm = self.ui.findChild(QLabel, "lbl_stage_width_mm")
+        self.lbl_stage_height_mm = self.ui.findChild(QLabel, "lbl_stage_height_mm")
+        
         # Color Picker Init
         self.color_picker_active = False
 
@@ -172,7 +178,7 @@ class MainWindow(QObject):
         # Measurement Tab Setup (Index 0)
         self.ruler_tab_index = 0
         if hasattr(self.ui, 'right_tab_widget'):
-            self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, False)
+            self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, True)
             self.color_picker_tab_index = self.ui.right_tab_widget.indexOf(self.tab_color_picker)
             self.ui.right_tab_widget.setTabVisible(self.color_picker_tab_index, False)
 
@@ -1417,6 +1423,28 @@ class MainWindow(QObject):
                     self.log("Settings loaded.")
             except Exception as e:
                 self.log(f"Error loading settings: {e}")
+            except Exception as e:
+                self.log(f"Error loading settings: {e}")
+        
+        self._load_stage_settings()
+
+    def _load_stage_settings(self):
+        stage_settings_file = os.path.join(os.getcwd(), "stage_settings.json")
+        if os.path.exists(stage_settings_file):
+            try:
+                with open(stage_settings_file, "r") as f:
+                    self.stage_settings = json.load(f)
+                    if self.lbl_stage_width_mm:
+                        self.lbl_stage_width_mm.setText(f"{self.stage_settings.get('stage_width_mm', 'N/A'):.1f} mm")
+                    if self.lbl_stage_height_mm:
+                        self.lbl_stage_height_mm.setText(f"{self.stage_settings.get('stage_height_mm', 'N/A'):.1f} mm")
+                    self.log("Stage settings loaded.")
+            except FileNotFoundError:
+                self.log(f"Stage settings file not found: {stage_settings_file}")
+            except json.JSONDecodeError as e:
+                self.log(f"Error decoding stage settings JSON: {e}")
+            except Exception as e:
+                self.log(f"Error loading stage settings: {e}")
 
     def save_settings(self):
         settings = {

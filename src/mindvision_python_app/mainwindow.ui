@@ -43,14 +43,6 @@
         <bool>true</bool>
        </property>
        <widget class="QWidget" name="scrollAreaWidgetContents">
-        <property name="geometry">
-         <rect>
-          <x>0</x>
-          <y>0</y>
-          <width>298</width>
-          <height>800</height>
-         </rect>
-        </property>
         <layout class="QVBoxLayout" name="scroll_layout">
          <item>
           <widget class="QGroupBox" name="controls_group">
@@ -802,20 +794,6 @@
             </item>
            </layout>
           </widget>
-         </item>
-
-         <item>
-          <spacer name="verticalSpacer">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
          </item>
         </layout>
        </widget>
@@ -2065,11 +2043,6 @@
   <action name="action_color_picker">
    <property name="checkable">
     <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset>
-     <normaloff>icons/color_picker.svg</normaloff>icons/color_picker.svg
-    </iconset>
    </property>
    <property name="text">
     <string>Color Picker</string>

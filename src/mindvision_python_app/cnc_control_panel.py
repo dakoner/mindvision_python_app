@@ -1,5 +1,8 @@
+import os
+import sys
 from PySide6 import QtWidgets, QtCore
-from PySide6.QtCore import QThread, Signal, Slot
+from PySide6.QtCore import QThread, Signal, Slot, QFile
+from PySide6.QtUiTools import QUiLoader
 import serial.tools.list_ports
 import re
 
@@ -14,11 +17,44 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     send_raw_serial_cmd_signal = Signal(str)
     poll_serial_signal = Signal()
 
-    def __init__(self, *args, **kwargs):
-        super().__init__("CNC Control", *args, **kwargs)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # Load UI from file
+        loader = QUiLoader()
+        script_dir = os.path.dirname(__file__)
+        ui_file_path = os.path.join(script_dir, "cnc_control_panel.ui")
+        ui_file = QFile(ui_file_path)
+
+        if not ui_file.open(QFile.ReadOnly):
+            print(f"Cannot open {ui_file_path}: {ui_file.errorString()}")
+            sys.exit(-1)
+        
+        loader.load(ui_file, self)
+        ui_file.close()
+
+        # Now, find the children widgets by their names from the .ui file
+        self.serial_port_combo = self.findChild(QtWidgets.QComboBox, "serial_port_combo")
+        self.refresh_button = self.findChild(QtWidgets.QPushButton, "refresh_button")
+        self.connect_button = self.findChild(QtWidgets.QPushButton, "connect_button")
+        self.forward_button = self.findChild(QtWidgets.QPushButton, "forward_button")
+        self.back_button = self.findChild(QtWidgets.QPushButton, "back_button")
+        self.left_button = self.findChild(QtWidgets.QPushButton, "left_button")
+        self.right_button = self.findChild(QtWidgets.QPushButton, "right_button")
+        self.up_button = self.findChild(QtWidgets.QPushButton, "up_button")
+        self.down_button = self.findChild(QtWidgets.QPushButton, "down_button")
+        self.home_button = self.findChild(QtWidgets.QPushButton, "home_button")
+        self.step_input = self.findChild(QtWidgets.QDoubleSpinBox, "step_input")
+        self.z_step_input = self.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
+        self.status_label = self.findChild(QtWidgets.QLabel, "status_label")
+        self.wpos_x_label = self.findChild(QtWidgets.QLabel, "wpos_x_label")
+        self.wpos_y_label = self.findChild(QtWidgets.QLabel, "wpos_y_label")
+        self.wpos_z_label = self.findChild(QtWidgets.QLabel, "wpos_z_label")
 
         self.step_size = 0.1
         self.z_step_size = 0.01
+        self.step_input.setValue(self.step_size)
+        self.z_step_input.setValue(self.z_step_size)
 
         # --- Serial Worker Setup ---
         self.serial_thread = QThread()
@@ -46,80 +82,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         self.status_poll_timer = QtCore.QTimer(self)
         self.status_poll_timer.timeout.connect(self.poll_status)
 
-        # --- UI Layout ---
-        self.grid_layout = QtWidgets.QGridLayout()
-        self.setLayout(self.grid_layout)
-        self.grid_layout.setSpacing(5)
-        self.grid_layout.setContentsMargins(5, 5, 5, 5)
-
-        # --- Serial connection UI ---
-        self.serial_port_combo = QtWidgets.QComboBox()
-        self.refresh_button = QtWidgets.QPushButton("Refresh")
-        self.connect_button = QtWidgets.QPushButton("Connect")
-        self.connect_button.setCheckable(True)
-
-        self.grid_layout.addWidget(self.serial_port_combo, 0, 0, 1, 2)
-        self.grid_layout.addWidget(self.refresh_button, 0, 2, 1, 1)
-        self.grid_layout.addWidget(self.connect_button, 0, 3, 1, 1)
-
-        # --- Movement Buttons ---
-        self.forward_button = QtWidgets.QPushButton("Y+")
-        self.back_button = QtWidgets.QPushButton("Y-")
-        self.left_button = QtWidgets.QPushButton("X-")
-        self.right_button = QtWidgets.QPushButton("X+")
-        self.up_button = QtWidgets.QPushButton("Z+")
-        self.down_button = QtWidgets.QPushButton("Z-")
-        self.home_button = QtWidgets.QPushButton("Home")
-
-        self.grid_layout.addWidget(self.forward_button, 1, 1)  # Y+
-        self.grid_layout.addWidget(self.left_button, 2, 0)  # X-
-        self.grid_layout.addWidget(self.right_button, 2, 2)  # X+
-        self.grid_layout.addWidget(self.back_button, 3, 1)  # Y-
-        self.grid_layout.addWidget(self.up_button, 1, 3)  # Z+
-        self.grid_layout.addWidget(self.down_button, 2, 3)  # Z-
-        self.grid_layout.addWidget(self.home_button, 3, 3)
-
-        # --- Step size controls ---
-        self.step_label = QtWidgets.QLabel("X/Y Step (mm):")
-        self.step_input = QtWidgets.QDoubleSpinBox()
-        self.step_input.setDecimals(3)
-        self.step_input.setSingleStep(0.1)
-        self.step_input.setValue(self.step_size)
-        self.grid_layout.addWidget(self.step_label, 4, 0, 1, 1)
-        self.grid_layout.addWidget(self.step_input, 4, 1, 1, 1)
-
-        self.z_step_label = QtWidgets.QLabel("Z Step (mm):")
-        self.z_step_input = QtWidgets.QDoubleSpinBox()
-        self.z_step_input.setDecimals(3)
-        self.z_step_input.setSingleStep(0.01)
-        self.z_step_input.setValue(self.z_step_size)
-        self.grid_layout.addWidget(self.z_step_label, 5, 0, 1, 1)
-        self.grid_layout.addWidget(self.z_step_input, 5, 1, 1, 1)
-        
-        # --- Status Display ---
-        status_group = QtWidgets.QGroupBox("Status")
-        status_layout = QtWidgets.QFormLayout()
-        status_group.setLayout(status_layout)
-
-        self.status_label = QtWidgets.QLabel("N/A")
-        self.wpos_x_label = QtWidgets.QLabel("0.000")
-        self.wpos_y_label = QtWidgets.QLabel("0.000")
-        self.wpos_z_label = QtWidgets.QLabel("0.000")
-
-        status_layout.addRow("State:", self.status_label)
-        status_layout.addRow("X:", self.wpos_x_label)
-        status_layout.addRow("Y:", self.wpos_y_label)
-        status_layout.addRow("Z:", self.wpos_z_label)
-        
-        self.grid_layout.addWidget(status_group, 6, 0, 1, 4)
-
-        # --- Final Touches ---
-        for button in self.findChildren(QtWidgets.QPushButton):
-            button.setSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
-            )
-
-        # Connect signals
+        # Connect signals from UI widgets
         self.refresh_button.clicked.connect(self.refresh_serial_ports)
         self.connect_button.toggled.connect(self.on_connect_toggled)
         self.up_button.clicked.connect(self.move_up)
@@ -245,8 +208,8 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     def home(self):
         self.send_serial_cmd_signal.emit(f"$H")
 
-    def closeEvent(self, event):
+    def stop(self):
         self.status_poll_timer.stop()
-        self.serial_thread.quit()
-        self.serial_thread.wait()
-        super().closeEvent(event)
+        if self.serial_thread.isRunning():
+            self.serial_thread.quit()
+            self.serial_thread.wait()

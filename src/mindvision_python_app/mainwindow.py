@@ -157,6 +157,7 @@ class MainWindow(QObject):
         index = scroll_layout.indexOf(group_serial)
         scroll_layout.insertWidget(index + 1, self.cnc_control_panel)
         self.cnc_control_panel.log_signal.connect(self.log)
+        self.ui.scrollArea.updateGeometry()
 
         # Initial Detector config
         
@@ -442,6 +443,9 @@ class MainWindow(QObject):
             if watched is self.ui and event.type() == QEvent.Close:
                 self.save_settings()
                 self.on_stop_clicked()
+
+                if self.cnc_control_panel:
+                    self.cnc_control_panel.stop()
 
                 # Cleanup Matching Thread
                 if self.matching_thread.isRunning():

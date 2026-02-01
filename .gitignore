@@ -3,3 +3,4 @@ videos/*
 settings.json
 Camera/
 __pycache__/
+src/mindvision_python_app.egg-info/

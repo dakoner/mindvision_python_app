@@ -71,7 +71,6 @@ class MainWindow(QObject):
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
         loader.registerCustomWidget(IntensityChart)
-        loader.registerCustomWidget(ColorPickerWidget)
         ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
@@ -120,16 +119,14 @@ class MainWindow(QObject):
         self.param_poll_timer = QTimer()
         self.param_poll_timer.timeout.connect(self.poll_camera_params)
 
-        # --- CNC Control Panel Setup ---
-        self.cnc_control_panel = CNCControlPanel()
-        # Find the scroll_layout and the group_serial widget (now LED Controller)
-        scroll_layout = self.ui.scroll_layout
-        group_serial = self.ui.group_serial
-        # Get the index of the group_serial widget and insert the cnc_control_panel after it
-        index = scroll_layout.indexOf(group_serial)
-        scroll_layout.insertWidget(index + 1, self.cnc_control_panel)
-        self.cnc_control_panel.log_signal.connect(self.log)
-        self.ui.scrollArea.updateGeometry()
+        # --- CNC Control Panel Setup ---        
+        # The CNCControlPanel QGroupBox is now part of mainwindow.ui. Find it and pass it to the controller.
+        cnc_group_box_widget = self.ui.findChild(QGroupBox, "CNCControlPanel")
+        if cnc_group_box_widget:
+            self.cnc_control_panel = CNCControlPanel(cnc_group_box_widget, self)
+            self.cnc_control_panel.log_signal.connect(self.log)
+        else:
+            self.cnc_control_panel = None # Handle case where it's not found
 
         # Initial Detector config
         

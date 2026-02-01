@@ -1,15 +1,12 @@
-import os
-import sys
 from PySide6 import QtWidgets, QtCore
-from PySide6.QtCore import QThread, Signal, Slot, QFile
-from PySide6.QtUiTools import QUiLoader
+from PySide6.QtCore import QThread, Signal, Slot, QObject
 import serial.tools.list_ports
 import re
 
 from serial_worker import SerialWorker, HAS_SERIAL
 
 
-class CNCControlPanel(QtWidgets.QGroupBox):
+class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     log_signal = Signal(str)
     connect_serial_signal = Signal(str, int)
     disconnect_serial_signal = Signal()
@@ -17,39 +14,30 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     send_raw_serial_cmd_signal = Signal(str)
     poll_serial_signal = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, cnc_group_box_widget: QtWidgets.QGroupBox, parent=None):
         super().__init__(parent)
 
-        # Load UI from file
-        loader = QUiLoader()
-        script_dir = os.path.dirname(__file__)
-        ui_file_path = os.path.join(script_dir, "cnc_control_panel.ui")
-        ui_file = QFile(ui_file_path)
+        # The UI for the CNCControlPanel QGroupBox is now loaded as part of mainwindow.ui.
+        # We are passed the QGroupBox widget instance from mainwindow.py.
+        self._cnc_group_box_widget = cnc_group_box_widget
 
-        if not ui_file.open(QFile.ReadOnly):
-            print(f"Cannot open {ui_file_path}: {ui_file.errorString()}")
-            sys.exit(-1)
-        
-        loader.load(ui_file, self)
-        ui_file.close()
-
-        # Now, find the children widgets by their names from the .ui file
-        self.serial_port_combo = self.findChild(QtWidgets.QComboBox, "serial_port_combo")
-        self.refresh_button = self.findChild(QtWidgets.QPushButton, "refresh_button")
-        self.connect_button = self.findChild(QtWidgets.QPushButton, "connect_button")
-        self.forward_button = self.findChild(QtWidgets.QPushButton, "forward_button")
-        self.back_button = self.findChild(QtWidgets.QPushButton, "back_button")
-        self.left_button = self.findChild(QtWidgets.QPushButton, "left_button")
-        self.right_button = self.findChild(QtWidgets.QPushButton, "right_button")
-        self.up_button = self.findChild(QtWidgets.QPushButton, "up_button")
-        self.down_button = self.findChild(QtWidgets.QPushButton, "down_button")
-        self.home_button = self.findChild(QtWidgets.QPushButton, "home_button")
-        self.step_input = self.findChild(QtWidgets.QDoubleSpinBox, "step_input")
-        self.z_step_input = self.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
-        self.status_label = self.findChild(QtWidgets.QLabel, "status_label")
-        self.wpos_x_label = self.findChild(QtWidgets.QLabel, "wpos_x_label")
-        self.wpos_y_label = self.findChild(QtWidgets.QLabel, "wpos_y_label")
-        self.wpos_z_label = self.findChild(QtWidgets.QLabel, "wpos_z_label")
+        # Now, find the children widgets by their names within the passed QGroupBox
+        self.serial_port_combo = self._cnc_group_box_widget.findChild(QtWidgets.QComboBox, "serial_port_combo")
+        self.refresh_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "refresh_button")
+        self.connect_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "connect_button")
+        self.forward_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "forward_button")
+        self.back_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "back_button")
+        self.left_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "left_button")
+        self.right_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "right_button")
+        self.up_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "up_button")
+        self.down_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "down_button")
+        self.home_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "home_button")
+        self.step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "step_input")
+        self.z_step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
+        self.status_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "status_label")
+        self.wpos_x_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_x_label")
+        self.wpos_y_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_y_label")
+        self.wpos_z_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_z_label")
 
         self.step_size = 0.1
         self.z_step_size = 0.01

@@ -1428,6 +1428,7 @@ class MainWindow(QObject):
             self.mosaic_window = MosaicWindow(stage_width_mm, stage_height_mm, self.ruler_calibration)
             self.mosaic_window.closed_signal.connect(lambda: self.ui.action_show_mosaic.setChecked(False))
             self.mosaic_window.request_move_signal.connect(self.on_mosaic_move_requested)
+            self.mosaic_window.request_scan_signal.connect(self.on_mosaic_scan_requested)
             self.mosaic_window.show()
         else:
             if self.mosaic_window.isVisible():
@@ -1448,6 +1449,55 @@ class MainWindow(QObject):
             cmd = f"G90 G0 X{x:.3f} Y{y:.3f}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
+
+    @Slot(float, float, float, float)
+    def on_mosaic_scan_requested(self, x_min, y_min, x_max, y_max):
+        if not self.cnc_control_panel:
+            return
+            
+        if not self.ruler_calibration or self.ruler_calibration <= 0:
+            self.log("Scan Error: Ruler not calibrated.")
+            return
+            
+        if not self.current_pixmap:
+            self.log("Scan Error: No camera image.")
+            return
+            
+        # Calculate FOV in mm based on current image dimensions and calibration.
+        # Note: MosaicWindow rotates the image 90 degrees.
+        # So Mosaic X axis corresponds to Camera Image Height.
+        # Mosaic Y axis corresponds to Camera Image Width.
+        
+        img_w = self.current_pixmap.width()
+        img_h = self.current_pixmap.height()
+        
+        fov_x_mm = img_h / self.ruler_calibration
+        fov_y_mm = img_w / self.ruler_calibration
+        
+        # Step size with 10% overlap
+        step_x = fov_x_mm * 0.9
+        step_y = fov_y_mm * 0.9
+        
+        cmds = ["G90", "F2000"] # Absolute positioning, Feed rate
+        
+        current_y = y_max - (fov_y_mm / 2)
+        direction = 1 # 1 = Right, -1 = Left
+        
+        while current_y > y_min:
+            y_target = max(current_y, y_min + fov_y_mm/2)
+            
+            start_x = x_min + (fov_x_mm / 2) if direction == 1 else x_max - (fov_x_mm / 2)
+            end_x = x_max - (fov_x_mm / 2) if direction == 1 else x_min + (fov_x_mm / 2)
+            
+            cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+            cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
+            
+            current_y -= step_y
+            direction *= -1
+            
+        self.log(f"Starting Mosaic Scan: {len(cmds)} commands.")
+        for cmd in cmds:
+            self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
 
     def load_settings(self):
         settings_file = "camera_settings.json"

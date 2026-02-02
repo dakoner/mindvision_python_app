@@ -1,17 +1,21 @@
 import os
 from PySide6.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout
-from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QTransform
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect
+from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QTransform, QPen
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint
 
 class MosaicWidget(QWidget):
     """
     A custom widget to display the mosaic image scaled to fit the window.
     """
     clicked = Signal(float, float)
+    selection_made = Signal(float, float, float, float) # x, y, w, h in image pixels
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.image = None
+        self.start_pos = None
+        self.current_pos = None
+        self.is_dragging = False
 
     def set_image(self, image: QImage):
         self.image = image
@@ -50,38 +54,94 @@ class MosaicWidget(QWidget):
         
         target_rect = QRect(x, y, drawn_w, drawn_h)
         painter.drawImage(target_rect, self.image)
+        
+        # Draw selection rectangle if dragging
+        if self.is_dragging and self.start_pos and self.current_pos:
+            pen = QPen(QColor(0, 255, 255), 2, Qt.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            
+            rect = QRect(self.start_pos.toPoint(), self.current_pos.toPoint()).normalized()
+            painter.drawRect(rect)
 
     def mousePressEvent(self, event):
         if not self.image or self.image.isNull():
             return
         
-        if event.button() != Qt.LeftButton:
-            return
+        if event.button() == Qt.LeftButton:
+            self.start_pos = event.position()
+            self.current_pos = event.position()
+            self.is_dragging = True
 
-        widget_rect = self.rect()
-        img_size = self.image.size()
-        
-        if img_size.width() == 0 or img_size.height() == 0:
-            return
-        
-        scale_w = widget_rect.width() / img_size.width()
-        scale_h = widget_rect.height() / img_size.height()
-        scale = min(scale_w, scale_h)
-        
-        drawn_w = int(img_size.width() * scale)
-        drawn_h = int(img_size.height() * scale)
-        
-        x_off = (widget_rect.width() - drawn_w) // 2
-        y_off = (widget_rect.height() - drawn_h) // 2
-        
-        pos = event.position()
-        mx = pos.x()
-        my = pos.y()
-        
-        if mx >= x_off and mx < x_off + drawn_w and my >= y_off and my < y_off + drawn_h:
-            img_x = (mx - x_off) / scale
-            img_y = (my - y_off) / scale
-            self.clicked.emit(img_x, img_y)
+    def mouseMoveEvent(self, event):
+        if self.is_dragging:
+            self.current_pos = event.position()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.is_dragging:
+            self.is_dragging = False
+            end_pos = event.position()
+            
+            # Calculate distance to distinguish click from drag
+            dist = (end_pos - self.start_pos).manhattanLength()
+
+            widget_rect = self.rect()
+            img_size = self.image.size()
+            
+            if img_size.width() == 0 or img_size.height() == 0:
+                return
+            
+            scale_w = widget_rect.width() / img_size.width()
+            scale_h = widget_rect.height() / img_size.height()
+            scale = min(scale_w, scale_h)
+            
+            drawn_w = int(img_size.width() * scale)
+            drawn_h = int(img_size.height() * scale)
+            
+            x_off = (widget_rect.width() - drawn_w) // 2
+            y_off = (widget_rect.height() - drawn_h) // 2
+            
+            if dist < 5:
+                # Treat as Click
+                pos = end_pos
+                mx = pos.x()
+                my = pos.y()
+                
+                if mx >= x_off and mx < x_off + drawn_w and my >= y_off and my < y_off + drawn_h:
+                    img_x = (mx - x_off) / scale
+                    img_y = (my - y_off) / scale
+                    self.clicked.emit(img_x, img_y)
+            else:
+                # Treat as Selection Drag
+                # Convert start and end to image coords
+                p1 = self.start_pos
+                p2 = end_pos
+                
+                # Normalize rect in widget coords
+                x1 = min(p1.x(), p2.x())
+                y1 = min(p1.y(), p2.y())
+                x2 = max(p1.x(), p2.x())
+                y2 = max(p1.y(), p2.y())
+                
+                # Clip to drawn image area
+                x1 = max(x1, x_off)
+                y1 = max(y1, y_off)
+                x2 = min(x2, x_off + drawn_w)
+                y2 = min(y2, y_off + drawn_h)
+                
+                if x2 > x1 and y2 > y1:
+                    img_x = (x1 - x_off) / scale
+                    img_y = (y1 - y_off) / scale
+                    img_w = (x2 - x1) / scale
+                    img_h = (y2 - y1) / scale
+                    self.selection_made.emit(img_x, img_y, img_w, img_h)
+            
+            self.start_pos = None
+            self.current_pos = None
+            self.update()
+
+    # Removed old mousePressEvent to avoid conflict, logic moved to mouseReleaseEvent/mousePressEvent above
 
 class MosaicWindow(QMainWindow):
     """
@@ -90,6 +150,7 @@ class MosaicWindow(QMainWindow):
     """
     closed_signal = Signal()
     request_move_signal = Signal(float, float)
+    request_scan_signal = Signal(float, float, float, float) # x_min, y_min, x_max, y_max
 
     def __init__(self, stage_width_mm: float, stage_height_mm: float, ruler_calibration_px_per_mm: float, parent=None):
         super().__init__(parent)
@@ -126,6 +187,7 @@ class MosaicWindow(QMainWindow):
         self.display_widget = MosaicWidget(self)
         self.display_widget.set_image(self.mosaic_image)
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
+        self.display_widget.selection_made.connect(self.on_mosaic_selection)
         self.setCentralWidget(self.display_widget)
 
         # Store camera frame dimensions to calculate offset
@@ -191,3 +253,26 @@ class MosaicWindow(QMainWindow):
         cnc_y = max(0.0, min(cnc_y, self.stage_height_mm))
         
         self.request_move_signal.emit(cnc_x, cnc_y)
+
+    @Slot(float, float, float, float)
+    def on_mosaic_selection(self, x, y, w, h):
+        if self.ruler_calibration_px_per_mm <= 0:
+            return
+            
+        # Convert to CNC coords
+        # Image (0,0) is Top-Left. CNC (0,0) is Bottom-Left.
+        
+        # Top-Left of selection in CNC
+        cnc_x1 = x / self.ruler_calibration_px_per_mm
+        cnc_y1 = self.stage_height_mm - (y / self.ruler_calibration_px_per_mm)
+        
+        # Bottom-Right of selection in CNC
+        cnc_x2 = (x + w) / self.ruler_calibration_px_per_mm
+        cnc_y2 = self.stage_height_mm - ((y + h) / self.ruler_calibration_px_per_mm)
+        
+        x_min = min(cnc_x1, cnc_x2)
+        x_max = max(cnc_x1, cnc_x2)
+        y_min = min(cnc_y1, cnc_y2)
+        y_max = max(cnc_y1, cnc_y2)
+        
+        self.request_scan_signal.emit(x_min, y_min, x_max, y_max)

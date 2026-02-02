@@ -2190,6 +2190,7 @@
    <addaction name="action_snapshot"/>
    <addaction name="action_ruler"/>
    <addaction name="action_color_picker"/>
+   <addaction name="action_show_mosaic"/>
   </widget>
   <action name="action_start_camera">
    <property name="icon">

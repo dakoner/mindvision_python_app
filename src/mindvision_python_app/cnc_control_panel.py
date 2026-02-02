@@ -178,22 +178,22 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.z_step_size = value
 
     def move_up(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F100")
 
     def move_down(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F100")
 
     def move_left(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F100")
 
     def move_right(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 X{self.step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 X{self.step_size} F100")
 
     def move_forward(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Y{self.step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Y{self.step_size} F100")
 
     def move_back(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Y-{self.step_size} F4000")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Y-{self.step_size} F100")
 
     def home(self):
         self.send_serial_cmd_signal.emit(f"$H")

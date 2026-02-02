@@ -1427,6 +1427,7 @@ class MainWindow(QObject):
 
             self.mosaic_window = MosaicWindow(stage_width_mm, stage_height_mm, self.ruler_calibration)
             self.mosaic_window.closed_signal.connect(lambda: self.ui.action_show_mosaic.setChecked(False))
+            self.mosaic_window.request_move_signal.connect(self.on_mosaic_move_requested)
             self.mosaic_window.show()
         else:
             if self.mosaic_window.isVisible():
@@ -1439,6 +1440,14 @@ class MainWindow(QObject):
         """Receives updated CNC position from the CNCControlPanel."""
         self.current_cnc_x_mm = x_mm
         self.current_cnc_y_mm = y_mm
+
+    @Slot(float, float)
+    def on_mosaic_move_requested(self, x, y):
+        if self.cnc_control_panel:
+            # Send G-code to move to absolute position (G90) using Rapid Move (G0)
+            cmd = f"G90 G0 X{x:.3f} Y{y:.3f}"
+            self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+            self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
 
     def load_settings(self):
         settings_file = "camera_settings.json"

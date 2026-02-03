@@ -135,7 +135,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
             button.setEnabled(connected)
             
         if connected:
-            self.status_poll_timer.start(10) # Poll every 250ms
+            self.status_poll_timer.start(1) # Poll every 250ms
         else:
             self.status_poll_timer.stop()
             # Reset status on disconnect

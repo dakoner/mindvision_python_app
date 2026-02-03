@@ -13,6 +13,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     send_serial_cmd_signal = Signal(str)
     send_raw_serial_cmd_signal = Signal(str)
     poll_serial_signal = Signal()
+    state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float)
 
     def __init__(self, cnc_group_box_widget: QtWidgets.QGroupBox, parent=None):
@@ -134,7 +135,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
             button.setEnabled(connected)
             
         if connected:
-            self.status_poll_timer.start(250) # Poll every 250ms
+            self.status_poll_timer.start(10) # Poll every 250ms
         else:
             self.status_poll_timer.stop()
             # Reset status on disconnect
@@ -149,16 +150,16 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):
             self._parse_status(msg[4:-1])
-        #else:
+        else:
             # Pass all other messages through to the main window log
-        
-        self.log_signal.emit(msg)
+            self.log_signal.emit(msg)
 
     def _parse_status(self, status_str):
         # State is always the first part before a pipe or the end
         parts = status_str.split("|")
         if parts:
             self.status_label.setText(parts[0])
+            self.state_updated_signal.emit(parts[0])
 
         # Use regex for a more robust search for WPos or MPos
         match = re.search(r"(?:WPos|MPos):(-?[\d\.]+),(-?[\d\.]+),(-?[\d\.]+)", status_str)

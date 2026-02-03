@@ -166,6 +166,7 @@ class MainWindow(QObject):
         self.mosaic_window = None
         self.current_cnc_x_mm = None
         self.current_cnc_y_mm = None
+        self.cnc_state = "Idle"
         
         # Stage Settings
         self.stage_settings = {}
@@ -184,6 +185,7 @@ class MainWindow(QObject):
         # Connect CNC position updates for mosaic
         if self.cnc_control_panel:
             self.cnc_control_panel.position_updated_signal.connect(self.on_cnc_position_updated)
+            self.cnc_control_panel.state_updated_signal.connect(self.on_cnc_state_updated)
 
         # Measurement Tab Setup (Index 0)
         self.ruler_tab_index = 0
@@ -636,7 +638,8 @@ class MainWindow(QObject):
             # Update Mosaic Window
             if self.mosaic_window and self.mosaic_window.isVisible() and \
                self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
-                self.mosaic_window.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
+                if self.cnc_state != "Home":
+                    self.mosaic_window.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
 
     @Slot(float)
     def update_fps(self, fps):
@@ -1442,6 +1445,10 @@ class MainWindow(QObject):
         self.current_cnc_x_mm = x_mm
         self.current_cnc_y_mm = y_mm
 
+    @Slot(str)
+    def on_cnc_state_updated(self, state):
+        self.cnc_state = state
+
     @Slot(float, float)
     def on_mosaic_move_requested(self, x, y):
         if self.cnc_control_panel:
@@ -1478,22 +1485,34 @@ class MainWindow(QObject):
         step_x = fov_x_mm * 0.9
         step_y = fov_y_mm * 0.9
         
-        cmds = ["G99", "F100"] # Absolute positioning, Feed rate
+        cmds = ["G90", "F100"] # Absolute positioning, Feed rate
         
         current_y = y_max - (fov_y_mm / 2)
-        direction = 1 # 1 = Right, -1 = Left
+        is_first_strip = True
         
         while current_y > y_min:
             y_target = max(current_y, y_min + fov_y_mm/2)
             
-            start_x = x_min + (fov_x_mm / 2) if direction == 1 else x_max - (fov_x_mm / 2)
-            end_x = x_max - (fov_x_mm / 2) if direction == 1 else x_min + (fov_x_mm / 2)
+            # Calculate start and end X for the strip (always Left-to-Right)
+            start_x = x_min + (fov_x_mm / 2)
+            end_x = x_max - (fov_x_mm / 2)
             
+            if is_first_strip:
+                # 1. Go to correct XY position (Start of strip)
+                cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+                is_first_strip = False
+            else:
+                # 1. Move Y to target row
+                cmds.append(f"G0 Y{y_target:.3f}")
+
+            # 2. Home in X (Reset X reference)
+            cmds.append("$HX")
+            # 3. Return to start of strip (in case homing moved the head to the limit)
             cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+            # 4. Scan strip
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
             
             current_y -= step_y
-            direction *= -1
             
         self.log(f"Starting Mosaic Scan: {len(cmds)} commands.")
         for cmd in cmds:

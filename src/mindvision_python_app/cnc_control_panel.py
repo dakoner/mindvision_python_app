@@ -33,6 +33,11 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.up_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "up_button")
         self.down_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "down_button")
         self.home_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "home_button")
+        self.reset_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "reset_button")
+        if not self.reset_button:
+            self.reset_button = QtWidgets.QPushButton("Reset")
+            if self._cnc_group_box_widget.layout():
+                self._cnc_group_box_widget.layout().addWidget(self.reset_button)
         self.step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "step_input")
         self.z_step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
         self.status_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "status_label")
@@ -81,6 +86,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.forward_button.clicked.connect(self.move_forward)
         self.back_button.clicked.connect(self.move_back)
         self.home_button.clicked.connect(self.home)
+        self.reset_button.clicked.connect(self.reset_cnc)
         self.step_input.valueChanged.connect(self.on_step_size_changed)
         self.z_step_input.valueChanged.connect(self.on_z_step_size_changed)
 
@@ -123,6 +129,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
             self.forward_button,
             self.back_button,
             self.home_button,
+            self.reset_button,
         ]:
             button.setEnabled(connected)
             
@@ -142,9 +149,10 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):
             self._parse_status(msg[4:-1])
-        else:
+        #else:
             # Pass all other messages through to the main window log
-            self.log_signal.emit(msg)
+        
+        self.log_signal.emit(msg)
 
     def _parse_status(self, status_str):
         # State is always the first part before a pipe or the end
@@ -197,6 +205,9 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
 
     def home(self):
         self.send_serial_cmd_signal.emit(f"$H")
+
+    def reset_cnc(self):
+        self.send_raw_serial_cmd_signal.emit("\x18")
 
     def stop(self):
         self.status_poll_timer.stop()

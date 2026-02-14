@@ -1556,6 +1556,7 @@ class MainWindow(QObject):
                     # Apply camera settings
                     self.ui.spin_exposure_time.setValue(settings.get("exposure_time", 2000))
                     self.ui.spin_gain.setValue(settings.get("gain", 1))
+                    self.ui.chk_auto_exposure.setChecked(settings.get("auto_exposure", True))
                     
                     # Apply detector params
                     if "detector" in settings:
@@ -1610,6 +1611,7 @@ class MainWindow(QObject):
         settings = {
             "exposure_time": self.ui.spin_exposure_time.value(),
             "gain": self.ui.spin_gain.value(),
+            "auto_exposure": self.ui.chk_auto_exposure.isChecked(),
             "detector": self.get_detector_settings(),
             "ruler_calibration": self.ruler_calibration
         }
@@ -1643,5 +1645,6 @@ class MainWindow(QObject):
 
     def apply_camera_settings(self):
         # Force apply current UI values to camera
+        self.camera.setAutoExposure(self.ui.chk_auto_exposure.isChecked())
         self.camera.setExposureTime(self.ui.spin_exposure_time.value())
         self.camera.setAnalogGain(self.ui.spin_gain.value())

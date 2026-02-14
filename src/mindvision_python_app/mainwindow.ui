@@ -891,6 +891,13 @@
               </property>
              </widget>
             </item>
+            <item row="4" column="3">
+             <widget class="QPushButton" name="reset_button">
+              <property name="text">
+               <string>Reset</string>
+              </property>
+             </widget>
+            </item>
             <item row="4" column="0">
              <widget class="QLabel" name="step_label">
               <property name="text">
@@ -922,6 +929,26 @@
               </property>
               <property name="singleStep">
                <double>0.01</double>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="2">
+             <widget class="QLabel" name="feedrate_label">
+              <property name="text">
+               <string>Feedrate:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="3">
+             <widget class="QSpinBox" name="feedrate_input">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+              <property name="value">
+               <number>100</number>
               </property>
              </widget>
             </item>
@@ -988,6 +1015,20 @@
                 </widget>
                </item>
               </layout>
+             </widget>
+            </item>
+            <item row="7" column="0" colspan="3">
+             <widget class="QLineEdit" name="cnc_command_input">
+              <property name="placeholderText">
+               <string>Enter command...</string>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="3">
+             <widget class="QPushButton" name="send_command_button">
+              <property name="text">
+               <string>Send</string>
+              </property>
              </widget>
             </item>
            </layout>

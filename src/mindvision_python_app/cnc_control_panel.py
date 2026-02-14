@@ -35,19 +35,19 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.down_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "down_button")
         self.home_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "home_button")
         self.reset_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "reset_button")
-        if not self.reset_button:
-            self.reset_button = QtWidgets.QPushButton("Reset")
-            if self._cnc_group_box_widget.layout():
-                self._cnc_group_box_widget.layout().addWidget(self.reset_button)
         self.step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "step_input")
         self.z_step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
         self.status_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "status_label")
         self.wpos_x_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_x_label")
         self.wpos_y_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_y_label")
         self.wpos_z_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_z_label")
+        self.cnc_command_input = self._cnc_group_box_widget.findChild(QtWidgets.QLineEdit, "cnc_command_input")
+        self.send_command_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "send_command_button")
+        self.feedrate_input = self._cnc_group_box_widget.findChild(QtWidgets.QSpinBox, "feedrate_input")
 
         self.step_size = 0.1
         self.z_step_size = 0.01
+        self.feedrate = self.feedrate_input.value()
         self.step_input.setValue(self.step_size)
         self.z_step_input.setValue(self.z_step_size)
 
@@ -90,6 +90,9 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.reset_button.clicked.connect(self.reset_cnc)
         self.step_input.valueChanged.connect(self.on_step_size_changed)
         self.z_step_input.valueChanged.connect(self.on_z_step_size_changed)
+        self.send_command_button.clicked.connect(self.send_console_command)
+        self.cnc_command_input.returnPressed.connect(self.send_console_command)
+        self.feedrate_input.valueChanged.connect(self.on_feedrate_changed)
 
         self.refresh_serial_ports()
         self.on_serial_status_changed(False)  # Initial state
@@ -131,6 +134,9 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
             self.back_button,
             self.home_button,
             self.reset_button,
+            self.send_command_button,
+            self.cnc_command_input,
+            self.feedrate_input,
         ]:
             button.setEnabled(connected)
             
@@ -186,29 +192,38 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     def on_z_step_size_changed(self, value):
         self.z_step_size = value
 
+    def on_feedrate_changed(self, value):
+        self.feedrate = value
+
     def move_up(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F100")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F{self.feedrate}")
 
     def move_down(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F100")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F{self.feedrate}")
 
     def move_left(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F100")
+        self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F{self.feedrate}")
 
     def move_right(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 X{self.step_size} F100")
+        self.send_serial_cmd_signal.emit(f"$J=G91 X{self.step_size} F{self.feedrate}")
 
     def move_forward(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Y{self.step_size} F100")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Y{self.step_size} F{self.feedrate}")
 
     def move_back(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Y-{self.step_size} F100")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Y-{self.step_size} F{self.feedrate}")
 
     def home(self):
         self.send_serial_cmd_signal.emit(f"$H")
 
     def reset_cnc(self):
         self.send_raw_serial_cmd_signal.emit("\x18")
+
+    def send_console_command(self):
+        command = self.cnc_command_input.text()
+        if command:
+            self.send_raw_serial_cmd_signal.emit(command)
+            self.cnc_command_input.clear()
 
     def stop(self):
         self.status_poll_timer.stop()

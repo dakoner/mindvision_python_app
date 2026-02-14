@@ -627,7 +627,7 @@ class MainWindow(QObject):
                 self.log(f"Recording started: {os.path.basename(filename)}")
 
             # Display
-            image = image.mirrored(True, False) # Flip horizontally
+            #image = image.mirrored(True, False) # Flip horizontally
             self.current_pixmap = QPixmap.fromImage(image)
             self.refresh_video_label()
             

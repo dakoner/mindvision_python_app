@@ -16,6 +16,13 @@ class MosaicWidget(QWidget):
         self.start_pos = None
         self.current_pos = None
         self.is_dragging = False
+        self.grid_width = 0
+        self.grid_height = 0
+
+    def set_grid_size(self, width: int, height: int):
+        self.grid_width = width
+        self.grid_height = height
+        self.update()
 
     def set_image(self, image: QImage):
         self.image = image
@@ -54,6 +61,25 @@ class MosaicWidget(QWidget):
         
         target_rect = QRect(x, y, drawn_w, drawn_h)
         painter.drawImage(target_rect, self.image)
+
+        # Draw grid if size is valid
+        if self.grid_width > 0 and self.grid_height > 0 and self.image:
+            pen = QPen(QColor(128, 128, 128, 128), 1, Qt.SolidLine)
+            painter.setPen(pen)
+
+            # Draw vertical lines
+            steps = int(self.image.width() / self.grid_width)
+            for i in range(1, steps + 1):
+                line_x = target_rect.x() + int(i * self.grid_width * scale)
+                if line_x <= target_rect.right():
+                    painter.drawLine(line_x, target_rect.y(), line_x, target_rect.bottom())
+
+            # Draw horizontal lines
+            steps = int(self.image.height() / self.grid_height)
+            for i in range(1, steps + 1):
+                line_y = target_rect.y() + int(i * self.grid_height * scale)
+                if line_y <= target_rect.bottom():
+                    painter.drawLine(target_rect.x(), line_y, target_rect.right(), line_y)
         
         # Draw selection rectangle if dragging
         if self.is_dragging and self.start_pos and self.current_pos:
@@ -183,9 +209,13 @@ class MosaicPanel(QWidget):
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
         self.display_widget.selection_made.connect(self.on_mosaic_selection)
         
+        self.position_label = QLabel("X: 0 px, Y: 0 px")
+        self.position_label.setAlignment(Qt.AlignCenter)
+        
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.display_widget)
+        layout.addWidget(self.position_label)
 
         # Store camera frame dimensions to calculate offset
         self.camera_frame_width_px = 0
@@ -201,16 +231,17 @@ class MosaicPanel(QWidget):
             return
 
         # Rotate the image 90 degrees to correct for camera orientation
-        transform = QTransform()
-        transform.rotate(90)
-        camera_frame = camera_frame.transformed(transform)
-        camera_frame = camera_frame.mirrored(False, True)
+        #transform = QTransform()
+        #transform.rotate(90)
+        #camera_frame = camera_frame.transformed(transform)
+        #camera_frame = camera_frame.mirrored(False, True)
 
         # Update camera frame dimensions if they change (e.g., ROI changes)
         if self.camera_frame_width_px != camera_frame.width() or \
            self.camera_frame_height_px != camera_frame.height():
             self.camera_frame_width_px = camera_frame.width()
             self.camera_frame_height_px = camera_frame.height()
+            self.display_widget.set_grid_size(self.camera_frame_width_px, self.camera_frame_height_px)
 
         # Camera's physical width/height in mm
         camera_fov_width_mm = self.camera_frame_width_px / self.ruler_calibration_px_per_mm
@@ -230,6 +261,12 @@ class MosaicPanel(QWidget):
         painter.end()
 
         self.display_widget.set_image(self.mosaic_image)
+
+        # Update position label
+        if self.ruler_calibration_px_per_mm > 0:
+            pixel_x = cnc_x_mm * self.ruler_calibration_px_per_mm
+            pixel_y = cnc_y_mm * self.ruler_calibration_px_per_mm
+            self.position_label.setText(f"X: {pixel_x:.0f} px, Y: {pixel_y:.0f} px")
 
     @Slot(float, float)
     def on_mosaic_clicked(self, img_x, img_y):

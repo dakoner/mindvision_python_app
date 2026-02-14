@@ -1566,16 +1566,20 @@ class MainWindow(QObject):
                         self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
 
                     if "led_controller_port" in settings:
-                        led_port = settings["led_controller_port"]
+                        led_port = settings.get("led_controller_port")
                         if led_port and hasattr(self, 'led_controller'):
                             self.led_controller.set_port(led_port)
-                    
+                            if settings.get("led_controller_connected"):
+                                QTimer.singleShot(1000, self.led_controller.ui.btn_serial_connect.toggle)
+
                     if "cnc_controller_port" in settings and hasattr(self, 'cnc_control_panel'):
-                        cnc_port = settings["cnc_controller_port"]
+                        cnc_port = settings.get("cnc_controller_port")
                         if cnc_port:
                             index = self.cnc_control_panel.serial_port_combo.findText(cnc_port)
                             if index != -1:
                                 self.cnc_control_panel.serial_port_combo.setCurrentIndex(index)
+                                if settings.get("cnc_controller_connected"):
+                                    QTimer.singleShot(500, self.cnc_control_panel.connect_button.toggle)
                         
                     self.log("Settings loaded.")
             except Exception as e:
@@ -1612,8 +1616,10 @@ class MainWindow(QObject):
         
         if hasattr(self, 'led_controller'):
             settings["led_controller_port"] = self.led_controller.get_port()
+            settings["led_controller_connected"] = self.led_controller.ui.btn_serial_connect.isChecked()
         if hasattr(self, 'cnc_control_panel'):
             settings["cnc_controller_port"] = self.cnc_control_panel.serial_port_combo.currentText()
+            settings["cnc_controller_connected"] = self.cnc_control_panel.connect_button.isChecked()
         
         settings_file = "camera_settings.json"
         try:

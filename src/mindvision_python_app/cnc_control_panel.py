@@ -35,6 +35,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.down_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "down_button")
         self.home_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "home_button")
         self.reset_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "reset_button")
+        self.reboot_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "reboot_button")
         self.step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "step_input")
         self.z_step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
         self.status_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "status_label")
@@ -88,6 +89,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.back_button.clicked.connect(self.move_back)
         self.home_button.clicked.connect(self.home)
         self.reset_button.clicked.connect(self.reset_cnc)
+        self.reboot_button.clicked.connect(self.reboot_cnc)
         self.step_input.valueChanged.connect(self.on_step_size_changed)
         self.z_step_input.valueChanged.connect(self.on_z_step_size_changed)
         self.send_command_button.clicked.connect(self.send_console_command)
@@ -134,21 +136,22 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
             self.back_button,
             self.home_button,
             self.reset_button,
+            self.reboot_button,
             self.send_command_button,
             self.cnc_command_input,
             self.feedrate_input,
         ]:
             button.setEnabled(connected)
             
-        if connected:
-            self.status_poll_timer.start(1) # Poll every 250ms
-        else:
-            self.status_poll_timer.stop()
-            # Reset status on disconnect
-            self.status_label.setText("N/A")
-            self.wpos_x_label.setText("0.000")
-            self.wpos_y_label.setText("0.000")
-            self.wpos_z_label.setText("0.000")
+        # if connected:
+        #     self.status_poll_timer.start(1) # Poll every 250ms
+        # else:
+        #     self.status_poll_timer.stop()
+        #     # Reset status on disconnect
+        #     self.status_label.setText("N/A")
+        #     self.wpos_x_label.setText("0.000")
+        #     self.wpos_y_label.setText("0.000")
+        #     self.wpos_z_label.setText("0.000")
 
 
     @Slot(str)
@@ -159,6 +162,9 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         else:
             # Pass all other messages through to the main window log
             self.log_signal.emit(msg)
+            # Check for FluidNC connection string and set report interval
+            if "Grbl 4.0 [FluidNC" in msg:
+                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=1"))
 
     def _parse_status(self, status_str):
         # State is always the first part before a pipe or the end
@@ -219,10 +225,14 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     def reset_cnc(self):
         self.send_raw_serial_cmd_signal.emit("\x18")
 
+    def reboot_cnc(self):
+        self.send_raw_serial_cmd_signal.emit("\x14")
+        self.send_raw_serial_cmd_signal.emit("\x04")
+
     def send_console_command(self):
         command = self.cnc_command_input.text()
         if command:
-            self.send_raw_serial_cmd_signal.emit(command)
+            self.send_serial_cmd_signal.emit(command)
             self.cnc_command_input.clear()
 
     def stop(self):

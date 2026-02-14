@@ -891,6 +891,13 @@
               </property>
              </widget>
             </item>
+            <item row="4" column="2">
+             <widget class="QPushButton" name="reboot_button">
+              <property name="text">
+               <string>Reboot</string>
+              </property>
+             </widget>
+            </item>
             <item row="4" column="3">
              <widget class="QPushButton" name="reset_button">
               <property name="text">

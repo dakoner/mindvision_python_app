@@ -5,7 +5,8 @@ from PySide6.QtWidgets import QApplication
 
 # Setup paths before importing MainWindow
 script_dir = os.path.dirname(__file__)
-release_dir = os.path.join(r"/home/dek/src/microtools/mindvision_qobject", "release")
+release_dir = os.path.realpath(os.path.join(script_dir, "..", "..", "..", "mindvision_qobject", "release"))
+print(release_dir)
 sys.path.insert(0, release_dir)
 
 

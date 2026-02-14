@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QScrollArea,
     QPushButton,
+    QDockWidget,
 )
 from PySide6.QtCore import (
     Qt,
@@ -36,7 +37,7 @@ from _mindvision_qobject_py import MindVisionCamera, VideoThread
 from range_slider import RangeSlider
 from intensity_chart import IntensityChart
 from color_picker_widget import ColorPickerWidget
-from mosaic_window import MosaicWindow # New import
+from mosaic_window import MosaicPanel
 from matching_worker import MatchingWorker
 from cnc_control_panel import CNCControlPanel
 from led_controller import LEDController
@@ -163,9 +164,9 @@ class MainWindow(QObject):
         self.ruler_end = None
         self.ruler_calibration = None 
 
-        self.mosaic_window = None
-        self.current_cnc_x_mm = None
-        self.current_cnc_y_mm = None
+        self.mosaic_dock = None
+        self.current_cnc_x_mm = 0.0
+        self.current_cnc_y_mm = 0.0
         self.cnc_state = "Idle"
         
         # Stage Settings
@@ -636,10 +637,10 @@ class MainWindow(QObject):
                 self.update_intensity_profile(self.ruler_start, end_pt, image)
 
             # Update Mosaic Window
-            if self.mosaic_window and self.mosaic_window.isVisible() and \
+            if self.mosaic_dock and self.mosaic_dock.isVisible() and self.mosaic_panel and \
                self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
                 if self.cnc_state != "Home":
-                    self.mosaic_window.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
+                    self.mosaic_panel.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
 
     @Slot(float)
     def update_fps(self, fps):
@@ -1360,6 +1361,7 @@ class MainWindow(QObject):
         self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
         self.log(f"Ruler Calibrated: {self.ruler_calibration:.2f} px/mm")
         self.update_ruler_stats()
+        self.init_mosaic_panel(force_recreate=True)
 
     def update_ruler_stats(self):
         if self.ruler_start is None:
@@ -1414,30 +1416,54 @@ class MainWindow(QObject):
 
     @Slot()
     def on_show_mosaic_triggered(self):
-        """Handles the action to show/hide the mosaic window."""
-        if self.mosaic_window is None:
-            if not self.ruler_calibration or self.ruler_calibration <= 0:
-                self.log("Cannot create mosaic: Ruler not calibrated or calibration is invalid.")
-                self.ui.action_show_mosaic.setChecked(False)
-                return
-            if not self.stage_settings or "stage_width_mm" not in self.stage_settings or "stage_height_mm" not in self.stage_settings:
-                self.log("Cannot create mosaic: Stage settings not loaded or incomplete.")
-                self.ui.action_show_mosaic.setChecked(False)
-                return
-
-            stage_width_mm = self.stage_settings["stage_width_mm"]
-            stage_height_mm = self.stage_settings["stage_height_mm"]
-
-            self.mosaic_window = MosaicWindow(stage_width_mm, stage_height_mm, self.ruler_calibration)
-            self.mosaic_window.closed_signal.connect(lambda: self.ui.action_show_mosaic.setChecked(False))
-            self.mosaic_window.request_move_signal.connect(self.on_mosaic_move_requested)
-            self.mosaic_window.request_scan_signal.connect(self.on_mosaic_scan_requested)
-            self.mosaic_window.show()
+        """Handles the action to show/hide the mosaic panel."""
+        if self.mosaic_dock and self.mosaic_dock.isVisible():
+            self.mosaic_dock.hide()
+            self.ui.action_show_mosaic.setChecked(False)
         else:
-            if self.mosaic_window.isVisible():
-                self.mosaic_window.hide()
-            else:
-                self.mosaic_window.show()
+            self.init_mosaic_panel()
+            if not self.mosaic_dock:
+                self.ui.action_show_mosaic.setChecked(False) # Reset if failed
+
+    def init_mosaic_panel(self, force_recreate=False):
+        # If the dock already exists, just show it
+        if self.mosaic_dock and not force_recreate:
+            self.mosaic_dock.show()
+            self.ui.action_show_mosaic.setChecked(True)
+            return
+
+        # Prerequisite checks
+        if not self.ruler_calibration or self.ruler_calibration <= 0:
+            self.log("Cannot create Mosaic Panel: Ruler not calibrated.")
+            return
+        if not self.stage_settings or "stage_width_mm" not in self.stage_settings:
+            self.log("Cannot create Mosaic Panel: Stage settings not loaded.")
+            return
+
+        # Re-creation logic
+        if self.mosaic_dock:
+            self.mosaic_dock.setWidget(None)
+            self.mosaic_dock.deleteLater()
+            self.mosaic_dock = None
+
+        # Create the panel
+        stage_width_mm = self.stage_settings["stage_width_mm"]
+        stage_height_mm = self.stage_settings["stage_height_mm"]
+        self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
+        self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
+        self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
+        
+        # Create and setup the dock widget
+        self.mosaic_dock = QDockWidget("Stage Mosaic", self.ui)
+        self.mosaic_dock.setObjectName("MosaicDock")
+        self.mosaic_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
+        self.mosaic_dock.setWidget(self.mosaic_panel)
+        self.mosaic_dock.visibilityChanged.connect(lambda visible: self.ui.action_show_mosaic.setChecked(visible))
+        
+        self.ui.addDockWidget(Qt.RightDockWidgetArea, self.mosaic_dock)
+
+        self.mosaic_dock.show()
+        self.ui.action_show_mosaic.setChecked(True)
 
     @Slot(float, float)
     def on_cnc_position_updated(self, x_mm: float, y_mm: float):
@@ -1554,6 +1580,7 @@ class MainWindow(QObject):
                 self.log(f"Error loading settings: {e}")
         
         self._load_stage_settings()
+        self.init_mosaic_panel()
 
     def _load_stage_settings(self):
         stage_settings_file = os.path.join(os.getcwd(), "stage_settings.json")

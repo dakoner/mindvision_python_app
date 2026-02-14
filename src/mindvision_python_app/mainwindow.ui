@@ -1039,1135 +1039,1132 @@
        </widget>
       </widget>
       
-      <widget class="QTabWidget" name="right_tab_widget">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>320</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>450</width>
-         <height>16777215</height>
-        </size>
-       </property>
-       <property name="currentIndex">
-        <number>0</number>
-       </property>
-
-       <widget class="QWidget" name="tab_measurement">
-        <attribute name="title">
-         <string>Measurement</string>
-        </attribute>
-        <layout class="QFormLayout" name="layout_ruler">
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_ruler_len">
-           <property name="text">
-            <string>Known Length:</string>
-           </property>
+      <widget class="QWidget" name="right_panel_container">
+       <layout class="QVBoxLayout" name="right_panel_layout">
+        <item>
+         <widget class="QTabWidget" name="right_tab_widget">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>320</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>450</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="tab_measurement">
+           <attribute name="title">
+            <string>Measurement</string>
+           </attribute>
+           <layout class="QFormLayout" name="layout_ruler">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_ruler_len">
+              <property name="text">
+               <string>Known Length:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QDoubleSpinBox" name="spin_ruler_len">
+              <property name="maximum">
+               <double>9999.0</double>
+              </property>
+              <property name="value">
+               <double>10.0</double>
+              </property>
+              <property name="suffix">
+               <string> mm</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_ruler_px">
+              <property name="text">
+               <string>Pixel Dist:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLabel" name="lbl_ruler_px">
+              <property name="text">
+               <string>0.0 px</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_ruler_calib">
+              <property name="text">
+               <string>Scale:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLabel" name="lbl_ruler_calib">
+              <property name="text">
+               <string>Not Calibrated</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_ruler_meas">
+              <property name="text">
+               <string>Measured:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLabel" name="lbl_ruler_meas">
+              <property name="text">
+               <string>0.00 mm</string>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">font-weight: bold; font-size: 14px; color: blue;</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_stage_width">
+              <property name="text">
+               <string>Stage Width:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QLabel" name="lbl_stage_width_mm">
+              <property name="text">
+               <string>N/A</string>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="0">
+             <widget class="QLabel" name="label_stage_height">
+              <property name="text">
+               <string>Stage Height:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="1">
+             <widget class="QLabel" name="lbl_stage_height_mm">
+              <property name="text">
+               <string>N/A</string>
+              </property>
+             </widget>
+            </item>
+            <!-- End Stage Dimensions -->
+            <item row="6" column="0" colspan="2">
+             <widget class="QPushButton" name="btn_ruler_calibrate">
+              <property name="text">
+               <string>Calibrate from Line</string>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="0" colspan="2">
+             <widget class="QCheckBox" name="chk_show_profile">
+              <property name="text">
+               <string>Show Intensity Profile</string>
+              </property>
+             </widget>
+            </item>
+            <item row="8" column="0" colspan="2">
+             <widget class="IntensityChart" name="intensity_chart" native="true">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>200</height>
+               </size>
+              </property>
+              <property name="visible">
+               <bool>false</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QDoubleSpinBox" name="spin_ruler_len">
-           <property name="maximum">
-            <double>9999.0</double>
-           </property>
-           <property name="value">
-            <double>10.0</double>
-           </property>
-           <property name="suffix">
-            <string> mm</string>
-           </property>
+          <widget class="ColorPickerWidget" name="tab_color_picker">
+           <attribute name="title">
+            <string>Color Picker</string>
+           </attribute>
+           <layout class="QFormLayout" name="layout_color_picker">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_cp_coords">
+              <property name="text">
+               <string>Coords:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QLabel" name="lbl_cp_coords">
+              <property name="text">
+               <string>0, 0</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_cp_rgb">
+              <property name="text">
+               <string>RGB:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLabel" name="lbl_cp_rgb">
+              <property name="text">
+               <string>0, 0, 0</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_cp_hex">
+              <property name="text">
+               <string>Hex:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLabel" name="lbl_cp_hex">
+              <property name="text">
+               <string>#000000</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_cp_intensity">
+              <property name="text">
+               <string>Intensity:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLabel" name="lbl_cp_intensity">
+              <property name="text">
+               <string>0</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_cp_preview">
+              <property name="text">
+               <string>Preview:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QLabel" name="lbl_cp_color_preview">
+              <property name="minimumSize">
+               <size>
+                <width>50</width>
+                <height>50</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: black; border: 1px solid gray;</string>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_ruler_px">
-           <property name="text">
-            <string>Pixel Dist:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLabel" name="lbl_ruler_px">
-           <property name="text">
-            <string>0.0 px</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="label_ruler_calib">
-           <property name="text">
-            <string>Scale:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QLabel" name="lbl_ruler_calib">
-           <property name="text">
-            <string>Not Calibrated</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="0">
-          <widget class="QLabel" name="label_ruler_meas">
-           <property name="text">
-            <string>Measured:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="QLabel" name="lbl_ruler_meas">
-           <property name="text">
-            <string>0.00 mm</string>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">font-weight: bold; font-size: 14px; color: blue;</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="label_stage_width">
-           <property name="text">
-            <string>Stage Width:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="1">
-          <widget class="QLabel" name="lbl_stage_width_mm">
-           <property name="text">
-            <string>N/A</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QLabel" name="label_stage_height">
-           <property name="text">
-            <string>Stage Height:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="1">
-          <widget class="QLabel" name="lbl_stage_height_mm">
-           <property name="text">
-            <string>N/A</string>
-           </property>
-          </widget>
-         </item>
-         <!-- End Stage Dimensions -->
-
-         <item row="6" column="0" colspan="2">
-          <widget class="QPushButton" name="btn_ruler_calibrate">
-           <property name="text">
-            <string>Calibrate from Line</string>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="0" colspan="2">
-          <widget class="QCheckBox" name="chk_show_profile">
-           <property name="text">
-            <string>Show Intensity Profile</string>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="0" colspan="2">
-          <widget class="IntensityChart" name="intensity_chart" native="true">
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>200</height>
-            </size>
-           </property>
-           <property name="visible">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-
-       <widget class="ColorPickerWidget" name="tab_color_picker">
-        <attribute name="title">
-         <string>Color Picker</string>
-        </attribute>
-        <layout class="QFormLayout" name="layout_color_picker">
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_cp_coords">
-           <property name="text">
-            <string>Coords:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLabel" name="lbl_cp_coords">
-           <property name="text">
-            <string>0, 0</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_cp_rgb">
-           <property name="text">
-            <string>RGB:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLabel" name="lbl_cp_rgb">
-           <property name="text">
-            <string>0, 0, 0</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="label_cp_hex">
-           <property name="text">
-            <string>Hex:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QLabel" name="lbl_cp_hex">
-           <property name="text">
-            <string>#000000</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="0">
-          <widget class="QLabel" name="label_cp_intensity">
-           <property name="text">
-            <string>Intensity:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="QLabel" name="lbl_cp_intensity">
-           <property name="text">
-            <string>0</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="label_cp_preview">
-           <property name="text">
-            <string>Preview:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="1">
-          <widget class="QLabel" name="lbl_cp_color_preview">
-           <property name="minimumSize">
-            <size>
-             <width>50</width>
-             <height>50</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: black; border: 1px solid gray;</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-       
-       <widget class="QWidget" name="tab_aruco">
-        <attribute name="title">
-         <string>ArUco</string>
-        </attribute>
-        <layout class="QFormLayout" name="formLayout_aruco">
-         <item row="0" column="0" colspan="2">
-          <widget class="QCheckBox" name="chk_aruco_enable">
-           <property name="text">
-            <string>Enable ArUco Detection</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_aruco_dict">
-           <property name="text">
-            <string>Dictionary:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QComboBox" name="aruco_dict">
-           <item>
-            <property name="text">
-             <string>DICT_4X4_50</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>DICT_4X4_100</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>DICT_4X4_250</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>DICT_5X5_100</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>DICT_6X6_250</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>DICT_APRILTAG_36h11</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="label_aruco_border">
-           <property name="text">
-            <string>Border Bits:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QSpinBox" name="spin_aruco_border_bits">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="value">
-            <number>1</number>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="0" colspan="2">
-          <widget class="QCheckBox" name="chk_aruco_show_ids">
-           <property name="text">
-            <string>Show IDs</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0" colspan="2">
-          <widget class="QCheckBox" name="chk_aruco_show_rejected">
-           <property name="text">
-            <string>Show Rejected</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-
-       <widget class="QWidget" name="tab_qrcode">
-        <attribute name="title">
-         <string>QR Code</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="layout_qrcode">
-         <item>
-          <widget class="QCheckBox" name="chk_qrcode_enable">
-           <property name="text">
-            <string>Enable QR Code Detection</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="lbl_qrcode_data">
-           <property name="text">
-            <string>Decoded Data: None</string>
-           </property>
-           <property name="wordWrap">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="spacer_qrcode">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-
-       <widget class="QWidget" name="tab_ssim">
-        <attribute name="title">
-         <string>SSIM</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="layout_ssim">
-         <item>
-          <widget class="QCheckBox" name="chk_ssim_enable">
-           <property name="text">
-            <string>Enable SSIM</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btn_load_ssim_ref">
-           <property name="text">
-            <string>Load Reference Image...</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="lbl_ssim_ref_name">
-           <property name="text">
-            <string>No reference loaded</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">color: gray;</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="lbl_ssim_score">
-           <property name="text">
-            <string>Score: --</string>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">font-weight: bold; font-size: 14px;</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="spacer_ssim">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-
-       <widget class="QWidget" name="tab_template">
-        <attribute name="title">
-         <string>Template</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="layout_template_match">
-         <item>
-          <widget class="QCheckBox" name="chk_match_enable">
-           <property name="text">
-            <string>Enable Template Matching</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btn_load_template">
-           <property name="text">
-            <string>Load Template Image...</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="lbl_template_name">
-           <property name="text">
-            <string>No template loaded</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">color: gray;</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QTabWidget" name="tabs_matching">
-           <property name="currentIndex">
-            <number>0</number>
-           </property>
-           <widget class="QWidget" name="tab_orb">
-            <attribute name="title">
-             <string>ORB</string>
-            </attribute>
-            <layout class="QFormLayout" name="orb_form_layout">
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_nfeatures">
+          <widget class="QWidget" name="tab_aruco">
+           <attribute name="title">
+            <string>ArUco</string>
+           </attribute>
+           <layout class="QFormLayout" name="formLayout_aruco">
+            <item row="0" column="0" colspan="2">
+             <widget class="QCheckBox" name="chk_aruco_enable">
+              <property name="text">
+               <string>Enable ArUco Detection</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_aruco_dict">
+              <property name="text">
+               <string>Dictionary:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="aruco_dict">
+              <item>
                <property name="text">
-                <string>nFeatures:</string>
+                <string>DICT_4X4_50</string>
                </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QSpinBox" name="orb_nfeatures">
-               <property name="minimum">
-                <number>1</number>
-               </property>
-               <property name="maximum">
-                <number>10000</number>
-               </property>
-               <property name="value">
-                <number>500</number>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_scaleFactor">
+              </item>
+              <item>
                <property name="text">
-                <string>scaleFactor:</string>
+                <string>DICT_4X4_100</string>
                </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QDoubleSpinBox" name="orb_scaleFactor">
-               <property name="minimum">
-                <double>1.001000000000000</double>
-               </property>
-               <property name="maximum">
-                <double>3.000000000000000</double>
-               </property>
-               <property name="singleStep">
-                <double>0.100000000000000</double>
-               </property>
-               <property name="value">
-                <double>1.200000000000000</double>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="label_nlevels">
+              </item>
+              <item>
                <property name="text">
-                <string>nLevels:</string>
+                <string>DICT_4X4_250</string>
                </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QSpinBox" name="orb_nlevels">
-               <property name="minimum">
-                <number>1</number>
-               </property>
-               <property name="maximum">
-                <number>20</number>
-               </property>
-               <property name="value">
-                <number>8</number>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="label_edgeThreshold">
+              </item>
+              <item>
                <property name="text">
-                <string>edgeThreshold:</string>
+                <string>DICT_5X5_100</string>
                </property>
-              </widget>
-             </item>
-             <item row="3" column="1">
-              <widget class="QSpinBox" name="orb_edgeThreshold">
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>31</number>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="label_firstLevel">
+              </item>
+              <item>
                <property name="text">
-                <string>firstLevel:</string>
+                <string>DICT_6X6_250</string>
                </property>
-              </widget>
-             </item>
-             <item row="4" column="1">
-              <widget class="QSpinBox" name="orb_firstLevel">
-               <property name="maximum">
-                <number>1</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-              </widget>
-             </item>
-             <item row="5" column="0">
-              <widget class="QLabel" name="label_wta_k">
+              </item>
+              <item>
                <property name="text">
-                <string>WTA_K:</string>
+                <string>DICT_APRILTAG_36h11</string>
                </property>
+              </item>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_aruco_border">
+              <property name="text">
+               <string>Border Bits:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSpinBox" name="spin_aruco_border_bits">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="value">
+               <number>1</number>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0" colspan="2">
+             <widget class="QCheckBox" name="chk_aruco_show_ids">
+              <property name="text">
+               <string>Show IDs</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0" colspan="2">
+             <widget class="QCheckBox" name="chk_aruco_show_rejected">
+              <property name="text">
+               <string>Show Rejected</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_qrcode">
+           <attribute name="title">
+            <string>QR Code</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="layout_qrcode">
+            <item>
+             <widget class="QCheckBox" name="chk_qrcode_enable">
+              <property name="text">
+               <string>Enable QR Code Detection</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_qrcode_data">
+              <property name="text">
+               <string>Decoded Data: None</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="spacer_qrcode">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_ssim">
+           <attribute name="title">
+            <string>SSIM</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="layout_ssim">
+            <item>
+             <widget class="QCheckBox" name="chk_ssim_enable">
+              <property name="text">
+               <string>Enable SSIM</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_load_ssim_ref">
+              <property name="text">
+               <string>Load Reference Image...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_ssim_ref_name">
+              <property name="text">
+               <string>No reference loaded</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">color: gray;</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_ssim_score">
+              <property name="text">
+               <string>Score: --</string>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">font-weight: bold; font-size: 14px;</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="spacer_ssim">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_template">
+           <attribute name="title">
+            <string>Template</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="layout_template_match">
+            <item>
+             <widget class="QCheckBox" name="chk_match_enable">
+              <property name="text">
+               <string>Enable Template Matching</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_load_template">
+              <property name="text">
+               <string>Load Template Image...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_template_name">
+              <property name="text">
+               <string>No template loaded</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">color: gray;</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QTabWidget" name="tabs_matching">
+              <property name="currentIndex">
+               <number>0</number>
+              </property>
+              <widget class="QWidget" name="tab_orb">
+               <attribute name="title">
+                <string>ORB</string>
+               </attribute>
+               <layout class="QFormLayout" name="orb_form_layout">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_nfeatures">
+                  <property name="text">
+                   <string>nFeatures:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QSpinBox" name="orb_nfeatures">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>10000</number>
+                  </property>
+                  <property name="value">
+                   <number>500</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="label_scaleFactor">
+                  <property name="text">
+                   <string>scaleFactor:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QDoubleSpinBox" name="orb_scaleFactor">
+                  <property name="minimum">
+                   <double>1.001000000000000</double>
+                  </property>
+                  <property name="maximum">
+                   <double>3.000000000000000</double>
+                  </property>
+                  <property name="singleStep">
+                   <double>0.100000000000000</double>
+                  </property>
+                  <property name="value">
+                   <double>1.200000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_nlevels">
+                  <property name="text">
+                   <string>nLevels:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QSpinBox" name="orb_nlevels">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>20</number>
+                  </property>
+                  <property name="value">
+                   <number>8</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="label_edgeThreshold">
+                  <property name="text">
+                   <string>edgeThreshold:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="1">
+                 <widget class="QSpinBox" name="orb_edgeThreshold">
+                  <property name="maximum">
+                   <number>100</number>
+                  </property>
+                  <property name="value">
+                   <number>31</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="4" column="0">
+                 <widget class="QLabel" name="label_firstLevel">
+                  <property name="text">
+                   <string>firstLevel:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="4" column="1">
+                 <widget class="QSpinBox" name="orb_firstLevel">
+                  <property name="maximum">
+                   <number>1</number>
+                  </property>
+                  <property name="value">
+                   <number>0</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="5" column="0">
+                 <widget class="QLabel" name="label_wta_k">
+                  <property name="text">
+                   <string>WTA_K:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="5" column="1">
+                 <widget class="QSpinBox" name="orb_wta_k">
+                  <property name="minimum">
+                   <number>2</number>
+                  </property>
+                  <property name="maximum">
+                   <number>4</number>
+                  </property>
+                  <property name="value">
+                   <number>2</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="6" column="0">
+                 <widget class="QLabel" name="label_scoreType">
+                  <property name="text">
+                   <string>scoreType:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="6" column="1">
+                 <widget class="QComboBox" name="orb_scoreType">
+                  <item>
+                   <property name="text">
+                    <string>HARRIS_SCORE</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>FAST_SCORE</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+                <item row="7" column="0">
+                 <widget class="QLabel" name="label_patchSize">
+                  <property name="text">
+                   <string>patchSize:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="7" column="1">
+                 <widget class="QSpinBox" name="orb_patchSize">
+                  <property name="minimum">
+                   <number>2</number>
+                  </property>
+                  <property name="maximum">
+                   <number>100</number>
+                  </property>
+                  <property name="value">
+                   <number>31</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="8" column="0">
+                 <widget class="QLabel" name="label_fastThreshold">
+                  <property name="text">
+                   <string>fastThreshold:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="8" column="1">
+                 <widget class="QSpinBox" name="orb_fastThreshold">
+                  <property name="maximum">
+                   <number>255</number>
+                  </property>
+                  <property name="value">
+                   <number>20</number>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </widget>
-             </item>
-             <item row="5" column="1">
-              <widget class="QSpinBox" name="orb_wta_k">
-               <property name="minimum">
-                <number>2</number>
-               </property>
-               <property name="maximum">
-                <number>4</number>
-               </property>
-               <property name="value">
-                <number>2</number>
-               </property>
+              <widget class="QWidget" name="tab_sift">
+               <attribute name="title">
+                <string>SIFT</string>
+               </attribute>
+               <layout class="QFormLayout" name="sift_form_layout">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_sift_nfeatures">
+                  <property name="text">
+                   <string>nFeatures:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QSpinBox" name="sift_nfeatures">
+                  <property name="maximum">
+                   <number>10000</number>
+                  </property>
+                  <property name="value">
+                   <number>0</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="label_sift_nOctaveLayers">
+                  <property name="text">
+                   <string>nOctaveLayers:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QSpinBox" name="sift_nOctaveLayers">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>1</number>
+                  </property>
+                  <property name="value">
+                   <number>3</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_sift_contrastThreshold">
+                  <property name="text">
+                   <string>contrastThresh:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QDoubleSpinBox" name="sift_contrastThreshold">
+                  <property name="singleStep">
+                   <double>0.010000000000000</double>
+                  </property>
+                  <property name="value">
+                   <double>0.040000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="label_sift_edgeThreshold">
+                  <property name="text">
+                   <string>edgeThreshold:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="1">
+                 <widget class="QDoubleSpinBox" name="sift_edgeThreshold">
+                  <property name="value">
+                   <double>10.000000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+                <item row="4" column="0">
+                 <widget class="QLabel" name="label_sift_sigma">
+                  <property name="text">
+                   <string>sigma:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="4" column="1">
+                 <widget class="QDoubleSpinBox" name="sift_sigma">
+                  <property name="value">
+                   <double>1.600000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </widget>
-             </item>
-             <item row="6" column="0">
-              <widget class="QLabel" name="label_scoreType">
-               <property name="text">
-                <string>scoreType:</string>
-               </property>
+              <widget class="QWidget" name="tab_akaze">
+               <attribute name="title">
+                <string>AKAZE</string>
+               </attribute>
+               <layout class="QFormLayout" name="akaze_form_layout">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_akaze_type">
+                  <property name="text">
+                   <string>Descriptor:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QComboBox" name="akaze_descriptor_type">
+                  <item>
+                   <property name="text">
+                    <string>KAZE_UPRIGHT</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>KAZE</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>MLP_UPRIGHT</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>MLP</string>
+                   </property>
+                  </item>
+                  <property name="currentIndex">
+                   <number>3</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="label_akaze_threshold">
+                  <property name="text">
+                   <string>Threshold:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QDoubleSpinBox" name="akaze_threshold">
+                  <property name="decimals">
+                   <number>4</number>
+                  </property>
+                  <property name="singleStep">
+                   <double>0.000100000000000</double>
+                  </property>
+                  <property name="value">
+                   <double>0.001200000000000</double>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_akaze_nOctaves">
+                  <property name="text">
+                   <string>nOctaves:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QSpinBox" name="akaze_nOctaves">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>1</number>
+                  </property>
+                  <property name="value">
+                   <number>4</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="label_akaze_nOctaveLayers">
+                  <property name="text">
+                   <string>nOctaveLayers:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="1">
+                 <widget class="QSpinBox" name="akaze_nOctaveLayers">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>1</number>
+                  </property>
+                  <property name="value">
+                   <number>4</number>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </widget>
-             </item>
-             <item row="6" column="1">
-              <widget class="QComboBox" name="orb_scoreType">
-               <item>
+             </widget>
+            </item>
+            <item>
+             <spacer name="spacer_template">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_hough">
+           <attribute name="title">
+            <string>Hough</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="hough_v_layout">
+            <item>
+             <widget class="QCheckBox" name="chk_hough_enable">
+              <property name="text">
+               <string>Enable Hough Circle</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QFormLayout" name="hough_form_layout">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_hough_dp">
                 <property name="text">
-                 <string>HARRIS_SCORE</string>
+                 <string>dp:</string>
                 </property>
-               </item>
-               <item>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QDoubleSpinBox" name="hough_dp">
+                <property name="minimum">
+                 <double>0.1</double>
+                </property>
+                <property name="maximum">
+                 <double>10.0</double>
+                </property>
+                <property name="singleStep">
+                 <double>0.1</double>
+                </property>
+                <property name="value">
+                 <double>1.0</double>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_hough_minDist">
                 <property name="text">
-                 <string>FAST_SCORE</string>
+                 <string>minDist:</string>
                 </property>
-               </item>
-              </widget>
-             </item>
-             <item row="7" column="0">
-              <widget class="QLabel" name="label_patchSize">
-               <property name="text">
-                <string>patchSize:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="7" column="1">
-              <widget class="QSpinBox" name="orb_patchSize">
-               <property name="minimum">
-                <number>2</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>31</number>
-               </property>
-              </widget>
-             </item>
-             <item row="8" column="0">
-              <widget class="QLabel" name="label_fastThreshold">
-               <property name="text">
-                <string>fastThreshold:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="8" column="1">
-              <widget class="QSpinBox" name="orb_fastThreshold">
-               <property name="maximum">
-                <number>255</number>
-               </property>
-               <property name="value">
-                <number>20</number>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-           <widget class="QWidget" name="tab_sift">
-            <attribute name="title">
-             <string>SIFT</string>
-            </attribute>
-            <layout class="QFormLayout" name="sift_form_layout">
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_sift_nfeatures">
-               <property name="text">
-                <string>nFeatures:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QSpinBox" name="sift_nfeatures">
-               <property name="maximum">
-                <number>10000</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_sift_nOctaveLayers">
-               <property name="text">
-                <string>nOctaveLayers:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QSpinBox" name="sift_nOctaveLayers">
-               <property name="minimum">
-                <number>1</number>
-               </property>
-               <property name="maximum">
-                <number>1</number>
-               </property>
-               <property name="value">
-                <number>3</number>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="label_sift_contrastThreshold">
-               <property name="text">
-                <string>contrastThresh:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QDoubleSpinBox" name="sift_contrastThreshold">
-               <property name="singleStep">
-                <double>0.010000000000000</double>
-               </property>
-               <property name="value">
-                <double>0.040000000000000</double>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="label_sift_edgeThreshold">
-               <property name="text">
-                <string>edgeThreshold:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="1">
-              <widget class="QDoubleSpinBox" name="sift_edgeThreshold">
-               <property name="value">
-                <double>10.000000000000000</double>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="label_sift_sigma">
-               <property name="text">
-                <string>sigma:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="1">
-              <widget class="QDoubleSpinBox" name="sift_sigma">
-               <property name="value">
-                <double>1.600000000000000</double>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-           <widget class="QWidget" name="tab_akaze">
-            <attribute name="title">
-             <string>AKAZE</string>
-            </attribute>
-            <layout class="QFormLayout" name="akaze_form_layout">
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_akaze_type">
-               <property name="text">
-                <string>Descriptor:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QComboBox" name="akaze_descriptor_type">
-               <item>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QDoubleSpinBox" name="hough_minDist">
+                <property name="minimum">
+                 <double>1.0</double>
+                </property>
+                <property name="maximum">
+                 <double>1000.0</double>
+                </property>
+                <property name="value">
+                 <double>50.0</double>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_hough_param1">
                 <property name="text">
-                 <string>KAZE_UPRIGHT</string>
+                 <string>param1 (Canny):</string>
                 </property>
-               </item>
-               <item>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QDoubleSpinBox" name="hough_param1">
+                <property name="maximum">
+                 <double>500.0</double>
+                </property>
+                <property name="value">
+                 <double>100.0</double>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_hough_param2">
                 <property name="text">
-                 <string>KAZE</string>
+                 <string>param2 (Vote):</string>
                 </property>
-               </item>
-               <item>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QDoubleSpinBox" name="hough_param2">
+                <property name="maximum">
+                 <double>200.0</double>
+                </property>
+                <property name="value">
+                 <double>30.0</double>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="0">
+               <widget class="QLabel" name="label_hough_minRadius">
                 <property name="text">
-                 <string>MLP_UPRIGHT</string>
+                 <string>minRadius:</string>
                 </property>
-               </item>
-               <item>
+               </widget>
+              </item>
+              <item row="4" column="1">
+               <widget class="QSpinBox" name="hough_minRadius">
+                <property name="maximum">
+                 <number>1000</number>
+                </property>
+                <property name="value">
+                 <number>1</number>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="0">
+               <widget class="QLabel" name="label_hough_maxRadius">
                 <property name="text">
-                 <string>MLP</string>
+                 <string>maxRadius:</string>
                 </property>
-               </item>
-               <property name="currentIndex">
-                <number>3</number>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_akaze_threshold">
+               </widget>
+              </item>
+              <item row="5" column="1">
+               <widget class="QSpinBox" name="hough_maxRadius">
+                <property name="maximum">
+                 <number>1000</number>
+                </property>
+                <property name="value">
+                 <number>100</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="spacer_hough">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_contours">
+           <attribute name="title">
+            <string>Contours</string>
+           </attribute>
+           <layout class="QFormLayout" name="formLayout_contours">
+            <item row="0" column="0" colspan="2">
+             <widget class="QPushButton" name="btn_toggle_contours">
+              <property name="text">
+               <string>Enable Contours</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="label_contour_mode">
+              <property name="text">
+               <string>Mode:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="combo_contour_mode">
+              <item>
                <property name="text">
-                <string>Threshold:</string>
+                <string>Canny</string>
                </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QDoubleSpinBox" name="akaze_threshold">
-               <property name="decimals">
-                <number>4</number>
-               </property>
-               <property name="singleStep">
-                <double>0.000100000000000</double>
-               </property>
-               <property name="value">
-                <double>0.001200000000000</double>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="label_akaze_nOctaves">
+              </item>
+              <item>
                <property name="text">
-                <string>nOctaves:</string>
+                <string>Threshold</string>
                </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QSpinBox" name="akaze_nOctaves">
-               <property name="minimum">
-                <number>1</number>
-               </property>
-               <property name="maximum">
-                <number>1</number>
-               </property>
-               <property name="value">
-                <number>4</number>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="label_akaze_nOctaveLayers">
-               <property name="text">
-                <string>nOctaveLayers:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="1">
-              <widget class="QSpinBox" name="akaze_nOctaveLayers">
-               <property name="minimum">
-                <number>1</number>
-               </property>
-               <property name="maximum">
-                <number>1</number>
-               </property>
-               <property name="value">
-                <number>4</number>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
+              </item>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="label_threshold">
+              <property name="text">
+               <string>Threshold:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSlider" name="slider_threshold">
+              <property name="maximum">
+               <number>255</number>
+              </property>
+              <property name="value">
+               <number>127</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLabel" name="lbl_threshold_val">
+              <property name="text">
+               <string>127</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_canny">
+              <property name="text">
+               <string>Canny Range:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="RangeSlider" name="slider_canny" native="true"/>
+            </item>
+            <item row="5" column="1">
+             <widget class="QLabel" name="lbl_canny_val">
+              <property name="text">
+               <string>50 - 150</string>
+              </property>
+             </widget>
+            </item>
+            <item row="6" column="0">
+             <widget class="QLabel" name="label_min_area">
+              <property name="text">
+               <string>Min Area:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="6" column="1">
+             <widget class="QSpinBox" name="spin_min_area">
+              <property name="maximum">
+               <number>100000</number>
+              </property>
+              <property name="value">
+               <number>100</number>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="0">
+             <widget class="QLabel" name="label_max_area">
+              <property name="text">
+               <string>Max Area:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="7" column="1">
+             <widget class="QSpinBox" name="spin_max_area">
+              <property name="maximum">
+               <number>100000</number>
+              </property>
+              <property name="value">
+               <number>100000</number>
+              </property>
+             </widget>
+            </item>
+            <item row="8" column="1">
+             <widget class="QCheckBox" name="chk_fill_contours">
+              <property name="text">
+               <string>Fill Contours</string>
+              </property>
+             </widget>
+            </item>
+            <item row="9" column="1">
+             <widget class="QCheckBox" name="chk_show_box">
+              <property name="text">
+               <string>Show Bounding Box</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </widget>
-         </item>
-         <item>
-          <spacer name="spacer_template">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-
-       <widget class="QWidget" name="tab_hough">
-        <attribute name="title">
-         <string>Hough</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="hough_v_layout">
-         <item>
-          <widget class="QCheckBox" name="chk_hough_enable">
-           <property name="text">
-            <string>Enable Hough Circle</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <layout class="QFormLayout" name="hough_form_layout">
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_hough_dp">
-             <property name="text">
-              <string>dp:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="1">
-            <widget class="QDoubleSpinBox" name="hough_dp">
-             <property name="minimum">
-              <double>0.1</double>
-             </property>
-             <property name="maximum">
-              <double>10.0</double>
-             </property>
-             <property name="singleStep">
-              <double>0.1</double>
-             </property>
-             <property name="value">
-              <double>1.0</double>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="label_hough_minDist">
-             <property name="text">
-              <string>minDist:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QDoubleSpinBox" name="hough_minDist">
-             <property name="minimum">
-              <double>1.0</double>
-             </property>
-             <property name="maximum">
-              <double>1000.0</double>
-             </property>
-             <property name="value">
-              <double>50.0</double>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="0">
-            <widget class="QLabel" name="label_hough_param1">
-             <property name="text">
-              <string>param1 (Canny):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QDoubleSpinBox" name="hough_param1">
-             <property name="maximum">
-              <double>500.0</double>
-             </property>
-             <property name="value">
-              <double>100.0</double>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="0">
-            <widget class="QLabel" name="label_hough_param2">
-             <property name="text">
-              <string>param2 (Vote):</string>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="1">
-            <widget class="QDoubleSpinBox" name="hough_param2">
-             <property name="maximum">
-              <double>200.0</double>
-             </property>
-             <property name="value">
-              <double>30.0</double>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="0">
-            <widget class="QLabel" name="label_hough_minRadius">
-             <property name="text">
-              <string>minRadius:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="1">
-            <widget class="QSpinBox" name="hough_minRadius">
-             <property name="maximum">
-              <number>1000</number>
-             </property>
-             <property name="value">
-              <number>1</number>
-             </property>
-            </widget>
-           </item>
-           <item row="5" column="0">
-            <widget class="QLabel" name="label_hough_maxRadius">
-             <property name="text">
-              <string>maxRadius:</string>
-             </property>
-            </widget>
-           </item>
-           <item row="5" column="1">
-            <widget class="QSpinBox" name="hough_maxRadius">
-             <property name="maximum">
-              <number>1000</number>
-             </property>
-             <property name="value">
-              <number>100</number>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-         <item>
-          <spacer name="spacer_hough">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-
-       <widget class="QWidget" name="tab_contours">
-        <attribute name="title">
-         <string>Contours</string>
-        </attribute>
-        <layout class="QFormLayout" name="formLayout_contours">
-         <item row="0" column="0" colspan="2">
-          <widget class="QPushButton" name="btn_toggle_contours">
-           <property name="text">
-            <string>Enable Contours</string>
-           </property>
-           <property name="checkable">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="label_contour_mode">
-           <property name="text">
-            <string>Mode:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QComboBox" name="combo_contour_mode">
-           <item>
-            <property name="text">
-             <string>Canny</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>Threshold</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="label_threshold">
-           <property name="text">
-            <string>Threshold:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QSlider" name="slider_threshold">
-           <property name="maximum">
-            <number>255</number>
-           </property>
-           <property name="value">
-            <number>127</number>
-           </property>
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="QLabel" name="lbl_threshold_val">
-           <property name="text">
-            <string>127</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="label_canny">
-           <property name="text">
-            <string>Canny Range:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="1">
-          <widget class="RangeSlider" name="slider_canny" native="true"/>
-         </item>
-         <item row="5" column="1">
-          <widget class="QLabel" name="lbl_canny_val">
-           <property name="text">
-            <string>50 - 150</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="0">
-          <widget class="QLabel" name="label_min_area">
-           <property name="text">
-            <string>Min Area:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="1">
-          <widget class="QSpinBox" name="spin_min_area">
-           <property name="maximum">
-            <number>100000</number>
-           </property>
-           <property name="value">
-            <number>100</number>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="0">
-          <widget class="QLabel" name="label_max_area">
-           <property name="text">
-            <string>Max Area:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="1">
-          <widget class="QSpinBox" name="spin_max_area">
-           <property name="maximum">
-            <number>100000</number>
-           </property>
-           <property name="value">
-            <number>100000</number>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="1">
-          <widget class="QCheckBox" name="chk_fill_contours">
-           <property name="text">
-            <string>Fill Contours</string>
-           </property>
-          </widget>
-         </item>
-         <item row="9" column="1">
-          <widget class="QCheckBox" name="chk_show_box">
-           <property name="text">
-            <string>Show Bounding Box</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>

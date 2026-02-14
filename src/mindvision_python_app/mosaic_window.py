@@ -33,7 +33,7 @@ class MosaicWidget(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         
         # Fill background
-        painter.fillRect(self.rect(), QColor("black"))
+        painter.fillRect(self.rect(), Qt.white)
         
         # Calculate aspect ratio scaling to fit
         widget_rect = self.rect()
@@ -49,7 +49,7 @@ class MosaicWidget(QWidget):
         drawn_w = int(img_size.width() * scale)
         drawn_h = int(img_size.height() * scale)
         
-        x = (widget_rect.width() - drawn_w) // 2
+        x = 0
         y = (widget_rect.height() - drawn_h) // 2
         
         target_rect = QRect(x, y, drawn_w, drawn_h)
@@ -99,7 +99,7 @@ class MosaicWidget(QWidget):
             drawn_w = int(img_size.width() * scale)
             drawn_h = int(img_size.height() * scale)
             
-            x_off = (widget_rect.width() - drawn_w) // 2
+            x_off = 0
             y_off = (widget_rect.height() - drawn_h) // 2
             
             if dist < 5:
@@ -143,20 +143,17 @@ class MosaicWidget(QWidget):
 
     # Removed old mousePressEvent to avoid conflict, logic moved to mouseReleaseEvent/mousePressEvent above
 
-class MosaicWindow(QMainWindow):
+class MosaicPanel(QWidget):
     """
-    A window to display a mosaic of the stage area, updated with camera frames
+    A panel to display a mosaic of the stage area, updated with camera frames
     based on CNC position.
     """
-    closed_signal = Signal()
+    # closed_signal = Signal() # No longer needed for a panel
     request_move_signal = Signal(float, float)
     request_scan_signal = Signal(float, float, float, float) # x_min, y_min, x_max, y_max
 
     def __init__(self, stage_width_mm: float, stage_height_mm: float, ruler_calibration_px_per_mm: float, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Stage Mosaic View")
-        # Set window to be maximized by default
-        self.setWindowState(Qt.WindowMaximized)
 
         self.stage_width_mm = stage_width_mm
         self.stage_height_mm = stage_height_mm
@@ -164,10 +161,9 @@ class MosaicWindow(QMainWindow):
 
         if self.ruler_calibration_px_per_mm <= 0:
             print("Error: Invalid ruler calibration for mosaic window. Calibration must be > 0.")
-            self.mosaic_image = QImage(100, 100, QImage.Format_RGB32)
-            self.mosaic_image.fill(QColor("red"))
-            self.label = QLabel("Error: Invalid Calibration", self)
-            self.setCentralWidget(self.label)
+            # Handle error gracefully in UI
+            layout = QVBoxLayout(self)
+            layout.addWidget(QLabel("Error: Invalid Calibration"))
             return
 
         self.mosaic_width_px = int(self.stage_width_mm * self.ruler_calibration_px_per_mm)
@@ -175,29 +171,25 @@ class MosaicWindow(QMainWindow):
 
         if self.mosaic_width_px <= 0 or self.mosaic_height_px <= 0:
             print(f"Error: Calculated mosaic dimensions are invalid: {self.mosaic_width_px}x{self.mosaic_height_px}")
-            self.mosaic_image = QImage(100, 100, QImage.Format_RGB32)
-            self.mosaic_image.fill(QColor("red"))
-            self.label = QLabel("Error: Invalid Mosaic Dimensions", self)
-            self.setCentralWidget(self.label)
+            layout = QVBoxLayout(self)
+            layout.addWidget(QLabel("Error: Invalid Mosaic Dimensions"))
             return
 
         self.mosaic_image = QImage(self.mosaic_width_px, self.mosaic_height_px, QImage.Format_RGB32)
-        self.mosaic_image.fill(QColor("darkgray")) # Initial background for the mosaic
+        self.mosaic_image.fill(Qt.white) # Initial background for the mosaic
 
         self.display_widget = MosaicWidget(self)
         self.display_widget.set_image(self.mosaic_image)
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
         self.display_widget.selection_made.connect(self.on_mosaic_selection)
-        self.setCentralWidget(self.display_widget)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.display_widget)
 
         # Store camera frame dimensions to calculate offset
         self.camera_frame_width_px = 0
         self.camera_frame_height_px = 0
-
-    def closeEvent(self, event):
-        """Emits a signal when the window is closed."""
-        self.closed_signal.emit()
-        super().closeEvent(event)
 
     @Slot(QImage, float, float)
     def update_mosaic(self, camera_frame: QImage, cnc_x_mm: float, cnc_y_mm: float):

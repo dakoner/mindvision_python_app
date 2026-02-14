@@ -1508,9 +1508,9 @@ class MainWindow(QObject):
         fov_x_mm = img_h / self.ruler_calibration
         fov_y_mm = img_w / self.ruler_calibration
         
-        # Step size with 10% overlap
-        step_x = fov_x_mm * 0.9
-        step_y = fov_y_mm * 0.9
+        # Step size with 25% overlap
+        step_x = fov_x_mm * 0.75
+        step_y = fov_y_mm * 0.75
         
         feedrate = self.cnc_control_panel.feedrate
         cmds = ["G90", f"F{feedrate}"] # Absolute positioning, Feed rate

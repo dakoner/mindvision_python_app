@@ -155,7 +155,7 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     def on_log_message(self, msg):
         # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):
-            self._parse_status(msg[4:-1])
+            self._parse_status(msg[5:-1])
         else:
             # Pass all other messages through to the main window log
             self.log_signal.emit(msg)

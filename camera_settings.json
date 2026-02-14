@@ -1,6 +1,6 @@
 {
-    "exposure_time": 2.9916,
-    "gain": 8,
+    "exposure_time": 58.2883,
+    "gain": 5,
     "detector": {
         "orb_nfeatures": 500
     },

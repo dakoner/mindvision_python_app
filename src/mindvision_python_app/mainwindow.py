@@ -1479,7 +1479,8 @@ class MainWindow(QObject):
     def on_mosaic_move_requested(self, x, y):
         if self.cnc_control_panel:
             # Send G-code to move to absolute position (G90) using Rapid Move (G0)
-            cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F100"
+            feedrate = self.cnc_control_panel.feedrate
+            cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F{feedrate}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
 
@@ -1511,7 +1512,8 @@ class MainWindow(QObject):
         step_x = fov_x_mm * 0.9
         step_y = fov_y_mm * 0.9
         
-        cmds = ["G90", "F100"] # Absolute positioning, Feed rate
+        feedrate = self.cnc_control_panel.feedrate
+        cmds = ["G90", f"F{feedrate}"] # Absolute positioning, Feed rate
         
         current_y = y_max - (fov_y_mm / 2)
         is_first_strip = True

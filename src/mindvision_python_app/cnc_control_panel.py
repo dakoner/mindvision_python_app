@@ -6,7 +6,7 @@ import re
 from serial_worker import SerialWorker, HAS_SERIAL
 
 
-class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
+class CNCControlPanel(QtWidgets.QGroupBox): 
     log_signal = Signal(str)
     connect_serial_signal = Signal(str, int)
     disconnect_serial_signal = Signal()
@@ -16,35 +16,42 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
     state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float)
 
-    def __init__(self, cnc_group_box_widget: QtWidgets.QGroupBox, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
+        self._ui_loaded = False
+        # Timer for polling CNC status
+        self.status_poll_timer = QtCore.QTimer(self)
+        # --- Serial Worker Setup ---
+        self.serial_thread = QThread()
+        self.serial_worker = SerialWorker()
 
-        # The UI for the CNCControlPanel QGroupBox is now loaded as part of mainwindow.ui.
-        # We are passed the QGroupBox widget instance from mainwindow.py.
-        self._cnc_group_box_widget = cnc_group_box_widget
-
-        # Now, find the children widgets by their names within the passed QGroupBox
-        self.serial_port_combo = self._cnc_group_box_widget.findChild(QtWidgets.QComboBox, "serial_port_combo")
-        self.refresh_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "refresh_button")
-        self.connect_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "connect_button")
-        self.forward_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "forward_button")
-        self.back_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "back_button")
-        self.left_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "left_button")
-        self.right_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "right_button")
-        self.up_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "up_button")
-        self.down_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "down_button")
-        self.home_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "home_button")
-        self.reset_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "reset_button")
-        self.reboot_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "reboot_button")
-        self.step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "step_input")
-        self.z_step_input = self._cnc_group_box_widget.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
-        self.status_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "status_label")
-        self.wpos_x_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_x_label")
-        self.wpos_y_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_y_label")
-        self.wpos_z_label = self._cnc_group_box_widget.findChild(QtWidgets.QLabel, "wpos_z_label")
-        self.cnc_command_input = self._cnc_group_box_widget.findChild(QtWidgets.QLineEdit, "cnc_command_input")
-        self.send_command_button = self._cnc_group_box_widget.findChild(QtWidgets.QPushButton, "send_command_button")
-        self.feedrate_input = self._cnc_group_box_widget.findChild(QtWidgets.QSpinBox, "feedrate_input")
+    def setupUi(self):
+        if self._ui_loaded:
+            return
+        self._ui_loaded = True
+        
+        # Now, find the children widgets by their names within this QGroupBox
+        self.serial_port_combo = self.findChild(QtWidgets.QComboBox, "serial_port_combo")
+        self.refresh_button = self.findChild(QtWidgets.QPushButton, "refresh_button")
+        self.connect_button = self.findChild(QtWidgets.QPushButton, "connect_button")
+        self.forward_button = self.findChild(QtWidgets.QPushButton, "forward_button")
+        self.back_button = self.findChild(QtWidgets.QPushButton, "back_button")
+        self.left_button = self.findChild(QtWidgets.QPushButton, "left_button")
+        self.right_button = self.findChild(QtWidgets.QPushButton, "right_button")
+        self.up_button = self.findChild(QtWidgets.QPushButton, "up_button")
+        self.down_button = self.findChild(QtWidgets.QPushButton, "down_button")
+        self.home_button = self.findChild(QtWidgets.QPushButton, "home_button")
+        self.reset_button = self.findChild(QtWidgets.QPushButton, "reset_button")
+        self.reboot_button = self.findChild(QtWidgets.QPushButton, "reboot_button")
+        self.step_input = self.findChild(QtWidgets.QDoubleSpinBox, "step_input")
+        self.z_step_input = self.findChild(QtWidgets.QDoubleSpinBox, "z_step_input")
+        self.status_label = self.findChild(QtWidgets.QLabel, "status_label")
+        self.wpos_x_label = self.findChild(QtWidgets.QLabel, "wpos_x_label")
+        self.wpos_y_label = self.findChild(QtWidgets.QLabel, "wpos_y_label")
+        self.wpos_z_label = self.findChild(QtWidgets.QLabel, "wpos_z_label")
+        self.cnc_command_input = self.findChild(QtWidgets.QLineEdit, "cnc_command_input")
+        self.send_command_button = self.findChild(QtWidgets.QPushButton, "send_command_button")
+        self.feedrate_input = self.findChild(QtWidgets.QSpinBox, "feedrate_input")
 
         self.step_size = 0.1
         self.z_step_size = 0.01
@@ -52,9 +59,6 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.step_input.setValue(self.step_size)
         self.z_step_input.setValue(self.z_step_size)
 
-        # --- Serial Worker Setup ---
-        self.serial_thread = QThread()
-        self.serial_worker = SerialWorker()
         self.serial_worker.moveToThread(self.serial_thread)
 
         # Connect signals
@@ -74,8 +78,6 @@ class CNCControlPanel(QObject): # Changed base class from QGroupBox to QObject
         self.serial_poll_timer.timeout.connect(self.poll_serial_signal.emit)
         self.serial_poll_timer.start(50)  # Poll every 50ms
 
-        # Timer for polling CNC status
-        self.status_poll_timer = QtCore.QTimer(self)
         self.status_poll_timer.timeout.connect(self.poll_status)
 
         # Connect signals from UI widgets

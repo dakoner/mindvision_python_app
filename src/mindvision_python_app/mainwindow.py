@@ -75,6 +75,7 @@ class MainWindow(QObject):
         loader.registerCustomWidget(RangeSlider)
         loader.registerCustomWidget(IntensityChart)
         loader.registerCustomWidget(ColorPickerWidget)
+        loader.registerCustomWidget(CNCControlPanel)
         ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
@@ -124,10 +125,10 @@ class MainWindow(QObject):
         self.param_poll_timer.timeout.connect(self.poll_camera_params)
 
         # --- CNC Control Panel Setup ---        
-        # The CNCControlPanel QGroupBox is now part of mainwindow.ui. Find it and pass it to the controller.
-        cnc_group_box_widget = self.ui.findChild(QGroupBox, "CNCControlPanel")
-        if cnc_group_box_widget:
-            self.cnc_control_panel = CNCControlPanel(cnc_group_box_widget, self)
+        # The CNCControlPanel is now a custom widget loaded from the UI file.
+        self.cnc_control_panel = self.ui.findChild(QGroupBox, "CNCControlPanel")
+        if self.cnc_control_panel:
+            self.cnc_control_panel.setupUi()
             self.cnc_control_panel.log_signal.connect(self.log)
         else:
             self.cnc_control_panel = None # Handle case where it's not found

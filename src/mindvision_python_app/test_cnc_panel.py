@@ -21,6 +21,7 @@ class CncTestWindow(QMainWindow):
 
         # Load the mainwindow.ui to get the CNCControlPanel widget
         loader = QUiLoader()
+        loader.registerCustomWidget(CNCControlPanel)
         script_dir = os.path.dirname(__file__)
         ui_file_path = os.path.join(script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
@@ -35,24 +36,24 @@ class CncTestWindow(QMainWindow):
         if not main_ui_widget:
             raise RuntimeError(loader.errorString())
 
-        cnc_group_box_widget = main_ui_widget.findChild(QGroupBox, "CNCControlPanel")
-        if not cnc_group_box_widget:
+        self.cnc_control_panel = main_ui_widget.findChild(QGroupBox, "CNCControlPanel")
+        if not self.cnc_control_panel:
             raise RuntimeError("Could not find QGroupBox 'CNCControlPanel' in UI file.")
         
         # The CNCControlPanel's parent is the widget from the UI file, which we don't show.
         # To make it part of our new window, we need to reparent it.
-        cnc_group_box_widget.setParent(self)
+        self.cnc_control_panel.setParent(self)
+        self.cnc_control_panel.setupUi()
 
         self.log_text_edit = QTextEdit()
         self.log_text_edit.setReadOnly(True)
 
         central_widget = QWidget()
         layout = QVBoxLayout(central_widget)
-        layout.addWidget(cnc_group_box_widget)
+        layout.addWidget(self.cnc_control_panel)
         layout.addWidget(self.log_text_edit)
         self.setCentralWidget(central_widget)
 
-        self.cnc_control_panel = CNCControlPanel(cnc_group_box_widget, self)
         self.cnc_control_panel.log_signal.connect(self.log)
         
         self.resize(400, 600)

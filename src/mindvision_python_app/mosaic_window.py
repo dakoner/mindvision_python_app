@@ -30,6 +30,17 @@ class MosaicWidget(QWidget):
         self.is_zooming = False
         self.is_selecting = False
 
+        self.stage_width_mm = 0
+        self.stage_height_mm = 0
+        self.ruler_calibration_px_per_mm = 0
+
+    def set_stage_size(self, width_mm: float, height_mm: float):
+        self.stage_width_mm = width_mm
+        self.stage_height_mm = height_mm
+
+    def set_calibration(self, calibration: float):
+        self.ruler_calibration_px_per_mm = calibration
+
     def set_grid_size(self, width: int, height: int):
         self.grid_width = width
         self.grid_height = height
@@ -42,13 +53,13 @@ class MosaicWidget(QWidget):
         self.image = image
         self.update()
 
-    def widget_to_image_coords(self, widget_pos: QPointF) -> QPointF:
+    def widget_to_image_coords(self, widget_pos: QPoint) -> QPointF:
         """Converts widget coordinates to image coordinates."""
         if self.image is None:
             return QPointF()
         
         # Reverse the transformation: (pos - pan) / zoom
-        return (widget_pos - self.pan_offset) / self.zoom_factor
+        return (QPointF(widget_pos) - self.pan_offset) / self.zoom_factor
 
     def image_to_widget_coords(self, image_pos: QPointF) -> QPointF:
         """Converts image coordinates to widget coordinates."""
@@ -113,56 +124,96 @@ class MosaicWidget(QWidget):
         self.fit_to_window()
 
     def paintEvent(self, event):
-        if not self.image or self.image.isNull():
-            painter = QPainter(self)
-            painter.fillRect(self.rect(), QColor("black"))
-            return
-        
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
-        
-        painter.fillRect(self.rect(), Qt.white)
-        
-        # Apply pan and zoom transformation
-        painter.save()
-        painter.translate(self.pan_offset)
-        painter.scale(self.zoom_factor, self.zoom_factor)
-        
-        # Draw the mosaic image
-        painter.drawImage(0, 0, self.image)
+        painter.fillRect(self.rect(), QColor(20, 20, 20))
 
-        # --- Draw overlays in image coordinates ---
+        if self.image and not self.image.isNull():
+            painter.save()
+            painter.translate(self.pan_offset)
+            painter.scale(self.zoom_factor, self.zoom_factor)
+            painter.drawImage(0, 0, self.image)
 
-        # Draw grid (must be drawn in image coordinates before painter state is restored)
-        if self.grid_width > 0 and self.grid_height > 0:
-            pen = QPen(QColor(128, 128, 128, 128), 1 / self.zoom_factor) # Keep pen width constant on screen
-            painter.setPen(pen)
+            # Draw grid
+            if self.grid_width > 0 and self.grid_height > 0:
+                pen = QPen(QColor(128, 128, 128, 100), 1 / self.zoom_factor)
+                painter.setPen(pen)
+                # Vertical lines
+                for i in range(1, int(self.image.width() / self.grid_width) + 1):
+                    x = i * self.grid_width
+                    painter.drawLine(x, 0, x, self.image.height())
+                # Horizontal lines
+                for i in range(1, int(self.image.height() / self.grid_height) + 1):
+                    y = i * self.grid_height
+                    painter.drawLine(0, y, self.image.width(), y)
+            painter.restore()
 
-            # Draw vertical lines
-            steps_v = int(self.image.width() / self.grid_width)
-            for i in range(1, steps_v + 1):
-                x = i * self.grid_width
-                painter.drawLine(x, 0, x, self.image.height())
-
-            # Draw horizontal lines
-            steps_h = int(self.image.height() / self.grid_height)
-            for i in range(1, steps_h + 1):
-                y = i * self.grid_height
-                painter.drawLine(0, y, self.image.width(), y)
-        
-        painter.restore()
-        
-        # --- End of image coordinate drawing ---
+        self.draw_axes(painter)
 
         # Draw selection rectangle if dragging
         if self.is_selecting and self.start_pos and self.current_pos:
-            pen = QPen(QColor(0, 255, 255), 2, Qt.DashLine)
+            pen = QPen(QColor(0, 255, 255, 200), 2, Qt.DashLine)
             painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            
+            painter.setBrush(QColor(0, 100, 100, 50))
             rect = QRect(self.start_pos.toPoint(), self.current_pos.toPoint()).normalized()
             painter.drawRect(rect)
+
+    def draw_axes(self, painter):
+        if not hasattr(self, 'stage_width_mm') or self.image is None:
+            return
+
+        margin = 40
+        rect = self.rect()
+        axis_rect = rect.adjusted(margin, margin, -margin, -margin)
+
+        painter.setPen(QPen(QColor(220, 220, 220), 1))
+        painter.setFont(self.font())
+
+        # Visible image area in image coordinates
+        tl_img = self.widget_to_image_coords(axis_rect.topLeft())
+        br_img = self.widget_to_image_coords(axis_rect.bottomRight())
+        
+        # Min/Max labels
+        painter.drawText(QRectF(0, axis_rect.top() - 20, margin, 20), Qt.AlignRight | Qt.AlignVCenter, f"{self.stage_height_mm:.1f}")
+        painter.drawText(QRectF(0, axis_rect.bottom() - 10, margin, 20), Qt.AlignRight | Qt.AlignVCenter, "0.0")
+        painter.drawText(QRectF(axis_rect.left(), axis_rect.bottom(), 40, 20), Qt.AlignLeft | Qt.AlignVCenter, "0.0")
+        painter.drawText(QRectF(axis_rect.right() - 40, axis_rect.bottom(), 40, 20), Qt.AlignRight | Qt.AlignVCenter, f"{self.stage_width_mm:.1f}")
+
+
+        # --- X AXIS (Bottom) ---
+        num_ticks = 100
+        for i in range(num_ticks + 1):
+            img_x = (i / num_ticks) * self.image.width()
+            widget_x = self.image_to_widget_coords(QPointF(img_x, 0)).x()
+            
+            if axis_rect.left() <= widget_x <= axis_rect.right():
+                painter.drawLine(QPointF(widget_x, axis_rect.bottom()), QPointF(widget_x, axis_rect.bottom() + 5))
+
+        num_labels = 11
+        for i in range(num_labels + 1):
+            val_mm = (i / num_labels) * self.stage_width_mm
+            img_x = val_mm * self.ruler_calibration_px_per_mm
+            widget_x = self.image_to_widget_coords(QPointF(img_x, 0)).x()
+            
+            if axis_rect.left() - 20 <= widget_x <= axis_rect.right() + 20:
+                painter.drawText(QRectF(widget_x - 20, axis_rect.bottom() + 5, 40, 20), Qt.AlignCenter, f"{val_mm:.1f}")
+
+        # --- Y AXIS (Left) ---
+        for i in range(num_ticks + 1):
+            img_y = (i / num_ticks) * self.image.height()
+            widget_y = self.image_to_widget_coords(QPointF(0, img_y)).y()
+            
+            if axis_rect.top() <= widget_y <= axis_rect.bottom():
+                painter.drawLine(QPointF(axis_rect.left(), widget_y), QPointF(axis_rect.left() - 5, widget_y))
+
+        for i in range(num_labels + 1):
+            val_mm = (i / num_labels) * self.stage_height_mm
+            # Y is inverted
+            img_y = self.image.height() - (val_mm * self.ruler_calibration_px_per_mm)
+            widget_y = self.image_to_widget_coords(QPointF(0, img_y)).y()
+
+            if axis_rect.top() - 10 <= widget_y <= axis_rect.bottom() + 10:
+                painter.drawText(QRectF(axis_rect.left() - margin, widget_y - 10, margin - 5, 20), Qt.AlignRight | Qt.AlignVCenter, f"{val_mm:.1f}")
 
     def mousePressEvent(self, event):
         if not self.image or self.image.isNull():
@@ -280,6 +331,8 @@ class MosaicPanel(QWidget):
         self.mosaic_image.fill(Qt.white) # Initial background for the mosaic
 
         self.display_widget = MosaicWidget(self)
+        self.display_widget.set_stage_size(self.stage_width_mm, self.stage_height_mm)
+        self.display_widget.set_calibration(self.ruler_calibration_px_per_mm)
         self.display_widget.set_image(self.mosaic_image)
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
         self.display_widget.selection_made.connect(self.on_mosaic_selection)
@@ -325,9 +378,12 @@ class MosaicPanel(QWidget):
         mosaic_draw_x_px = int(camera_top_left_x_mm * self.ruler_calibration_px_per_mm)
         mosaic_draw_y_px = int((self.stage_height_mm - camera_top_left_y_mm) * self.ruler_calibration_px_per_mm)
 
-        painter = QPainter(self.mosaic_image)
-        painter.drawImage(mosaic_draw_x_px, mosaic_draw_y_px, camera_frame.convertToFormat(QImage.Format_RGB32))
-        painter.end()
+        if not self.mosaic_image.isNull():
+            painter = QPainter(self.mosaic_image)
+            painter.drawImage(mosaic_draw_x_px, mosaic_draw_y_px, camera_frame.convertToFormat(QImage.Format_RGB32))
+            painter.end()
+        else:
+            print(f"Error: Mosaic image is null (Dimensions: {self.mosaic_width_px}x{self.mosaic_height_px}). Cannot update mosaic.")
 
         self.display_widget.set_image(self.mosaic_image)
 

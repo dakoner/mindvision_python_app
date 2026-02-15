@@ -3,8 +3,6 @@ import sys
 import time
 import json
 import PySide6.QtWidgets
-import serial
-import serial.tools.list_ports
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -16,7 +14,9 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QCheckBox,
     QGroupBox,
+    QScrollArea,
     QPushButton,
+    QDockWidget,
 )
 from PySide6.QtCore import (
     Qt,
@@ -37,19 +37,14 @@ from _mindvision_qobject_py import MindVisionCamera, VideoThread
 from range_slider import RangeSlider
 from intensity_chart import IntensityChart
 from color_picker_widget import ColorPickerWidget
+from mosaic_window import MosaicPanel
 from matching_worker import MatchingWorker
-from serial_worker import SerialWorker, HAS_SERIAL
 from cnc_control_panel import CNCControlPanel
+from led_controller import LEDController
 
 class MainWindow(QObject):
     update_fps_signal = Signal(float)
     error_signal = Signal(str)
-
-    # Serial Signals
-    connect_serial_signal = Signal(str, int)
-    disconnect_serial_signal = Signal()
-    send_serial_cmd_signal = Signal(str)
-    poll_serial_signal = Signal()
 
     # Signal to send frame to worker
     process_frame_signal = Signal(int, int, int, int, bytes)
@@ -123,41 +118,19 @@ class MainWindow(QObject):
         self.worker.ssim_score_signal.connect(self.handle_ssim_score)
         
         self.matching_thread.start()
-        # --- Serial Worker Setup ---
-        self.serial_thread = QThread()
-        self.serial_worker = SerialWorker()
-        self.serial_worker.moveToThread(self.serial_thread)
-
-        # Connect signals
-        self.connect_serial_signal.connect(self.serial_worker.connect_serial)
-        self.disconnect_serial_signal.connect(self.serial_worker.disconnect_serial)
-        self.send_serial_cmd_signal.connect(self.serial_worker.send_command)
-        self.poll_serial_signal.connect(self.serial_worker.poll_serial)
-
-        self.serial_worker.log_signal.connect(self.log)
-        self.serial_worker.connection_status.connect(self.on_serial_status_changed)
-
-        self.serial_thread.start()
-
-        # Timer for polling serial read
-        self.serial_poll_timer = QTimer()
-        self.serial_poll_timer.timeout.connect(lambda: self.poll_serial_signal.emit())
-        self.serial_poll_timer.start(50) # Poll every 50ms
 
         # Parameter Poll Timer (for Auto Exposure updates)
         self.param_poll_timer = QTimer()
         self.param_poll_timer.timeout.connect(self.poll_camera_params)
 
-        # --- CNC Control Panel Setup ---
-        self.cnc_control_panel = CNCControlPanel()
-        # Find the scroll_layout and the group_serial widget (now LED Controller)
-        scroll_layout = self.ui.scroll_layout
-        group_serial = self.ui.group_serial
-        # Get the index of the group_serial widget and insert the cnc_control_panel after it
-        index = scroll_layout.indexOf(group_serial)
-        scroll_layout.insertWidget(index + 1, self.cnc_control_panel)
-        self.cnc_control_panel.log_signal.connect(self.log)
-        self.ui.scrollArea.updateGeometry()
+        # --- CNC Control Panel Setup ---        
+        # The CNCControlPanel QGroupBox is now part of mainwindow.ui. Find it and pass it to the controller.
+        cnc_group_box_widget = self.ui.findChild(QGroupBox, "CNCControlPanel")
+        if cnc_group_box_widget:
+            self.cnc_control_panel = CNCControlPanel(cnc_group_box_widget, self)
+            self.cnc_control_panel.log_signal.connect(self.log)
+        else:
+            self.cnc_control_panel = None # Handle case where it's not found
 
         # Initial Detector config
         
@@ -190,6 +163,16 @@ class MainWindow(QObject):
         self.ruler_start = None
         self.ruler_end = None
         self.ruler_calibration = None 
+
+        self.mosaic_dock = None
+        self.current_cnc_x_mm = 0.0
+        self.current_cnc_y_mm = 0.0
+        self.cnc_state = "Idle"
+        
+        # Stage Settings
+        self.stage_settings = {}
+        self.lbl_stage_width_mm = self.ui.findChild(QLabel, "lbl_stage_width_mm")
+        self.lbl_stage_height_mm = self.ui.findChild(QLabel, "lbl_stage_height_mm")
         
         # Color Picker Init
         self.color_picker_active = False
@@ -199,13 +182,21 @@ class MainWindow(QObject):
         self.action_color_picker.toggled.connect(self.on_color_picker_toggled)
         self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
         self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
+        
+        # Connect CNC position updates for mosaic
+        if self.cnc_control_panel:
+            self.cnc_control_panel.position_updated_signal.connect(self.on_cnc_position_updated)
+            self.cnc_control_panel.state_updated_signal.connect(self.on_cnc_state_updated)
 
         # Measurement Tab Setup (Index 0)
         self.ruler_tab_index = 0
         if hasattr(self.ui, 'right_tab_widget'):
-            self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, False)
+            self.ui.right_tab_widget.setTabVisible(self.ruler_tab_index, True)
             self.color_picker_tab_index = self.ui.right_tab_widget.indexOf(self.tab_color_picker)
             self.ui.right_tab_widget.setTabVisible(self.color_picker_tab_index, False)
+
+        # Mosaic Window Action
+        self.ui.action_show_mosaic.triggered.connect(self.on_show_mosaic_triggered)
 
         self.update_detector()
 
@@ -222,50 +213,9 @@ class MainWindow(QObject):
         self.ui.log_text_edit.setCenterOnScroll(True)
         self.log("Application started.")
 
-        # --- Status Widgets Setup (Programmatic) ---
-        self.has_initialized_settings = False
-        self.status_items_map = {}  # Map pin -> QListWidgetItem
-        self.interrupt_items_map = {}  # Map pin -> QListWidgetItem
-
-        # Status List - already in UI
-        # self.ui.list_status
-        # self.ui.list_interrupts
-
-        # Serial UI Init
-        self.refresh_serial_ports()
-        self.ui.btn_serial_refresh.clicked.connect(self.refresh_serial_ports)
-        self.ui.btn_serial_connect.clicked.connect(self.on_btn_serial_connect_clicked)
-        self.ui.btn_cmd_pulse.clicked.connect(self.on_cmd_pulse)
-        # self.ui.btn_cmd_level connection removed
-        self.ui.btn_cmd_pwm.clicked.connect(self.on_cmd_pwm)
-        self.ui.btn_cmd_stoppwm.clicked.connect(self.on_cmd_stoppwm)
-        self.ui.btn_cmd_repeat.clicked.connect(self.on_cmd_repeat)
-        self.ui.btn_cmd_stoprepeat.clicked.connect(self.on_cmd_stoprepeat)
-        self.ui.btn_cmd_interrupt.clicked.connect(self.on_cmd_interrupt)
-        self.ui.btn_cmd_stopinterrupt.clicked.connect(self.on_cmd_stopinterrupt)
-        self.ui.btn_cmd_throb.clicked.connect(self.on_cmd_throb)
-        self.ui.btn_cmd_stopthrob.clicked.connect(self.on_cmd_stopthrob)
-        self.ui.btn_cmd_info.clicked.connect(
-            lambda: self.send_serial_cmd_signal.emit("info")
-        )
-        self.ui.btn_cmd_wifi.clicked.connect(
-            lambda: self.send_serial_cmd_signal.emit("wifi")
-        )
-        self.ui.btn_cmd_mem.clicked.connect(self.on_cmd_mem)
-
-        # --- Setup Pin Level Buttons ---
-        self.pin_buttons = {}
-        valid_pins = [4, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
-        
-        for pin in valid_pins:
-            btn_name = f"btn_pin_{pin}"
-            if hasattr(self.ui, btn_name):
-                btn = getattr(self.ui, btn_name)
-                btn.clicked.connect(lambda checked=False, p=pin: self.toggle_pin_level(p))
-                self.pin_buttons[pin] = btn
-
-        # Disable serial tabs initially
-        self.ui.tabs_serial_cmds.setEnabled(False)
+        # --- LED Controller Setup ---
+        self.led_controller = LEDController(self.ui)
+        self.led_controller.log_signal.connect(self.log)
 
         # Connections
         self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
@@ -433,6 +383,8 @@ class MainWindow(QObject):
 
     def show(self):
         self.ui.showMaximized()
+        # Set initial splitter sizes: [left, center, right]
+        self.ui.main_h_splitter.setSizes([300, 1000, 350])
 
     def close(self):
         # Triggers closeEvent via the widget
@@ -452,10 +404,8 @@ class MainWindow(QObject):
                     self.matching_thread.quit()
                     self.matching_thread.wait()
 
-                # Cleanup Serial Thread
-                if self.serial_thread.isRunning():
-                    self.serial_thread.quit()
-                    self.serial_thread.wait()
+                # Cleanup LED Controller
+                self.led_controller.stop()
 
                 self.ui.removeEventFilter(self)
                 try:
@@ -535,121 +485,6 @@ class MainWindow(QObject):
         timestamp = time.strftime("%H:%M:%S")
         if hasattr(self.ui, "log_text_edit"):
             self.ui.log_text_edit.appendPlainText(f"[{timestamp}] {message}")
-
-        # Parse Rx messages
-        if message.startswith("Rx: "):
-            content = message[4:].strip()
-            self.process_serial_line(content)
-
-    def process_serial_line(self, line):
-        # Startup detection
-        if "LED>" in line and not self.has_initialized_settings:
-            self.has_initialized_settings = True
-            QTimer.singleShot(
-                500, lambda: self.send_serial_cmd_signal.emit("printsettings")
-            )
-            return
-
-        parts = line.split()
-        if not parts:
-            return
-
-        cmd = parts[0]
-
-        try:
-            if cmd == "level" and len(parts) >= 3:
-                pin = int(parts[1])
-                val = int(parts[2])
-                # self.update_pin_status(pin, f"Level: {val}") # Removed per user request
-
-                # If the pin was in the status list (e.g. PWM/Repeat), remove it as it's now just a simple level
-                if pin in self.status_items_map:
-                    item = self.status_items_map.pop(pin)
-                    row = self.ui.list_status.row(item)
-                    self.ui.list_status.takeItem(row)
-
-                # Update Pin Button State
-                if hasattr(self, "pin_buttons") and pin in self.pin_buttons:
-                    btn = self.pin_buttons[pin]
-                    if val == 1:
-                        btn.setStyleSheet("background-color: red; color: white;")
-                    else:
-                        btn.setStyleSheet("background-color: none;")
-
-                # Update old UI setters if they exist (legacy/fallback)
-                if hasattr(self.ui, "spin_level_pin"):
-                    self.ui.spin_level_pin.setValue(pin)
-                if hasattr(self.ui, "combo_level_val"):
-                    self.ui.combo_level_val.setCurrentIndex(val + 1)
-
-            elif cmd == "pwm" and len(parts) >= 4:
-                pin = int(parts[1])
-                freq = int(parts[2])
-                duty = int(parts[3])
-                self.update_pin_status(pin, f"PWM: {freq}Hz, {duty}%")
-                # Update UI setters
-                self.ui.spin_pwm_pin.setValue(pin)
-                self.ui.spin_pwm_freq.setValue(freq)
-                self.ui.spin_pwm_duty.setValue(duty)
-
-            elif cmd == "repeat" and len(parts) >= 4:
-                pin = int(parts[1])
-                freq = int(parts[2])
-                dur = int(parts[3])
-                self.update_pin_status(pin, f"Repeat: {freq}Hz, {dur}us")
-                # Update UI setters
-                self.ui.spin_repeat_pin.setValue(pin)
-                self.ui.spin_repeat_freq.setValue(freq)
-                self.ui.spin_repeat_dur.setValue(dur)
-
-            elif cmd == "throb" and len(parts) >= 5:
-                period = int(parts[1])
-                p1 = int(parts[2])
-                p2 = int(parts[3])
-                p3 = int(parts[4])
-                self.update_pin_status(p1, "Throb")
-                self.update_pin_status(p2, "Throb")
-                self.update_pin_status(p3, "Throb")
-                # Update UI setters
-                self.ui.spin_throb_period.setValue(period)
-                self.ui.spin_throb_p1.setValue(p1)
-                self.ui.spin_throb_p2.setValue(p2)
-                self.ui.spin_throb_p3.setValue(p3)
-
-            elif cmd == "interrupt" and len(parts) >= 5:
-                pin = int(parts[1])
-                edge = parts[2]
-                tgt = int(parts[3])
-                width = int(parts[4])
-                self.update_interrupt_status(pin, f"{edge} -> Pulse {tgt} ({width}us)")
-                # Update UI setters
-                self.ui.spin_int_pin.setValue(pin)
-                idx = self.ui.combo_int_edge.findText(edge)
-                if idx >= 0:
-                    self.ui.combo_int_edge.setCurrentIndex(idx)
-                self.ui.spin_int_target.setValue(tgt)
-                self.ui.spin_int_width.setValue(width)
-
-        except ValueError:
-            pass
-
-    def update_pin_status(self, pin, status_text):
-        text = f"Pin {pin}: {status_text}"
-        if pin in self.status_items_map:
-            self.status_items_map[pin].setText(text)
-        else:
-            item = QListWidgetItem(text)
-            self.ui.list_status.addItem(item)
-            self.status_items_map[pin] = item
-
-    def update_interrupt_status(self, pin, status_text):
-        text = f"Pin {pin}: {status_text}"
-        if pin in self.interrupt_items_map:
-            self.interrupt_items_map[pin].setText(text)
-        else:
-            item = QListWidgetItem(text)
-            self.ui.list_interrupts.addItem(item)
-            self.interrupt_items_map[pin] = item
 
     def update_detector(self):
         # SSIM Priority
@@ -794,6 +629,7 @@ class MainWindow(QObject):
                 self.log(f"Recording started: {os.path.basename(filename)}")
 
             # Display
+            #image = image.mirrored(True, False) # Flip horizontally
             self.current_pixmap = QPixmap.fromImage(image)
             self.refresh_video_label()
             
@@ -801,6 +637,12 @@ class MainWindow(QObject):
             if self.ruler_active and self.chk_show_profile.isChecked() and self.ruler_start:
                 end_pt = self.ruler_end if self.ruler_end is not None else self.ruler_start
                 self.update_intensity_profile(self.ruler_start, end_pt, image)
+
+            # Update Mosaic Window
+            if self.mosaic_dock and self.mosaic_dock.isVisible() and self.mosaic_panel and \
+               self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
+                if self.cnc_state != "Home":
+                    self.mosaic_panel.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
 
     @Slot(float)
     def update_fps(self, fps):
@@ -1411,135 +1253,6 @@ class MainWindow(QObject):
         if hasattr(self.camera, "setStrobePulseWidth"):
             self.camera.setStrobePulseWidth(value)
 
-    # --- Serial Control Methods ---
-    def refresh_serial_ports(self):
-        self.ui.combo_serial_port.clear()
-        if HAS_SERIAL:
-            ports = serial.tools.list_ports.comports()
-            for port in ports:
-                self.ui.combo_serial_port.addItem(f"{port.device}")
-        else:
-            self.ui.combo_serial_port.addItem("No pyserial")
-            self.ui.btn_serial_connect.setEnabled(False)
-
-    def on_btn_serial_connect_clicked(self, checked):
-        if checked:
-            port = self.ui.combo_serial_port.currentText().split()[
-                0
-            ]  # Handle "COM3 - Desc" if needed
-            if port:
-                self.connect_serial_signal.emit(port, 115200)
-                self.ui.btn_serial_connect.setText("Connecting...")
-            else:
-                self.ui.btn_serial_connect.setChecked(False)
-        else:
-            self.disconnect_serial_signal.emit()
-
-    @Slot(bool)
-    def on_serial_status_changed(self, connected):
-        self.ui.btn_serial_connect.setChecked(connected)
-        self.ui.btn_serial_connect.setText("Disconnect" if connected else "Connect")
-        self.ui.tabs_serial_cmds.setEnabled(connected)
-        self.ui.combo_serial_port.setEnabled(not connected)
-        self.ui.btn_serial_refresh.setEnabled(not connected)
-
-        if not connected:
-            self.has_initialized_settings = False
-            self.ui.list_status.clear()
-            self.status_items_map.clear()
-            self.ui.list_interrupts.clear()
-            self.interrupt_items_map.clear()
-
-    def on_cmd_pulse(self):
-        pin = self.ui.spin_pulse_pin.value()
-        val = self.ui.spin_pulse_val.value()
-        dur = self.ui.spin_pulse_dur.value()
-        self.send_serial_cmd_signal.emit(f"pulse {pin} {val} {dur}")
-
-    def toggle_pin_level(self, pin):
-        btn = self.pin_buttons.get(pin)
-        if not btn:
-            return
-
-        # Check current visual state (High=Red)
-        is_high = "red" in btn.styleSheet()
-        # Toggle: If high, set to 0. If low, set to 1.
-        new_val = 0 if is_high else 1
-
-        self.send_serial_cmd_signal.emit(f"level {pin} {new_val}")
-
-    def on_cmd_pwm(self):
-        pin = self.ui.spin_pwm_pin.value()
-        freq = self.ui.spin_pwm_freq.value()
-        duty = self.ui.spin_pwm_duty.value()
-        self.send_serial_cmd_signal.emit(f"pwm {pin} {freq} {duty}")
-
-    def on_cmd_stoppwm(self):
-        pin = self.ui.spin_pwm_pin.value()
-        self.send_serial_cmd_signal.emit(f"stoppwm {pin}")
-
-        # Remove from Modified Pins list
-        if pin in self.status_items_map:
-            item = self.status_items_map.pop(pin)
-            row = self.ui.list_status.row(item)
-            self.ui.list_status.takeItem(row)
-
-        # Reset button state
-        if hasattr(self, "pin_buttons") and pin in self.pin_buttons:
-            self.pin_buttons[pin].setStyleSheet("background-color: none;")
-
-    def on_cmd_repeat(self):
-        pin = self.ui.spin_repeat_pin.value()
-        freq = self.ui.spin_repeat_freq.value()
-        dur = self.ui.spin_repeat_dur.value()
-        self.send_serial_cmd_signal.emit(f"repeat {pin} {freq} {dur}")
-
-    def on_cmd_stoprepeat(self):
-        pin = self.ui.spin_repeat_pin.value()
-        self.send_serial_cmd_signal.emit(f"stoprepeat {pin}")
-
-        # Remove from Modified Pins list
-        if pin in self.status_items_map:
-            item = self.status_items_map.pop(pin)
-            row = self.ui.list_status.row(item)
-            self.ui.list_status.takeItem(row)
-
-        # Reset button state
-        if hasattr(self, "pin_buttons") and pin in self.pin_buttons:
-            self.pin_buttons[pin].setStyleSheet("background-color: none;")
-
-    def on_cmd_interrupt(self):
-        pin = self.ui.spin_int_pin.value()
-        edge = self.ui.combo_int_edge.currentText()
-        tgt = self.ui.spin_int_target.value()
-        width = self.ui.spin_int_width.value()
-        self.send_serial_cmd_signal.emit(f"interrupt {pin} {edge} {tgt} {width}")
-
-    def on_cmd_stopinterrupt(self):
-        pin = self.ui.spin_int_pin.value()
-        self.send_serial_cmd_signal.emit(f"stopinterrupt {pin}")
-
-        # Remove from Interrupts list
-        if pin in self.interrupt_items_map:
-            item = self.interrupt_items_map.pop(pin)
-            row = self.ui.list_interrupts.row(item)
-            self.ui.list_interrupts.takeItem(row)
-
-    def on_cmd_throb(self):
-        period = self.ui.spin_throb_period.value()
-        p1 = self.ui.spin_throb_p1.value()
-        p2 = self.ui.spin_throb_p2.value()
-        p3 = self.ui.spin_throb_p3.value()
-        self.send_serial_cmd_signal.emit(f"throb {period} {p1} {p2} {p3}")
-
-    def on_cmd_stopthrob(self):
-        self.send_serial_cmd_signal.emit("stopthrob")
-
-    def on_cmd_mem(self):
-        addr = self.ui.edit_mem_addr.text().strip()
-        if addr:
-            self.send_serial_cmd_signal.emit(f"mem {addr}")
-
     def on_color_picker_toggled(self, checked):
         self.color_picker_active = checked
         
@@ -1590,6 +1303,10 @@ class MainWindow(QObject):
             self.intensity_chart.hide()
 
     def get_image_coords(self, mouse_pos):
+        """
+        Converts mouse position on video_label to pixel coordinates on the original image.
+        Handles aspect ratio scaling.
+        """
         if not self.current_pixmap:
             return None
         
@@ -1604,8 +1321,6 @@ class MainWindow(QObject):
             return None
 
         # Calculate scale and offsets (KeepAspectRatio)
-        # The QPixmap.scaled uses Qt.KeepAspectRatio, so we need to replicate that logic to find the rect where image is drawn.
-        
         scale_w = lbl_w / img_w
         scale_h = lbl_h / img_h
         scale = min(scale_w, scale_h)
@@ -1648,6 +1363,7 @@ class MainWindow(QObject):
         self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
         self.log(f"Ruler Calibrated: {self.ruler_calibration:.2f} px/mm")
         self.update_ruler_stats()
+        self.init_mosaic_panel(force_recreate=True)
 
     def update_ruler_stats(self):
         if self.ruler_start is None:
@@ -1700,6 +1416,139 @@ class MainWindow(QObject):
                 
         self.intensity_chart.set_data(data)
 
+    @Slot()
+    def on_show_mosaic_triggered(self):
+        """Handles the action to show/hide the mosaic panel."""
+        if self.mosaic_dock and self.mosaic_dock.isVisible():
+            self.mosaic_dock.hide()
+            self.ui.action_show_mosaic.setChecked(False)
+        else:
+            self.init_mosaic_panel()
+            if not self.mosaic_dock:
+                self.ui.action_show_mosaic.setChecked(False) # Reset if failed
+
+    def init_mosaic_panel(self, force_recreate=False):
+        # If the dock already exists, just show it
+        if self.mosaic_dock and not force_recreate:
+            self.mosaic_dock.show()
+            self.ui.action_show_mosaic.setChecked(True)
+            return
+
+        # Prerequisite checks
+        if not self.ruler_calibration or self.ruler_calibration <= 0:
+            self.log("Cannot create Mosaic Panel: Ruler not calibrated.")
+            return
+        if not self.stage_settings or "stage_width_mm" not in self.stage_settings:
+            self.log("Cannot create Mosaic Panel: Stage settings not loaded.")
+            return
+
+        # Re-creation logic
+        if self.mosaic_dock:
+            self.mosaic_dock.setWidget(None)
+            self.mosaic_dock.deleteLater()
+            self.mosaic_dock = None
+
+        # Create the panel
+        stage_width_mm = self.stage_settings["stage_width_mm"]
+        stage_height_mm = self.stage_settings["stage_height_mm"]
+        self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
+        self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
+        self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
+        
+        # Create and setup the dock widget
+        self.mosaic_dock = QDockWidget("Stage Mosaic", self.ui)
+        self.mosaic_dock.setObjectName("MosaicDock")
+        self.mosaic_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
+        self.mosaic_dock.setWidget(self.mosaic_panel)
+        self.mosaic_dock.setMinimumWidth(600)
+        self.mosaic_dock.visibilityChanged.connect(lambda visible: self.ui.action_show_mosaic.setChecked(visible))
+        
+        self.ui.addDockWidget(Qt.RightDockWidgetArea, self.mosaic_dock)
+
+        self.mosaic_dock.show()
+        self.ui.action_show_mosaic.setChecked(True)
+
+    @Slot(float, float)
+    def on_cnc_position_updated(self, x_mm: float, y_mm: float):
+        """Receives updated CNC position from the CNCControlPanel."""
+        self.current_cnc_x_mm = x_mm
+        self.current_cnc_y_mm = y_mm
+
+    @Slot(str)
+    def on_cnc_state_updated(self, state):
+        self.cnc_state = state
+
+    @Slot(float, float)
+    def on_mosaic_move_requested(self, x, y):
+        if self.cnc_control_panel:
+            # Send G-code to move to absolute position (G90) using Rapid Move (G0)
+            feedrate = self.cnc_control_panel.feedrate
+            cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F{feedrate}"
+            self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+            self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
+
+    @Slot(float, float, float, float)
+    def on_mosaic_scan_requested(self, x_min, y_min, x_max, y_max):
+        if not self.cnc_control_panel:
+            return
+            
+        if not self.ruler_calibration or self.ruler_calibration <= 0:
+            self.log("Scan Error: Ruler not calibrated.")
+            return
+            
+        if not self.current_pixmap:
+            self.log("Scan Error: No camera image.")
+            return
+            
+        # Calculate FOV in mm based on current image dimensions and calibration.
+        # Note: MosaicWindow rotates the image 90 degrees.
+        # So Mosaic X axis corresponds to Camera Image Height.
+        # Mosaic Y axis corresponds to Camera Image Width.
+        
+        img_w = self.current_pixmap.width()
+        img_h = self.current_pixmap.height()
+        
+        fov_x_mm = img_h / self.ruler_calibration
+        fov_y_mm = img_w / self.ruler_calibration
+        
+        # Step size with 25% overlap
+        step_x = fov_x_mm * 0.75
+        step_y = fov_y_mm * 0.75
+        
+        feedrate = self.cnc_control_panel.feedrate
+        cmds = ["G90", f"F{feedrate}"] # Absolute positioning, Feed rate
+        
+        current_y = y_max - (fov_y_mm / 2)
+        is_first_strip = True
+        
+        while current_y > y_min:
+            y_target = max(current_y, y_min + fov_y_mm/2)
+            
+            # Calculate start and end X for the strip (always Left-to-Right)
+            start_x = x_min + (fov_x_mm / 2)
+            end_x = x_max - (fov_x_mm / 2)
+            
+            if is_first_strip:
+                # 1. Go to correct XY position (Start of strip)
+                cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+                is_first_strip = False
+            else:
+                # 1. Move Y to target row
+                cmds.append(f"G0 Y{y_target:.3f}")
+
+            # 2. Home in X (Reset X reference)
+            cmds.append("$HX")
+            # 3. Return to start of strip (in case homing moved the head to the limit)
+            cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+            # 4. Scan strip
+            cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
+            
+            current_y -= step_y
+            
+        self.log(f"Starting Mosaic Scan: {len(cmds)} commands.")
+        for cmd in cmds:
+            self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+
     def load_settings(self):
         settings_file = "camera_settings.json"
         if os.path.exists(settings_file):
@@ -1710,6 +1559,7 @@ class MainWindow(QObject):
                     # Apply camera settings
                     self.ui.spin_exposure_time.setValue(settings.get("exposure_time", 2000))
                     self.ui.spin_gain.setValue(settings.get("gain", 1))
+                    self.ui.chk_auto_exposure.setChecked(settings.get("auto_exposure", True))
                     
                     # Apply detector params
                     if "detector" in settings:
@@ -1720,35 +1570,61 @@ class MainWindow(QObject):
                         self.lbl_ruler_calib.setText(f"{self.ruler_calibration:.2f} px/mm")
 
                     if "led_controller_port" in settings:
-                        led_port = settings["led_controller_port"]
-                        if led_port:
-                            index = self.ui.combo_serial_port.findText(led_port)
-                            if index != -1:
-                                self.ui.combo_serial_port.setCurrentIndex(index)
-                    
+                        led_port = settings.get("led_controller_port")
+                        if led_port and hasattr(self, 'led_controller'):
+                            self.led_controller.set_port(led_port)
+                            if settings.get("led_controller_connected"):
+                                QTimer.singleShot(1000, self.led_controller.ui.btn_serial_connect.toggle)
+
                     if "cnc_controller_port" in settings and hasattr(self, 'cnc_control_panel'):
-                        cnc_port = settings["cnc_controller_port"]
+                        cnc_port = settings.get("cnc_controller_port")
                         if cnc_port:
                             index = self.cnc_control_panel.serial_port_combo.findText(cnc_port)
                             if index != -1:
                                 self.cnc_control_panel.serial_port_combo.setCurrentIndex(index)
+                                if settings.get("cnc_controller_connected"):
+                                    QTimer.singleShot(500, self.cnc_control_panel.connect_button.toggle)
                         
                     self.log("Settings loaded.")
             except Exception as e:
                 self.log(f"Error loading settings: {e}")
+        
+        self._load_stage_settings()
+        self.init_mosaic_panel()
+
+    def _load_stage_settings(self):
+        stage_settings_file = os.path.join(os.getcwd(), "stage_settings.json")
+        if os.path.exists(stage_settings_file):
+            try:
+                with open(stage_settings_file, "r") as f:
+                    self.stage_settings = json.load(f)
+                    if self.lbl_stage_width_mm:
+                        self.lbl_stage_width_mm.setText(f"{self.stage_settings.get('stage_width_mm', 'N/A'):.1f} mm")
+                    if self.lbl_stage_height_mm:
+                        self.lbl_stage_height_mm.setText(f"{self.stage_settings.get('stage_height_mm', 'N/A'):.1f} mm")
+                    self.log("Stage settings loaded.")
+            except FileNotFoundError:
+                self.log(f"Stage settings file not found: {stage_settings_file}")
+            except json.JSONDecodeError as e:
+                self.log(f"Error decoding stage settings JSON: {e}")
+            except Exception as e:
+                self.log(f"Error loading stage settings: {e}")
 
     def save_settings(self):
         settings = {
             "exposure_time": self.ui.spin_exposure_time.value(),
             "gain": self.ui.spin_gain.value(),
+            "auto_exposure": self.ui.chk_auto_exposure.isChecked(),
             "detector": self.get_detector_settings(),
             "ruler_calibration": self.ruler_calibration
         }
         
-        if hasattr(self.ui, 'combo_serial_port'):
-            settings["led_controller_port"] = self.ui.combo_serial_port.currentText()
+        if hasattr(self, 'led_controller'):
+            settings["led_controller_port"] = self.led_controller.get_port()
+            settings["led_controller_connected"] = self.led_controller.ui.btn_serial_connect.isChecked()
         if hasattr(self, 'cnc_control_panel'):
             settings["cnc_controller_port"] = self.cnc_control_panel.serial_port_combo.currentText()
+            settings["cnc_controller_connected"] = self.cnc_control_panel.connect_button.isChecked()
         
         settings_file = "camera_settings.json"
         try:
@@ -1772,5 +1648,6 @@ class MainWindow(QObject):
 
     def apply_camera_settings(self):
         # Force apply current UI values to camera
+        self.camera.setAutoExposure(self.ui.chk_auto_exposure.isChecked())
         self.camera.setExposureTime(self.ui.spin_exposure_time.value())
         self.camera.setAnalogGain(self.ui.spin_gain.value())

@@ -1,11 +1,12 @@
 import os
 from PySide6.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QTransform, QPen
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint, QPointF, QRectF
+
 
 class MosaicWidget(QWidget):
     """
-    A custom widget to display the mosaic image scaled to fit the window.
+    A custom widget to display a pan-and-zoomable mosaic image.
     """
     clicked = Signal(float, float)
     selection_made = Signal(float, float, float, float) # x, y, w, h in image pixels
@@ -15,9 +16,19 @@ class MosaicWidget(QWidget):
         self.image = None
         self.start_pos = None
         self.current_pos = None
-        self.is_dragging = False
+        
         self.grid_width = 0
         self.grid_height = 0
+
+        # Pan and Zoom state
+        self.zoom_factor = 1.0
+        self.pan_offset = QPointF(0, 0)
+        self.last_mouse_pos = QPoint()
+
+        # Dragging states
+        self.is_panning = False
+        self.is_zooming = False
+        self.is_selecting = False
 
     def set_grid_size(self, width: int, height: int):
         self.grid_width = width
@@ -25,12 +36,84 @@ class MosaicWidget(QWidget):
         self.update()
 
     def set_image(self, image: QImage):
+        if self.image is None and not image.isNull():
+            # First image, fit to view
+            self.fit_to_window()
         self.image = image
         self.update()
 
+    def widget_to_image_coords(self, widget_pos: QPointF) -> QPointF:
+        """Converts widget coordinates to image coordinates."""
+        if self.image is None:
+            return QPointF()
+        
+        # Reverse the transformation: (pos - pan) / zoom
+        return (widget_pos - self.pan_offset) / self.zoom_factor
+
+    def image_to_widget_coords(self, image_pos: QPointF) -> QPointF:
+        """Converts image coordinates to widget coordinates."""
+        if self.image is None:
+            return QPointF()
+        
+        # Apply the transformation: (pos * zoom) + pan
+        return (image_pos * self.zoom_factor) + self.pan_offset
+
+    def fit_to_window(self):
+        if not self.image or self.image.isNull():
+            return
+        
+        widget_rect = self.rect()
+        img_size = self.image.size()
+
+        if img_size.width() == 0 or img_size.height() == 0:
+            return
+
+        scale_w = widget_rect.width() / img_size.width()
+        scale_h = widget_rect.height() / img_size.height()
+        self.zoom_factor = min(scale_w, scale_h)
+
+        # Center the image
+        drawn_w = img_size.width() * self.zoom_factor
+        drawn_h = img_size.height() * self.zoom_factor
+        
+        self.pan_offset = QPointF(
+            (widget_rect.width() - drawn_w) / 2,
+            (widget_rect.height() - drawn_h) / 2
+        )
+        self.update()
+
+    def wheelEvent(self, event):
+        if not self.image or self.image.isNull():
+            return
+            
+        # Zoom Factor
+        delta = event.angleDelta().y()
+        zoom_direction = 1 if delta > 0 else -1
+        zoom_increment = 0.1 * zoom_direction
+        
+        old_zoom = self.zoom_factor
+        self.zoom_factor = max(0.1, min(10.0, self.zoom_factor + zoom_increment))
+
+        # Zoom towards the mouse cursor
+        mouse_pos = event.position()
+        
+        # Position of the mouse cursor in image coordinates before zoom
+        img_pos_before = self.widget_to_image_coords(mouse_pos)
+        
+        # Expected position of the image point in widget coordinates after zoom
+        widget_pos_after = img_pos_before * self.zoom_factor
+        
+        # The new pan offset is the difference between the mouse position and the new widget pos
+        self.pan_offset = mouse_pos - widget_pos_after
+        
+        self.update()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.fit_to_window()
+
     def paintEvent(self, event):
         if not self.image or self.image.isNull():
-            # Draw black background if no image
             painter = QPainter(self)
             painter.fillRect(self.rect(), QColor("black"))
             return
@@ -39,50 +122,41 @@ class MosaicWidget(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Fill background
         painter.fillRect(self.rect(), Qt.white)
         
-        # Calculate aspect ratio scaling to fit
-        widget_rect = self.rect()
-        img_size = self.image.size()
+        # Apply pan and zoom transformation
+        painter.save()
+        painter.translate(self.pan_offset)
+        painter.scale(self.zoom_factor, self.zoom_factor)
         
-        # Use QPainter's ability to draw image into a target rect, but we want to maintain aspect ratio
-        # QImage.scaled() is one way, but calculating rect is faster for painting
-        
-        scale_w = widget_rect.width() / img_size.width()
-        scale_h = widget_rect.height() / img_size.height()
-        scale = min(scale_w, scale_h)
-        
-        drawn_w = int(img_size.width() * scale)
-        drawn_h = int(img_size.height() * scale)
-        
-        x = 0
-        y = (widget_rect.height() - drawn_h) // 2
-        
-        target_rect = QRect(x, y, drawn_w, drawn_h)
-        painter.drawImage(target_rect, self.image)
+        # Draw the mosaic image
+        painter.drawImage(0, 0, self.image)
 
-        # Draw grid if size is valid
-        if self.grid_width > 0 and self.grid_height > 0 and self.image:
-            pen = QPen(QColor(128, 128, 128, 128), 1, Qt.SolidLine)
+        # --- Draw overlays in image coordinates ---
+
+        # Draw grid (must be drawn in image coordinates before painter state is restored)
+        if self.grid_width > 0 and self.grid_height > 0:
+            pen = QPen(QColor(128, 128, 128, 128), 1 / self.zoom_factor) # Keep pen width constant on screen
             painter.setPen(pen)
 
             # Draw vertical lines
-            steps = int(self.image.width() / self.grid_width)
-            for i in range(1, steps + 1):
-                line_x = target_rect.x() + int(i * self.grid_width * scale)
-                if line_x <= target_rect.right():
-                    painter.drawLine(line_x, target_rect.y(), line_x, target_rect.bottom())
+            steps_v = int(self.image.width() / self.grid_width)
+            for i in range(1, steps_v + 1):
+                x = i * self.grid_width
+                painter.drawLine(x, 0, x, self.image.height())
 
             # Draw horizontal lines
-            steps = int(self.image.height() / self.grid_height)
-            for i in range(1, steps + 1):
-                line_y = target_rect.y() + int(i * self.grid_height * scale)
-                if line_y <= target_rect.bottom():
-                    painter.drawLine(target_rect.x(), line_y, target_rect.right(), line_y)
+            steps_h = int(self.image.height() / self.grid_height)
+            for i in range(1, steps_h + 1):
+                y = i * self.grid_height
+                painter.drawLine(0, y, self.image.width(), y)
         
+        painter.restore()
+        
+        # --- End of image coordinate drawing ---
+
         # Draw selection rectangle if dragging
-        if self.is_dragging and self.start_pos and self.current_pos:
+        if self.is_selecting and self.start_pos and self.current_pos:
             pen = QPen(QColor(0, 255, 255), 2, Qt.DashLine)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
@@ -94,87 +168,89 @@ class MosaicWidget(QWidget):
         if not self.image or self.image.isNull():
             return
         
-        if event.button() == Qt.LeftButton:
+        self.last_mouse_pos = event.position()
+        
+        if event.button() == Qt.LeftButton and (event.modifiers() & Qt.ShiftModifier):
+            self.is_selecting = True
             self.start_pos = event.position()
             self.current_pos = event.position()
-            self.is_dragging = True
+        elif event.button() == Qt.LeftButton:
+            self.is_panning = True
+            self.setCursor(Qt.ClosedHandCursor)
+        elif event.button() == Qt.RightButton:
+            self.is_zooming = True
+            self.setCursor(Qt.SizeVerCursor)
+
 
     def mouseMoveEvent(self, event):
-        if self.is_dragging:
-            self.current_pos = event.position()
+        if not self.image or self.image.isNull():
+            return
+            
+        delta = event.position() - self.last_mouse_pos
+        
+        if self.is_panning:
+            self.pan_offset += delta
+            self.update()
+            
+        elif self.is_zooming:
+            zoom_increment = -delta.y() * 0.005 # Negative so moving up zooms in
+            
+            old_zoom = self.zoom_factor
+            self.zoom_factor = max(0.1, min(10.0, self.zoom_factor + zoom_increment))
+
+            # Zoom towards the mouse cursor
+            mouse_pos = event.position()
+            img_pos_before = (mouse_pos - delta - self.pan_offset) / old_zoom
+            new_widget_pos = img_pos_before * self.zoom_factor
+            self.pan_offset = mouse_pos - delta - new_widget_pos
+            
             self.update()
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.is_dragging:
-            self.is_dragging = False
-            end_pos = event.position()
+        elif self.is_selecting:
+            self.current_pos = event.position()
+            self.update()
             
-            # Calculate distance to distinguish click from drag
-            dist = (end_pos - self.start_pos).manhattanLength()
+        self.last_mouse_pos = event.position()
 
-            widget_rect = self.rect()
-            img_size = self.image.size()
+    def mouseReleaseEvent(self, event):
+        if not self.image or self.image.isNull():
+            return
+
+        if self.is_selecting:
+            dist = (event.position() - self.start_pos).manhattanLength()
             
-            if img_size.width() == 0 or img_size.height() == 0:
-                return
-            
-            scale_w = widget_rect.width() / img_size.width()
-            scale_h = widget_rect.height() / img_size.height()
-            scale = min(scale_w, scale_h)
-            
-            drawn_w = int(img_size.width() * scale)
-            drawn_h = int(img_size.height() * scale)
-            
-            x_off = 0
-            y_off = (widget_rect.height() - drawn_h) // 2
-            
-            if dist < 5:
-                # Treat as Click
-                pos = end_pos
-                mx = pos.x()
-                my = pos.y()
+            if dist < 5: # Treat as a click
+                img_coords = self.widget_to_image_coords(event.position())
+                if not img_coords.isNull():
+                    self.clicked.emit(img_coords.x(), img_coords.y())
+            else: # Treat as a selection
+                start_img = self.widget_to_image_coords(self.start_pos)
+                end_img = self.widget_to_image_coords(event.position())
                 
-                if mx >= x_off and mx < x_off + drawn_w and my >= y_off and my < y_off + drawn_h:
-                    img_x = (mx - x_off) / scale
-                    img_y = (my - y_off) / scale
-                    self.clicked.emit(img_x, img_y)
-            else:
-                # Treat as Selection Drag
-                # Convert start and end to image coords
-                p1 = self.start_pos
-                p2 = end_pos
-                
-                # Normalize rect in widget coords
-                x1 = min(p1.x(), p2.x())
-                y1 = min(p1.y(), p2.y())
-                x2 = max(p1.x(), p2.x())
-                y2 = max(p1.y(), p2.y())
-                
-                # Clip to drawn image area
-                x1 = max(x1, x_off)
-                y1 = max(y1, y_off)
-                x2 = min(x2, x_off + drawn_w)
-                y2 = min(y2, y_off + drawn_h)
-                
-                if x2 > x1 and y2 > y1:
-                    img_x = (x1 - x_off) / scale
-                    img_y = (y1 - y_off) / scale
-                    img_w = (x2 - x1) / scale
-                    img_h = (y2 - y1) / scale
-                    self.selection_made.emit(img_x, img_y, img_w, img_h)
-            
+                if not start_img.isNull() and not end_img.isNull():
+                    selection_rect = QRectF(start_img, end_img).normalized()
+                    self.selection_made.emit(
+                        selection_rect.x(), 
+                        selection_rect.y(), 
+                        selection_rect.width(), 
+                        selection_rect.height()
+                    )
             self.start_pos = None
             self.current_pos = None
             self.update()
 
-    # Removed old mousePressEvent to avoid conflict, logic moved to mouseReleaseEvent/mousePressEvent above
+        # Reset all states
+        self.is_panning = False
+        self.is_zooming = False
+        self.is_selecting = False
+        self.setCursor(Qt.ArrowCursor)
+
 
 class MosaicPanel(QWidget):
     """
     A panel to display a mosaic of the stage area, updated with camera frames
     based on CNC position.
     """
-    # closed_signal = Signal() # No longer needed for a panel
     request_move_signal = Signal(float, float)
     request_scan_signal = Signal(float, float, float, float) # x_min, y_min, x_max, y_max
 
@@ -187,7 +263,6 @@ class MosaicPanel(QWidget):
 
         if self.ruler_calibration_px_per_mm <= 0:
             print("Error: Invalid ruler calibration for mosaic window. Calibration must be > 0.")
-            # Handle error gracefully in UI
             layout = QVBoxLayout(self)
             layout.addWidget(QLabel("Error: Invalid Calibration"))
             return
@@ -229,12 +304,6 @@ class MosaicPanel(QWidget):
         """
         if self.ruler_calibration_px_per_mm <= 0 or camera_frame.isNull():
             return
-
-        # Rotate the image 90 degrees to correct for camera orientation
-        #transform = QTransform()
-        #transform.rotate(90)
-        #camera_frame = camera_frame.transformed(transform)
-        #camera_frame = camera_frame.mirrored(False, True)
 
         # Update camera frame dimensions if they change (e.g., ROI changes)
         if self.camera_frame_width_px != camera_frame.width() or \

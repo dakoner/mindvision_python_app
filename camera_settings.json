@@ -1,10 +1,13 @@
 {
-    "exposure_time": 58.2883,
+    "exposure_time": 4.4896,
     "gain": 5,
+    "auto_exposure": false,
     "detector": {
         "orb_nfeatures": 500
     },
     "ruler_calibration": 121.21165160517364,
     "led_controller_port": "/dev/ttyUSB0",
-    "cnc_controller_port": "/dev/ttyUSB1"
+    "led_controller_connected": true,
+    "cnc_controller_port": "/dev/ttyUSB1",
+    "cnc_controller_connected": true
 }

@@ -383,6 +383,8 @@ class MainWindow(QObject):
 
     def show(self):
         self.ui.showMaximized()
+        # Set initial splitter sizes: [left, center, right]
+        self.ui.main_h_splitter.setSizes([300, 1000, 350])
 
     def close(self):
         # Triggers closeEvent via the widget
@@ -1458,6 +1460,7 @@ class MainWindow(QObject):
         self.mosaic_dock.setObjectName("MosaicDock")
         self.mosaic_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
         self.mosaic_dock.setWidget(self.mosaic_panel)
+        self.mosaic_dock.setMinimumWidth(600)
         self.mosaic_dock.visibilityChanged.connect(lambda visible: self.ui.action_show_mosaic.setChecked(visible))
         
         self.ui.addDockWidget(Qt.RightDockWidgetArea, self.mosaic_dock)

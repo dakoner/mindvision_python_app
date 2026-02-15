@@ -5,9 +5,9 @@
     "detector": {
         "orb_nfeatures": 500
     },
-    "ruler_calibration": 121.21165160517364,
+    "ruler_calibration": 814.5848807763334,
     "led_controller_port": "/dev/ttyUSB0",
     "led_controller_connected": true,
-    "cnc_controller_port": "/dev/ttyUSB1",
+    "cnc_controller_port": "/dev/ttyUSB2",
     "cnc_controller_connected": true
 }

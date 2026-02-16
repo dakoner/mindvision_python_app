@@ -1482,7 +1482,7 @@ class MainWindow(QObject):
     @Slot(float, float)
     def on_mosaic_move_requested(self, x, y):
         if self.cnc_control_panel:
-            # Send G-code to move to absolute position (G90) using Rapid Move (G0)
+            # Send G-code to move to absolute position (G90) using Linear Move (G1)
             feedrate = self.cnc_control_panel.feedrate
             cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F{feedrate}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
@@ -1531,16 +1531,16 @@ class MainWindow(QObject):
             
             if is_first_strip:
                 # 1. Go to correct XY position (Start of strip)
-                cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+                cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
                 is_first_strip = False
             else:
                 # 1. Move Y to target row
-                cmds.append(f"G0 Y{y_target:.3f}")
+                cmds.append(f"G1 Y{y_target:.3f}")
 
             # 2. Home in X (Reset X reference)
             cmds.append("$HX")
             # 3. Return to start of strip (in case homing moved the head to the limit)
-            cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+            cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
             # 4. Scan strip
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
             

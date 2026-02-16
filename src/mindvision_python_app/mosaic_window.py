@@ -39,6 +39,10 @@ class MosaicWidget(QWidget):
         self.stage_width_mm = 0
         self.stage_height_mm = 0
         self.ruler_calibration_px_per_mm = 0
+        
+        # Overlay Rectangles
+        self.scan_region_rect = QRectF()
+        self.current_frame_rect = QRectF()
 
     def set_stage_size(self, width_mm: float, height_mm: float):
         self.stage_width_mm = width_mm
@@ -50,6 +54,14 @@ class MosaicWidget(QWidget):
     def set_grid_size(self, width: int, height: int):
         self.grid_width = width
         self.grid_height = height
+        self.update()
+
+    def set_scan_region(self, rect: QRectF):
+        self.scan_region_rect = rect
+        self.update()
+
+    def set_current_frame_rect(self, rect: QRectF):
+        self.current_frame_rect = rect
         self.update()
 
     def reset_mosaic(self, width: int, height: int, tile_size: int):
@@ -146,6 +158,20 @@ class MosaicWidget(QWidget):
                 x = col * self.tile_size
                 y = row * self.tile_size
                 painter.drawImage(x, y, tile)
+
+            # Draw Scan Region (Pink)
+            if not self.scan_region_rect.isNull():
+                 pen = QPen(QColor(255, 105, 180), 3 / self.zoom_factor)
+                 painter.setPen(pen)
+                 painter.setBrush(Qt.NoBrush)
+                 painter.drawRect(self.scan_region_rect)
+
+            # Draw Current Frame Rect (Green)
+            if not self.current_frame_rect.isNull():
+                 pen = QPen(Qt.green, 2 / self.zoom_factor)
+                 painter.setPen(pen)
+                 painter.setBrush(Qt.NoBrush)
+                 painter.drawRect(self.current_frame_rect)
 
             # Draw grid
             if self.grid_width > 0 and self.grid_height > 0:
@@ -435,6 +461,9 @@ class MosaicPanel(QWidget):
         scaled_frame_height = int(self.camera_frame_height_px * self.SCALE_FACTOR)
         frame_rect = QRect(mosaic_draw_x_px, mosaic_draw_y_px, scaled_frame_width, scaled_frame_height)
         
+        # Update current frame overlay
+        self.display_widget.set_current_frame_rect(QRectF(frame_rect))
+        
         # Determine intersecting tiles
         start_col = max(0, frame_rect.left() // self.TILE_SIZE)
         end_col = min(self.cols - 1, frame_rect.right() // self.TILE_SIZE)
@@ -483,6 +512,9 @@ class MosaicPanel(QWidget):
         if self.ruler_calibration_px_per_mm <= 0:
             return
         
+        # Clear scan region overlay
+        self.display_widget.set_scan_region(QRectF())
+        
         # Mosaic (0,0) is Top-Left. CNC (0,0) is Bottom-Left.
         # Account for scaling: divide by (ruler_calibration * SCALE_FACTOR)
         cnc_x = img_x / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
@@ -498,6 +530,9 @@ class MosaicPanel(QWidget):
     def on_mosaic_selection(self, x, y, w, h):
         if self.ruler_calibration_px_per_mm <= 0:
             return
+            
+        # Set scan region overlay
+        self.display_widget.set_scan_region(QRectF(x, y, w, h))
             
         # Convert to CNC coords
         # Image (0,0) is Top-Left. CNC (0,0) is Bottom-Left.

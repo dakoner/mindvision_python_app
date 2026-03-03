@@ -15,6 +15,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     poll_serial_signal = Signal()
     state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float)
+    scan_finished_signal = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -161,6 +162,9 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):
             self._parse_status(msg[5:-1])
+        elif msg == "Rx: [ECHO:scan_finished]":
+            self.scan_finished_signal.emit()
+            self.log_signal.emit("Scan finished echo received.")
         else:
             # Pass all other messages through to the main window log
             self.log_signal.emit(msg)

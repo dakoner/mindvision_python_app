@@ -170,6 +170,8 @@ class MainWindow(QObject):
         self.current_cnc_y_mm = 0.0
         self.cnc_state = "Idle"
         
+        self.is_scanning = False
+        
         # Stage Settings
         self.stage_settings = {}
         self.lbl_stage_width_mm = self.ui.findChild(QLabel, "lbl_stage_width_mm")
@@ -188,6 +190,7 @@ class MainWindow(QObject):
         if self.cnc_control_panel:
             self.cnc_control_panel.position_updated_signal.connect(self.on_cnc_position_updated)
             self.cnc_control_panel.state_updated_signal.connect(self.on_cnc_state_updated)
+            self.cnc_control_panel.scan_finished_signal.connect(self.on_scan_finished)
 
         # Measurement Tab Setup (Index 0)
         self.ruler_tab_index = 0
@@ -1545,10 +1548,23 @@ class MainWindow(QObject):
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
             
             current_y -= step_y
-            
+        
+        cmds.append("[ECHO:scan_finished]")
         self.log(f"Starting Mosaic Scan: {len(cmds)} commands.")
+        
+        # Start recording if not already running
+        if not self.video_thread.isRunning():
+            self.on_record_clicked()
+            self.is_scanning = True
+
         for cmd in cmds:
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+
+    def on_scan_finished(self):
+        if self.is_scanning:
+            self.on_record_clicked()
+            self.is_scanning = False
+            self.log("Mosaic scan finished, recording stopped.")
 
     def load_settings(self):
         settings_file = "camera_settings.json"

@@ -1536,12 +1536,13 @@ class MainWindow(QObject):
                 # 1. Go to correct XY position (Start of strip)
                 cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
                 is_first_strip = False
+                # Home X on the first strip as well
+                cmds.append("$HX")
             else:
-                # 1. Move Y to target row
+                # For subsequent strips, home X first, then move Y
+                cmds.append("$HX")
                 cmds.append(f"G1 Y{y_target:.3f}")
 
-            # 2. Home in X (Reset X reference)
-            cmds.append("$HX")
             # 3. Return to start of strip (in case homing moved the head to the limit)
             cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
             # 4. Scan strip

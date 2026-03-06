@@ -41,6 +41,7 @@ from mosaic_window import MosaicPanel
 from matching_worker import MatchingWorker
 from cnc_control_panel import CNCControlPanel
 from led_controller import LEDController
+from scan_config_dialog import ScanConfigDialog
 
 class MainWindow(QObject):
     update_fps_signal = Signal(float)
@@ -61,6 +62,11 @@ class MainWindow(QObject):
     toggle_worker_contours_signal = Signal(bool)
     # Signal to update contour params
     update_worker_contour_params_signal = Signal(dict)
+    
+    # Signals for scan progress
+    scan_status_signal = Signal(str)
+    scan_progress_signal = Signal(int, int)
+
 
     def __init__(self):
         super().__init__()
@@ -171,6 +177,22 @@ class MainWindow(QObject):
         self.cnc_state = "Idle"
         
         self.is_scanning = False
+        self.scan_dialog = None
+        self.scan_current_row = 0
+        self.scan_total_rows = 0
+        
+        # Scan State for row-by-row processing
+        self.scan_x_min = 0
+        self.scan_y_min = 0
+        self.scan_x_max = 0
+        self.scan_y_max = 0
+        self.scan_home_x = False
+        self.scan_home_y = False
+        self.scan_step_y = 0
+        self.scan_current_y = 0
+        self.scan_is_first_strip = True
+        self.scan_fov_x_mm = 0
+        self.scan_fov_y_mm = 0
         
         # Stage Settings
         self.stage_settings = {}
@@ -1458,6 +1480,8 @@ class MainWindow(QObject):
         self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
         self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
         self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
+        if self.cnc_control_panel:
+            self.cnc_control_panel.row_finished_signal.connect(self.on_row_finished)
         
         # Create and setup the dock widget
         self.mosaic_dock = QDockWidget("Stage Mosaic", self.ui)
@@ -1493,7 +1517,12 @@ class MainWindow(QObject):
 
     @Slot(float, float, float, float)
     def on_mosaic_scan_requested(self, x_min, y_min, x_max, y_max):
+        if self.is_scanning:
+            self.log("Scan already in progress.")
+            return
+
         if not self.cnc_control_panel:
+            self.log("CNC panel not available.")
             return
             
         if not self.ruler_calibration or self.ruler_calibration <= 0:
@@ -1503,69 +1532,136 @@ class MainWindow(QObject):
         if not self.current_pixmap:
             self.log("Scan Error: No camera image.")
             return
-            
-        # Calculate FOV in mm based on current image dimensions and calibration.
-        # Note: MosaicWindow rotates the image 90 degrees.
-        # So Mosaic X axis corresponds to Camera Image Height.
-        # Mosaic Y axis corresponds to Camera Image Width.
+
+        # Create and show the dialog
+        self.scan_dialog = ScanConfigDialog(x_min, y_min, x_max, y_max, self.ui)
+        self.scan_dialog.start_scan_signal.connect(self.start_scan)
+        self.scan_dialog.cancel_scan_signal.connect(self.cancel_scan)
         
+        # Connect status/progress signals to the dialog's slots
+        self.scan_status_signal.connect(self.scan_dialog.update_status)
+        self.scan_progress_signal.connect(self.scan_dialog.update_progress)
+
+        self.scan_dialog.exec()
+        
+        # Disconnect after dialog is closed to prevent old connections
+        self.scan_status_signal.disconnect(self.scan_dialog.update_status)
+        self.scan_progress_signal.disconnect(self.scan_dialog.update_progress)
+
+
+    @Slot(float, float, float, float, bool, bool, bool)
+    def start_scan(self, x_min, y_min, x_max, y_max, home_x, home_y, record_video):
+        if not self.cnc_control_panel:
+            return
+
         img_w = self.current_pixmap.width()
         img_h = self.current_pixmap.height()
         
-        fov_x_mm = img_h / self.ruler_calibration
-        fov_y_mm = img_w / self.ruler_calibration
+        # Store scan parameters
+        self.scan_x_min, self.scan_y_min, self.scan_x_max, self.scan_y_max = x_min, y_min, x_max, y_max
+        self.scan_home_x, self.scan_home_y = home_x, home_y
+        self.scan_record_video = record_video
         
-        # Step size with 25% overlap
-        step_x = fov_x_mm * 0.75
-        step_y = fov_y_mm * 0.75
+        self.scan_fov_x_mm = img_h / self.ruler_calibration
+        self.scan_fov_y_mm = img_w / self.ruler_calibration
         
-        feedrate = self.cnc_control_panel.feedrate
-        cmds = ["G90", f"F{feedrate}"] # Absolute positioning, Feed rate
+        self.scan_step_y = self.scan_fov_y_mm * 0.75
         
-        current_y = y_max - (fov_y_mm / 2)
-        is_first_strip = True
+        scan_height = y_max - y_min
+        self.scan_total_rows = int(scan_height / self.scan_step_y) if self.scan_step_y > 0 else 0
+        self.scan_current_row = 0
+        self.scan_current_y = y_max - (self.scan_fov_y_mm / 2)
+        self.scan_is_first_strip = True
         
-        while current_y > y_min:
-            y_target = max(current_y, y_min + fov_y_mm/2)
-            
-            # Calculate start and end X for the strip (always Left-to-Right)
-            start_x = x_min + (fov_x_mm / 2)
-            end_x = x_max - (fov_x_mm / 2)
-            
-            if is_first_strip:
-                # 1. Go to correct XY position (Start of strip)
-                cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
-                is_first_strip = False
-                # Home X on the first strip as well
-                cmds.append("$HX")
-            else:
-                # For subsequent strips, home X first, then move Y
-                cmds.append("$HX")
-                cmds.append(f"G1 Y{y_target:.3f}")
-
-            # 3. Return to start of strip (in case homing moved the head to the limit)
-            cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
-            # 4. Scan strip
-            cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
-            
-            current_y -= step_y
+        self.is_scanning = True
         
-        cmds.append("[ECHO:scan_finished]")
-        self.log(f"Starting Mosaic Scan: {len(cmds)} commands.")
-        
-        # Start recording if not already running
-        if not self.video_thread.isRunning():
+        # Start recording
+        if self.scan_record_video and not self.video_thread.isRunning():
             self.on_record_clicked()
-            self.is_scanning = True
+        
+        # Initial commands
+        feedrate = self.cnc_control_panel.feedrate
+        self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
+        self.cnc_control_panel.send_serial_cmd_signal.emit(f"F{feedrate}")
+        
+        self.log(f"Starting Mosaic Scan: {self.scan_total_rows} rows.")
+        self.scan_status_signal.emit(f"Starting scan of {self.scan_total_rows} rows.")
+        self.scan_progress_signal.emit(0, self.scan_total_rows)
 
-        for cmd in cmds:
-            self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+        # Kick off the first row
+        self.scan_next_row()
+
+    def scan_next_row(self):
+        if not self.is_scanning:
+            return
+
+        if self.scan_current_y > self.scan_y_min:
+            y_target = max(self.scan_current_y, self.scan_y_min + self.scan_fov_y_mm/2)
+            
+            start_x = self.scan_x_min + (self.scan_fov_x_mm / 2)
+            end_x = self.scan_x_max - (self.scan_fov_x_mm / 2)
+            
+            cmds = []
+            if self.scan_is_first_strip:
+                cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                self.scan_is_first_strip = False
+            else:
+                cmds.append(f"G1 Y{y_target:.3f}")
+            
+            if self.scan_home_y:
+                cmds.append("$HY")
+            if self.scan_home_x:
+                cmds.append("$HX")
+
+            cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+            cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
+            cmds.append("M400") # Wait for moves to finish
+            
+            for cmd in cmds:
+                self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+            
+            self.cnc_control_panel.waiting_for_m400_ok_in_scan = True
+
+            self.scan_current_y -= self.scan_step_y
+        else:
+            # No more rows, scan is finished
+            self.cnc_control_panel.send_serial_cmd_signal.emit("[ECHO:scan_finished]")
+
+    @Slot()
+    def on_row_finished(self):
+        if self.is_scanning:
+            self.scan_current_row += 1
+            self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
+            
+            # Use a single shot timer to give the UI time to update before starting the next move
+            QTimer.singleShot(100, self.scan_next_row)
+
+
+    def cancel_scan(self):
+        if self.is_scanning:
+            self.is_scanning = False
+            if self.cnc_control_panel:
+                self.cnc_control_panel.send_serial_cmd_signal.emit("!") 
+                self.cnc_control_panel.stop() 
+            
+            if self.scan_record_video and self.video_thread.isRunning():
+                self.on_record_clicked()
+            
+            self.log("Scan cancelled by user.")
+            if self.scan_dialog:
+                self.scan_dialog.scan_finished(success=False)
+
 
     def on_scan_finished(self):
+        # This is triggered by "[ECHO:scan_finished]" from the CNC
         if self.is_scanning:
-            self.on_record_clicked()
+            if self.scan_record_video and self.video_thread.isRunning():
+                self.on_record_clicked() # Stop recording
             self.is_scanning = False
             self.log("Mosaic scan finished, recording stopped.")
+
+            if self.scan_dialog:
+                self.scan_dialog.scan_finished(success=True)
 
     def load_settings(self):
         settings_file = "camera_settings.json"

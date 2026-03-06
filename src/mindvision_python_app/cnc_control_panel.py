@@ -16,6 +16,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float)
     scan_finished_signal = Signal()
+    row_finished_signal = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -25,6 +26,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         # --- Serial Worker Setup ---
         self.serial_thread = QThread()
         self.serial_worker = SerialWorker()
+        self.waiting_for_m400_ok_in_scan = False
 
     def setupUi(self):
         if self._ui_loaded:
@@ -159,6 +161,11 @@ class CNCControlPanel(QtWidgets.QGroupBox):
 
     @Slot(str)
     def on_log_message(self, msg):
+        if self.waiting_for_m400_ok_in_scan and msg == "Rx: ok":
+            self.waiting_for_m400_ok_in_scan = False
+            self.row_finished_signal.emit()
+            return  # Consume this 'ok' to prevent it from being logged in the main window
+
         # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):
             self._parse_status(msg[5:-1])

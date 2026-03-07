@@ -2215,6 +2215,7 @@
    <addaction name="action_ruler" />
    <addaction name="action_color_picker" />
    <addaction name="action_show_mosaic" />
+   <addaction name="action_home_and_run" />
   </widget>
   <action name="action_start_camera">
    <property name="icon">
@@ -2318,6 +2319,19 @@
    </property>
    <property name="toolTip">
     <string>Show Stage Mosaic View</string>
+   </property>
+  </action>
+  <action name="action_home_and_run">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/ruler.png</normaloff>icons/ruler.png
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Home and Run</string>
+   </property>
+   <property name="toolTip">
+    <string>Home and then run from x=0, y=0 to x=100, y=0</string>
    </property>
   </action>
 

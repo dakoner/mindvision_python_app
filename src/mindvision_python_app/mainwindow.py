@@ -30,6 +30,7 @@ from PySide6.QtCore import (
     QPointF,
     QLineF,
 )
+
 from PySide6.QtGui import QPixmap, QAction, QPainter, QPen, QColor, QIcon, QImage
 from PySide6.QtUiTools import QUiLoader
 
@@ -290,6 +291,7 @@ class MainWindow(QObject):
         self.ui.action_stop_camera.triggered.connect(self.on_stop_clicked)
         self.ui.action_record.triggered.connect(self.on_record_clicked)
         self.ui.action_snapshot.triggered.connect(self.on_snapshot_clicked)
+        self.ui.action_home_and_run.triggered.connect(self.on_home_and_run_clicked)
 
         # Template Matching UI
         if hasattr(self.ui, 'btn_load_template'):
@@ -1614,14 +1616,13 @@ class MainWindow(QObject):
                 cmds.append("$HX")
 
             cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+            cmds.append("G4 P10") # Wait for moves to finish
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
-            cmds.append("M400") # Wait for moves to finish
+            cmds.append("G4 P10") # Wait for moves to finish
             
             for cmd in cmds:
                 self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             
-            self.cnc_control_panel.waiting_for_m400_ok_in_scan = True
-
             self.scan_current_y -= self.scan_step_y
         else:
             # No more rows, scan is finished
@@ -1662,6 +1663,16 @@ class MainWindow(QObject):
 
             if self.scan_dialog:
                 self.scan_dialog.scan_finished(success=True)
+
+    def on_home_and_run_clicked(self):
+        if self.cnc_control_panel:
+            feedrate = self.cnc_control_panel.feedrate
+            self.cnc_control_panel.send_serial_cmd_signal.emit("$H")
+            self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
+            self.cnc_control_panel.send_serial_cmd_signal.emit(f"G1 X0 Y0 F{feedrate}")
+            self.cnc_control_panel.send_serial_cmd_signal.emit(f"G1 X100 Y0 F{feedrate}")
+            self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P10")
+            self.log("Executing Home and Run.")
 
     def load_settings(self):
         settings_file = "camera_settings.json"

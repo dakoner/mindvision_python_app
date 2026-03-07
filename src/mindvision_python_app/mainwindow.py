@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QPushButton,
     QDockWidget,
+    QVBoxLayout,
 )
 from PySide6.QtCore import (
     Qt,
@@ -42,7 +43,7 @@ from mosaic_window import MosaicPanel
 from matching_worker import MatchingWorker
 from cnc_control_panel import CNCControlPanel
 from led_controller import LEDController
-from scan_config_dialog import ScanConfigDialog
+from scan_config_panel import ScanConfigPanel
 
 class MainWindow(QObject):
     update_fps_signal = Signal(float)
@@ -178,7 +179,7 @@ class MainWindow(QObject):
         self.cnc_state = "Idle"
         
         self.is_scanning = False
-        self.scan_dialog = None
+        self.scan_panel = None # Will be created with the mosaic panel
         self.scan_current_row = 0
         self.scan_total_rows = 0
         
@@ -1472,24 +1473,42 @@ class MainWindow(QObject):
 
         # Re-creation logic
         if self.mosaic_dock:
+            # self.ui.removeDockWidget(self.mosaic_dock)
             self.mosaic_dock.setWidget(None)
             self.mosaic_dock.deleteLater()
             self.mosaic_dock = None
 
-        # Create the panel
+        # --- Create container for mosaic and scan panel ---
+        container_widget = QWidget()
+        container_layout = QVBoxLayout(container_widget)
+        container_layout.setContentsMargins(0, 5, 0, 0) # Add a little space at the top
+        container_layout.setSpacing(0) # Pack widgets tightly
+
+        # Create the mosaic panel
         stage_width_mm = self.stage_settings["stage_width_mm"]
         stage_height_mm = self.stage_settings["stage_height_mm"]
         self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
         self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
         self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
+        
         if self.cnc_control_panel:
             self.cnc_control_panel.row_finished_signal.connect(self.on_row_finished)
         
+        container_layout.addWidget(self.mosaic_panel)
+
+        # Create the scan panel
+        self.scan_panel = ScanConfigPanel()
+        self.scan_panel.start_scan_signal.connect(self.start_scan)
+        self.scan_panel.cancel_scan_signal.connect(self.cancel_scan)
+        self.scan_status_signal.connect(self.scan_panel.update_status)
+        self.scan_progress_signal.connect(self.scan_panel.update_progress)
+        container_layout.addWidget(self.scan_panel)
+
         # Create and setup the dock widget
-        self.mosaic_dock = QDockWidget("Stage Mosaic", self.ui)
+        self.mosaic_dock = QDockWidget("Stage Control", self.ui) # Renamed title
         self.mosaic_dock.setObjectName("MosaicDock")
         self.mosaic_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
-        self.mosaic_dock.setWidget(self.mosaic_panel)
+        self.mosaic_dock.setWidget(container_widget) # Set the container as the widget
         self.mosaic_dock.setMinimumWidth(600)
         self.mosaic_dock.visibilityChanged.connect(lambda visible: self.ui.action_show_mosaic.setChecked(visible))
         
@@ -1534,21 +1553,10 @@ class MainWindow(QObject):
         if not self.current_pixmap:
             self.log("Scan Error: No camera image.")
             return
-
-        # Create and show the dialog
-        self.scan_dialog = ScanConfigDialog(x_min, y_min, x_max, y_max, self.ui)
-        self.scan_dialog.start_scan_signal.connect(self.start_scan)
-        self.scan_dialog.cancel_scan_signal.connect(self.cancel_scan)
-        
-        # Connect status/progress signals to the dialog's slots
-        self.scan_status_signal.connect(self.scan_dialog.update_status)
-        self.scan_progress_signal.connect(self.scan_dialog.update_progress)
-
-        self.scan_dialog.exec()
-        
-        # Disconnect after dialog is closed to prevent old connections
-        self.scan_status_signal.disconnect(self.scan_dialog.update_status)
-        self.scan_progress_signal.disconnect(self.scan_dialog.update_progress)
+            
+        if self.scan_panel:
+            self.scan_panel.update_scan_area(x_min, y_min, x_max, y_max)
+            self.log("Scan area selected. Configure and start scan in the 'Stage Control' panel.")
 
 
     @Slot(float, float, float, float, bool, bool, bool)
@@ -1649,8 +1657,8 @@ class MainWindow(QObject):
                 self.on_record_clicked()
             
             self.log("Scan cancelled by user.")
-            if self.scan_dialog:
-                self.scan_dialog.scan_finished(success=False)
+            if self.scan_panel:
+                self.scan_panel.scan_finished(success=False)
 
 
     def on_scan_finished(self):
@@ -1661,8 +1669,8 @@ class MainWindow(QObject):
             self.is_scanning = False
             self.log("Mosaic scan finished, recording stopped.")
 
-            if self.scan_dialog:
-                self.scan_dialog.scan_finished(success=True)
+            if self.scan_panel:
+                self.scan_panel.scan_finished(success=True)
 
     def on_home_and_run_clicked(self):
         if self.cnc_control_panel:

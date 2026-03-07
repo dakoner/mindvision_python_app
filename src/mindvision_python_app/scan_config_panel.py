@@ -1,8 +1,9 @@
 
 import PySide6.QtWidgets
 from PySide6.QtWidgets import (
-    QDialog,
+    QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QCheckBox,
     QPushButton,
     QLabel,
@@ -11,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, Slot
 
-class ScanConfigDialog(QDialog):
+class ScanConfigPanel(QWidget):
     """
     A dialog to configure and monitor a mosaic scan.
     """
@@ -20,32 +21,31 @@ class ScanConfigDialog(QDialog):
     start_scan_signal = Signal(float, float, float, float, bool, bool, bool)
     cancel_scan_signal = Signal()
 
-    def __init__(self, x_min, y_min, x_max, y_max, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Scan Configuration")
-        self.setMinimumWidth(400)
 
-        self.x_min = x_min
-        self.y_min = y_min
-        self.x_max = x_max
-        self.y_max = y_max
+        self.x_min = 0
+        self.y_min = 0
+        self.x_max = 0
+        self.y_max = 0
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0) # No extra margins
 
         # Scan Area Info
-        scan_area_label = QLabel(f"Scan Area: X({x_min:.2f} to {x_max:.2f}), Y({y_min:.2f} to {y_max:.2f})")
-        layout.addWidget(scan_area_label)
+        self.scan_area_label = QLabel("Scan Area: (select area on mosaic)")
+        layout.addWidget(self.scan_area_label)
         
         # Homing Options
         self.home_x_checkbox = QCheckBox("Home X before each row")
         self.home_y_checkbox = QCheckBox("Home Y before each row")
-        self.home_x_checkbox.setChecked(True) # Default to True as in original code
+        self.home_x_checkbox.setChecked(True)
         layout.addWidget(self.home_x_checkbox)
         layout.addWidget(self.home_y_checkbox)
 
         # Video recording option
         self.record_video_checkbox = QCheckBox("Take videos of each strip")
-        self.record_video_checkbox.setChecked(False) # Default to off
+        self.record_video_checkbox.setChecked(False)
         layout.addWidget(self.record_video_checkbox)
 
         # Status Display
@@ -56,22 +56,31 @@ class ScanConfigDialog(QDialog):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
-
-        # Buttons
-        self.button_box = QDialogButtonBox()
-        self.start_button = self.button_box.addButton("Start Scan", QDialogButtonBox.AcceptRole)
-        self.cancel_button = self.button_box.addButton("Cancel Scan", QDialogButtonBox.RejectRole)
-        self.close_button = self.button_box.addButton("Close", QDialogButtonBox.RejectRole)
         
-        self.cancel_button.setEnabled(False)
-        self.close_button.setVisible(False) # Initially hidden
+        # Buttons
+        button_layout = QHBoxLayout()
+        self.start_button = QPushButton("Start Scan")
+        self.cancel_button = QPushButton("Cancel Scan")
+        button_layout.addWidget(self.start_button)
+        button_layout.addWidget(self.cancel_button)
+        layout.addLayout(button_layout)
 
-        layout.addWidget(self.button_box)
+        self.cancel_button.setEnabled(False)
+        self.start_button.setEnabled(False) # Disabled until an area is selected
 
         # Connections
         self.start_button.clicked.connect(self.on_start_clicked)
         self.cancel_button.clicked.connect(self.on_cancel_clicked)
-        self.close_button.clicked.connect(self.reject) # Closes the dialog
+        
+    def update_scan_area(self, x_min, y_min, x_max, y_max):
+        self.x_min = x_min
+        self.y_min = y_min
+        self.x_max = x_max
+        self.y_max = y_max
+        self.scan_area_label.setText(f"Scan Area: X({x_min:.2f} to {x_max:.2f}), Y({y_min:.2f} to {y_max:.2f})")
+        self.start_button.setEnabled(True)
+        self.scan_finished(success=False) # Reset state
+
 
     def on_start_clicked(self):
         self.start_button.setEnabled(False)
@@ -105,12 +114,16 @@ class ScanConfigDialog(QDialog):
 
     @Slot(bool)
     def scan_finished(self, success=True):
-        self.start_button.setEnabled(False)
+        self.start_button.setEnabled(True)
+        self.home_x_checkbox.setEnabled(True)
+        self.home_y_checkbox.setEnabled(True)
+        self.record_video_checkbox.setEnabled(True)
         self.cancel_button.setEnabled(False)
-        self.close_button.setVisible(True)
+        
         if success:
              self.update_status("Scan completed successfully!")
              self.progress_bar.setValue(100)
         else:
-             self.update_status("Scan finished.")
+             self.update_status("Idle")
+             self.progress_bar.setValue(0)
 

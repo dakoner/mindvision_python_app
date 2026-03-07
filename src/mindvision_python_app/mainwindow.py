@@ -1481,7 +1481,7 @@ class MainWindow(QObject):
         # --- Create container for mosaic and scan panel ---
         container_widget = QWidget()
         container_layout = QVBoxLayout(container_widget)
-        container_layout.setContentsMargins(0, 5, 0, 0) # Add a little space at the top
+        container_layout.setContentsMargins(0, 0, 0, 0) # Add a little space at the top
         container_layout.setSpacing(0) # Pack widgets tightly
 
         # Create the mosaic panel
@@ -1507,9 +1507,7 @@ class MainWindow(QObject):
         # Create and setup the dock widget
         self.mosaic_dock = QDockWidget("Stage Control", self.ui) # Renamed title
         self.mosaic_dock.setObjectName("MosaicDock")
-        self.mosaic_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
         self.mosaic_dock.setWidget(container_widget) # Set the container as the widget
-        self.mosaic_dock.setMinimumWidth(600)
         self.mosaic_dock.visibilityChanged.connect(lambda visible: self.ui.action_show_mosaic.setChecked(visible))
         
         self.ui.addDockWidget(Qt.RightDockWidgetArea, self.mosaic_dock)

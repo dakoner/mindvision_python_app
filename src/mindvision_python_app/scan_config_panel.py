@@ -31,6 +31,7 @@ class ScanConfigPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0) # No extra margins
+        layout.setSpacing(0)
 
         # Scan Area Info
         self.scan_area_label = QLabel("Scan Area: (select area on mosaic)")

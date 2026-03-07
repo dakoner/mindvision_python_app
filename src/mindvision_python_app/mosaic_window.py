@@ -417,6 +417,7 @@ class MosaicPanel(QWidget):
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(self.display_widget)
         layout.addWidget(self.position_label)
         layout.addWidget(self.cursor_label)

@@ -2357,7 +2357,20 @@
    <extends>QGroupBox</extends>
    <header>cnc_control_panel</header>
   </customwidget>
- </customwidgets>
+ <widget class="QDockWidget" name="mosaic_dock">
+  <property name="windowTitle">
+   <string>Stage Control</string>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>600</width>
+    <height>0</height>
+   </size>
+  </property>
+  <property name="allowedAreas">
+   <set>LeftDockWidgetArea|RightDockWidgetArea</set>
+  </property>
+ </widget>
  <resources />
  <connections />
 </ui>

@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>IntensityChart</class>
+ <widget class="QWidget" name="IntensityChart" native="true">
+  <property name="minimumSize">
+   <size>
+    <width>0</width>
+    <height>200</height>
+   </size>
+  </property>
+  <property name="visible">
+   <bool>false</bool>
+  </property>
+ </widget>
+</ui>

@@ -18,6 +18,11 @@ from PySide6.QtWidgets import (
     QPushButton,
     QDockWidget,
     QVBoxLayout,
+    QDoubleSpinBox,
+    QRadioButton,
+    QComboBox,
+    QTabWidget,
+    QSplitter,
 )
 from PySide6.QtCore import (
     Qt,
@@ -34,6 +39,7 @@ from PySide6.QtCore import (
 
 from PySide6.QtGui import QPixmap, QAction, QPainter, QPen, QColor, QIcon, QImage
 from PySide6.QtUiTools import QUiLoader
+print("b")
 
 from _mindvision_qobject_py import MindVisionCamera, VideoThread
 from range_slider import RangeSlider
@@ -79,31 +85,170 @@ class MainWindow(QObject):
         self.script_dir = os.path.dirname(__file__)
 
         # Load UI from file
+        print("d")
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
         loader.registerCustomWidget(IntensityChart)
         loader.registerCustomWidget(ColorPickerWidget)
         loader.registerCustomWidget(CNCControlPanel)
-        ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
+
+        # Load main window
+        ui_file_path = os.path.join(self.script_dir, "mainwindow_widget.ui")
+        print("e")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
             print(f"Cannot open {ui_file_path}: {ui_file.errorString()}")
             sys.exit(-1)
-
         self.ui = loader.load(ui_file)
         ui_file.close()
+        print("f")
 
         if not self.ui:
             print(loader.errorString())
             sys.exit(-1)
 
+        # Load and add camera settings tabs
+        camera_settings_tabs_path = os.path.join(self.script_dir, "camera_settings_tabs.ui")
+        camera_settings_tabs_file = QFile(camera_settings_tabs_path)
+        if not camera_settings_tabs_file.open(QFile.ReadOnly):
+            print(f"Cannot open {camera_settings_tabs_path}: {camera_settings_tabs_file.errorString()}")
+            sys.exit(-1)
+        self.camera_settings_tabs = loader.load(camera_settings_tabs_file)
+        camera_settings_tabs_file.close()
+        if self.camera_settings_tabs:
+            self.ui.scroll_layout.addWidget(self.camera_settings_tabs)
+
+        # Load and add hardware tabs
+        hardware_tabs_path = os.path.join(self.script_dir, "hardware_tabs.ui")
+        hardware_tabs_file = QFile(hardware_tabs_path)
+        if not hardware_tabs_file.open(QFile.ReadOnly):
+            print(f"Cannot open {hardware_tabs_path}: {hardware_tabs_file.errorString()}")
+            sys.exit(-1)
+        self.hardware_tabs = loader.load(hardware_tabs_file)
+        hardware_tabs_file.close()
+        if self.hardware_tabs:
+            self.ui.scroll_layout.addWidget(self.hardware_tabs)
+
+        # Load and add right tab widget
+        right_tab_widget_path = os.path.join(self.script_dir, "right_tab_widget.ui")
+        right_tab_widget_file = QFile(right_tab_widget_path)
+        if not right_tab_widget_file.open(QFile.ReadOnly):
+            print(f"Cannot open {right_tab_widget_path}: {right_tab_widget_file.errorString()}")
+            sys.exit(-1)
+        self.right_tab_widget = loader.load(right_tab_widget_file)
+        right_tab_widget_file.close()
+        if self.right_tab_widget:
+            self.ui.main_h_splitter.addWidget(self.right_tab_widget)
+        print("g")
+
+        # --- Find all widgets ---
+        self.video_label = self.ui.findChild(QLabel, "video_label")
+        self.chk_qrcode_enable = self.right_tab_widget.findChild(QCheckBox, "chk_qrcode_enable")
+        self.btn_load_ssim_ref = self.right_tab_widget.findChild(QPushButton, "btn_load_ssim_ref")
+        self.chk_ssim_enable = self.right_tab_widget.findChild(QCheckBox, "chk_ssim_enable")
+        self.lbl_ssim_ref_name = self.right_tab_widget.findChild(QLabel, "lbl_ssim_ref_name")
+        self.lbl_ssim_score = self.right_tab_widget.findChild(QLabel, "lbl_ssim_score")
+        self.lbl_qrcode_data = self.right_tab_widget.findChild(QLabel, "lbl_qrcode_data")
+        self.lbl_template_name = self.right_tab_widget.findChild(QLabel, "lbl_template_name")
+        self.intensity_chart = self.right_tab_widget.findChild(IntensityChart, "intensity_chart")
+        self.action_color_picker = self.ui.findChild(QAction, "action_color_picker")
+        self.tab_color_picker = self.right_tab_widget.findChild(ColorPickerWidget, "tab_color_picker")
+        self.action_ruler = self.ui.findChild(QAction, "action_ruler")
+        self.spin_ruler_len = self.right_tab_widget.findChild(QSpinBox, "spin_ruler_len")
+        self.lbl_ruler_px = self.right_tab_widget.findChild(QLabel, "lbl_ruler_px")
+        self.lbl_ruler_calib = self.right_tab_widget.findChild(QLabel, "lbl_ruler_calib")
+        self.lbl_ruler_meas = self.right_tab_widget.findChild(QLabel, "lbl_ruler_meas")
+        self.btn_ruler_calibrate = self.right_tab_widget.findChild(QPushButton, "btn_ruler_calibrate")
+        self.chk_show_profile = self.right_tab_widget.findChild(QCheckBox, "chk_show_profile")
+        self.action_show_mosaic = self.ui.findChild(QAction, "action_show_mosaic")
+        self.log_text_edit = self.ui.findChild(PySide6.QtWidgets.QPlainTextEdit, "log_text_edit")
+        self.chk_auto_exposure = self.camera_settings_tabs.findChild(QCheckBox, "chk_auto_exposure")
+        self.chk_roi = self.camera_settings_tabs.findChild(QCheckBox, "chk_roi")
+        self.spin_exposure_time = self.camera_settings_tabs.findChild(QDoubleSpinBox, "spin_exposure_time")
+        self.slider_exposure = self.camera_settings_tabs.findChild(PySide6.QtWidgets.QSlider, "slider_exposure")
+        self.spin_gain = self.camera_settings_tabs.findChild(QSpinBox, "spin_gain")
+        self.slider_gain = self.camera_settings_tabs.findChild(PySide6.QtWidgets.QSlider, "slider_gain")
+        self.spin_ae_target = self.camera_settings_tabs.findChild(QSpinBox, "spin_ae_target")
+        self.slider_ae_target = self.camera_settings_tabs.findChild(PySide6.QtWidgets.QSlider, "slider_ae_target")
+        self.rb_continuous = self.camera_settings_tabs.findChild(QRadioButton, "rb_continuous")
+        self.rb_software = self.camera_settings_tabs.findChild(QRadioButton, "rb_software")
+        self.rb_hardware = self.camera_settings_tabs.findChild(QRadioButton, "rb_hardware")
+        self.btn_soft_trigger = self.camera_settings_tabs.findChild(QPushButton, "btn_soft_trigger")
+        self.spin_trigger_count = self.camera_settings_tabs.findChild(QSpinBox, "spin_trigger_count")
+        self.spin_trigger_delay = self.camera_settings_tabs.findChild(QSpinBox, "spin_trigger_delay")
+        self.spin_trigger_interval = self.camera_settings_tabs.findChild(QSpinBox, "spin_trigger_interval")
+        self.combo_ext_mode = self.camera_settings_tabs.findChild(QComboBox, "combo_ext_mode")
+        self.spin_ext_jitter = self.camera_settings_tabs.findChild(QSpinBox, "spin_ext_jitter")
+        self.combo_ext_shutter = self.camera_settings_tabs.findChild(QComboBox, "combo_ext_shutter")
+        self.combo_strobe_mode = self.camera_settings_tabs.findChild(QComboBox, "combo_strobe_mode")
+        self.combo_strobe_polarity = self.camera_settings_tabs.findChild(QComboBox, "combo_strobe_polarity")
+        self.spin_strobe_delay = self.camera_settings_tabs.findChild(QSpinBox, "spin_strobe_delay")
+        self.spin_strobe_width = self.camera_settings_tabs.findChild(QSpinBox, "spin_strobe_width")
+        self.action_start_camera = self.ui.findChild(QAction, "action_start_camera")
+        self.action_stop_camera = self.ui.findChild(QAction, "action_stop_camera")
+        self.action_record = self.ui.findChild(QAction, "action_record")
+        self.action_snapshot = self.ui.findChild(QAction, "action_snapshot")
+        self.action_home_and_run = self.ui.findChild(QAction, "action_home_and_run")
+        self.btn_load_template = self.right_tab_widget.findChild(QPushButton, "btn_load_template")
+        self.chk_match_enable = self.right_tab_widget.findChild(QCheckBox, "chk_match_enable")
+        self.btn_toggle_contours = self.right_tab_widget.findChild(QPushButton, "btn_toggle_contours")
+        self.combo_contour_mode = self.right_tab_widget.findChild(QComboBox, "combo_contour_mode")
+        self.slider_threshold = self.right_tab_widget.findChild(PySide6.QtWidgets.QSlider, "slider_threshold")
+        self.lbl_threshold_val = self.right_tab_widget.findChild(QLabel, "lbl_threshold_val")
+        self.slider_canny = self.right_tab_widget.findChild(RangeSlider, "slider_canny")
+        self.lbl_canny_val = self.right_tab_widget.findChild(QLabel, "lbl_canny_val")
+        self.spin_min_area = self.right_tab_widget.findChild(QSpinBox, "spin_min_area")
+        self.spin_max_area = self.right_tab_widget.findChild(QSpinBox, "spin_max_area")
+        self.chk_fill_contours = self.right_tab_widget.findChild(QCheckBox, "chk_fill_contours")
+        self.chk_show_box = self.right_tab_widget.findChild(QCheckBox, "chk_show_box")
+        self.tabs_matching = self.right_tab_widget.findChild(QTabWidget, "tabs_matching")
+        self.orb_nfeatures = self.right_tab_widget.findChild(QSpinBox, "orb_nfeatures")
+        self.orb_scaleFactor = self.right_tab_widget.findChild(QDoubleSpinBox, "orb_scaleFactor")
+        self.orb_nlevels = self.right_tab_widget.findChild(QSpinBox, "orb_nlevels")
+        self.orb_edgeThreshold = self.right_tab_widget.findChild(QSpinBox, "orb_edgeThreshold")
+        self.orb_firstLevel = self.right_tab_widget.findChild(QSpinBox, "orb_firstLevel")
+        self.orb_wta_k = self.right_tab_widget.findChild(QSpinBox, "orb_wta_k")
+        self.orb_scoreType = self.right_tab_widget.findChild(QComboBox, "orb_scoreType")
+        self.orb_patchSize = self.right_tab_widget.findChild(QSpinBox, "orb_patchSize")
+        self.orb_fastThreshold = self.right_tab_widget.findChild(QSpinBox, "orb_fastThreshold")
+        self.sift_nfeatures = self.right_tab_widget.findChild(QSpinBox, "sift_nfeatures")
+        self.sift_nOctaveLayers = self.right_tab_widget.findChild(QSpinBox, "sift_nOctaveLayers")
+        self.sift_contrastThreshold = self.right_tab_widget.findChild(QDoubleSpinBox, "sift_contrastThreshold")
+        self.sift_edgeThreshold = self.right_tab_widget.findChild(QDoubleSpinBox, "sift_edgeThreshold")
+        self.sift_sigma = self.right_tab_widget.findChild(QDoubleSpinBox, "sift_sigma")
+        self.akaze_descriptor_type = self.right_tab_widget.findChild(QComboBox, "akaze_descriptor_type")
+        self.akaze_threshold = self.right_tab_widget.findChild(QDoubleSpinBox, "akaze_threshold")
+        self.akaze_nOctaves = self.right_tab_widget.findChild(QSpinBox, "akaze_nOctaves")
+        self.akaze_nOctaveLayers = self.right_tab_widget.findChild(QSpinBox, "akaze_nOctaveLayers")
+        self.hough_dp = self.right_tab_widget.findChild(QDoubleSpinBox, "hough_dp")
+        self.hough_minDist = self.right_tab_widget.findChild(QDoubleSpinBox, "hough_minDist")
+        self.hough_param1 = self.right_tab_widget.findChild(QDoubleSpinBox, "hough_param1")
+        self.hough_param2 = self.right_tab_widget.findChild(QDoubleSpinBox, "hough_param2")
+        self.hough_minRadius = self.right_tab_widget.findChild(QSpinBox, "hough_minRadius")
+        self.hough_maxRadius = self.right_tab_widget.findChild(QSpinBox, "hough_maxRadius")
+        self.aruco_dict = self.right_tab_widget.findChild(QComboBox, "aruco_dict")
+        self.chk_aruco_show_ids = self.right_tab_widget.findChild(QCheckBox, "chk_aruco_show_ids")
+        self.chk_aruco_show_rejected = self.right_tab_widget.findChild(QCheckBox, "chk_aruco_show_rejected")
+        self.spin_aruco_border_bits = self.right_tab_widget.findChild(QSpinBox, "spin_aruco_border_bits")
+        self.chk_aruco_enable = self.right_tab_widget.findChild(QCheckBox, "chk_aruco_enable")
+        self.chk_hough_enable = self.right_tab_widget.findChild(QCheckBox, "chk_hough_enable")
+        self.main_h_splitter = self.ui.findChild(QSplitter, "main_h_splitter")
+        self.scroll_layout = self.ui.findChild(QVBoxLayout, "scroll_layout")
+        self.controls_group = self.camera_settings_tabs.findChild(QGroupBox, "controls_group")
+        self.trigger_group = self.camera_settings_tabs.findChild(QGroupBox, "trigger_group")
+        self.trigger_params_group = self.camera_settings_tabs.findChild(QGroupBox, "trigger_params_group")
+        self.ext_trigger_group = self.camera_settings_tabs.findChild(QGroupBox, "ext_trigger_group")
+        self.strobe_group = self.camera_settings_tabs.findChild(QGroupBox, "strobe_group")
+
+        # --- End of widget finding ---
+
         # Install event filter to handle close event
         self.ui.installEventFilter(self)
 
-        self.ui.video_label.installEventFilter(self)
+        self.video_label.installEventFilter(self)
 
         self.current_pixmap = None
-
+        
         # Setup Worker Thread
         self.matching_thread = QThread()
         self.worker = MatchingWorker()
@@ -133,39 +278,25 @@ class MainWindow(QObject):
         self.param_poll_timer.timeout.connect(self.poll_camera_params)
 
         # --- CNC Control Panel Setup ---        
-        # The CNCControlPanel is now a custom widget loaded from the UI file.
-        self.cnc_control_panel = self.ui.findChild(QGroupBox, "CNCControlPanel")
+        self.cnc_control_panel = self.hardware_tabs.findChild(QGroupBox, "CNCControlPanel")
         if self.cnc_control_panel:
             self.cnc_control_panel.setupUi()
             self.cnc_control_panel.log_signal.connect(self.log)
         else:
-            self.cnc_control_panel = None # Handle case where it's not found
+            self.cnc_control_panel = None
 
         # Initial Detector config
         
-        if hasattr(self.ui, 'chk_qrcode_enable'):
-            self.ui.chk_qrcode_enable.toggled.connect(self.on_qrcode_enable_toggled)
+        if hasattr(self, 'chk_qrcode_enable') and self.chk_qrcode_enable:
+            self.chk_qrcode_enable.toggled.connect(self.on_qrcode_enable_toggled)
 
         # SSIM UI
-        if hasattr(self.ui, 'btn_load_ssim_ref'):
-            self.ui.btn_load_ssim_ref.clicked.connect(self.on_load_ssim_ref_clicked)
-        if hasattr(self.ui, 'chk_ssim_enable'):
-            self.ui.chk_ssim_enable.toggled.connect(self.on_ssim_enable_toggled)
+        if hasattr(self, 'btn_load_ssim_ref') and self.btn_load_ssim_ref:
+            self.btn_load_ssim_ref.clicked.connect(self.on_load_ssim_ref_clicked)
+        if hasattr(self, 'chk_ssim_enable') and self.chk_ssim_enable:
+            self.chk_ssim_enable.toggled.connect(self.on_ssim_enable_toggled)
             
         self.ssim_ref_loaded = False
-
-        self.intensity_chart = self.ui.intensity_chart
-        self.action_color_picker = self.ui.action_color_picker
-        self.tab_color_picker = self.ui.tab_color_picker
-        
-        # Restore Ruler UI Elements
-        self.action_ruler = self.ui.action_ruler
-        self.spin_ruler_len = self.ui.spin_ruler_len
-        self.lbl_ruler_px = self.ui.lbl_ruler_px
-        self.lbl_ruler_calib = self.ui.lbl_ruler_calib
-        self.lbl_ruler_meas = self.ui.lbl_ruler_meas
-        self.btn_ruler_calibrate = self.ui.btn_ruler_calibrate
-        self.chk_show_profile = self.ui.chk_show_profile
 
         # Ruler / Measurement Tool Init
         self.ruler_active = False
@@ -205,10 +336,14 @@ class MainWindow(QObject):
         self.color_picker_active = False
 
         # Connect Signals
-        self.action_ruler.toggled.connect(self.on_ruler_toggled)
-        self.action_color_picker.toggled.connect(self.on_color_picker_toggled)
-        self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
-        self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
+        if self.action_ruler:
+            self.action_ruler.toggled.connect(self.on_ruler_toggled)
+        if self.action_color_picker:
+            self.action_color_picker.toggled.connect(self.on_color_picker_toggled)
+        if self.btn_ruler_calibrate:
+            self.btn_ruler_calibrate.clicked.connect(self.calibrate_ruler)
+        if self.chk_show_profile:
+            self.chk_show_profile.toggled.connect(self.on_show_profile_toggled)
         
         # Connect CNC position updates for mosaic
         if self.cnc_control_panel:
@@ -242,50 +377,52 @@ class MainWindow(QObject):
         self.log("Application started.")
 
         # --- LED Controller Setup ---
-        self.led_controller = LEDController(self.ui)
+        self.led_controller = LEDController(self.hardware_tabs)
         self.led_controller.log_signal.connect(self.log)
 
         # Connections
-        self.ui.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
-        self.ui.chk_roi.toggled.connect(self.on_roi_toggled)
+        if self.chk_auto_exposure:
+            self.chk_auto_exposure.toggled.connect(self.on_auto_exposure_toggled)
+        if self.chk_roi:
+            self.chk_roi.toggled.connect(self.on_roi_toggled)
 
-        self.ui.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
-        self.ui.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
+        self.spin_exposure_time.valueChanged.connect(self.on_exposure_time_changed)
+        self.slider_exposure.valueChanged.connect(self.on_exposure_slider_changed)
 
-        self.ui.spin_gain.valueChanged.connect(self.on_gain_changed)
-        self.ui.slider_gain.valueChanged.connect(self.on_gain_slider_changed)
+        self.spin_gain.valueChanged.connect(self.on_gain_changed)
+        self.slider_gain.valueChanged.connect(self.on_gain_slider_changed)
 
-        self.ui.spin_ae_target.valueChanged.connect(self.on_ae_target_changed)
-        self.ui.slider_ae_target.valueChanged.connect(self.on_ae_slider_changed)
+        self.spin_ae_target.valueChanged.connect(self.on_ae_target_changed)
+        self.slider_ae_target.valueChanged.connect(self.on_ae_slider_changed)
 
         # Recreate ButtonGroup for logic
         self.trigger_bg = QButtonGroup(self.ui)
-        self.trigger_bg.addButton(self.ui.rb_continuous, 0)
-        self.trigger_bg.addButton(self.ui.rb_software, 1)
-        self.trigger_bg.addButton(self.ui.rb_hardware, 2)
+        self.trigger_bg.addButton(self.rb_continuous, 0)
+        self.trigger_bg.addButton(self.rb_software, 1)
+        self.trigger_bg.addButton(self.rb_hardware, 2)
         self.trigger_bg.idToggled.connect(self.on_trigger_mode_changed)
 
-        self.ui.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
+        self.btn_soft_trigger.clicked.connect(self.on_soft_trigger_clicked)
 
         # New Connections for Trigger Params
-        self.ui.spin_trigger_count.valueChanged.connect(self.on_trigger_count_changed)
-        self.ui.spin_trigger_delay.valueChanged.connect(self.on_trigger_delay_changed)
-        self.ui.spin_trigger_interval.valueChanged.connect(
+        self.spin_trigger_count.valueChanged.connect(self.on_trigger_count_changed)
+        self.spin_trigger_delay.valueChanged.connect(self.on_trigger_delay_changed)
+        self.spin_trigger_interval.valueChanged.connect(
             self.on_trigger_interval_changed
         )
 
         # New Connections for External Trigger Params
-        self.ui.combo_ext_mode.currentIndexChanged.connect(self.on_ext_mode_changed)
-        self.ui.spin_ext_jitter.valueChanged.connect(self.on_ext_jitter_changed)
-        self.ui.combo_ext_shutter.currentIndexChanged.connect(
+        self.combo_ext_mode.currentIndexChanged.connect(self.on_ext_mode_changed)
+        self.spin_ext_jitter.valueChanged.connect(self.on_ext_jitter_changed)
+        self.combo_ext_shutter.currentIndexChanged.connect(
             self.on_ext_shutter_changed
         )
 
         # New Connections for Strobe Params
-        self.ui.combo_strobe_mode.currentIndexChanged.connect(self.on_strobe_mode_changed)
-        self.ui.combo_strobe_polarity.currentIndexChanged.connect(self.on_strobe_polarity_changed)
-        self.ui.spin_strobe_delay.valueChanged.connect(self.on_strobe_delay_changed)
-        self.ui.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
+        self.combo_strobe_mode.currentIndexChanged.connect(self.on_strobe_mode_changed)
+        self.combo_strobe_polarity.currentIndexChanged.connect(self.on_strobe_polarity_changed)
+        self.spin_strobe_delay.valueChanged.connect(self.on_strobe_delay_changed)
+        self.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
         
         # Retrieve Actions
         self.ui.action_start_camera.triggered.connect(self.on_start_clicked)
@@ -295,100 +432,107 @@ class MainWindow(QObject):
         self.ui.action_home_and_run.triggered.connect(self.on_home_and_run_clicked)
 
         # Template Matching UI
-        if hasattr(self.ui, 'btn_load_template'):
-            self.ui.btn_load_template.clicked.connect(self.on_load_template_clicked)
-        if hasattr(self.ui, 'chk_match_enable'):
-            self.ui.chk_match_enable.toggled.connect(self.on_match_enable_toggled)
+        if self.btn_load_template:
+            self.btn_load_template.clicked.connect(self.on_load_template_clicked)
+        if self.chk_match_enable:
+            self.chk_match_enable.toggled.connect(self.on_match_enable_toggled)
             
         self.template_loaded = False
         
         # --- Contour Controls ---
-        self.btn_toggle_contours = self.ui.btn_toggle_contours
-        self.combo_contour_mode = self.ui.combo_contour_mode
-        self.slider_threshold = self.ui.slider_threshold
-        self.lbl_threshold_val = self.ui.lbl_threshold_val
-        self.slider_canny = self.ui.slider_canny
-        self.lbl_canny_val = self.ui.lbl_canny_val
-        self.spin_min_area = self.ui.spin_min_area
-        self.spin_max_area = self.ui.spin_max_area
-        self.chk_fill_contours = self.ui.chk_fill_contours
-        self.chk_show_box = self.ui.chk_show_box
         if self.slider_canny:
             self.slider_canny.setRange(0, 255)
             self.slider_canny.setValues(50, 150)
 
         # Connect Contour Signals
-        self.btn_toggle_contours.toggled.connect(self.on_toggle_contours_toggled)
-        self.combo_contour_mode.currentTextChanged.connect(
-            self.on_contour_params_changed
-        )
-        self.slider_threshold.valueChanged.connect(self.on_contour_params_changed)
-        self.slider_canny.valuesChanged.connect(self.on_contour_params_changed)
-        self.spin_min_area.valueChanged.connect(self.on_contour_params_changed)
-        self.spin_max_area.valueChanged.connect(self.on_contour_params_changed)
-        self.chk_fill_contours.toggled.connect(self.on_contour_params_changed)
-        self.chk_show_box.toggled.connect(self.on_contour_params_changed)
+        if self.btn_toggle_contours:
+            self.btn_toggle_contours.toggled.connect(self.on_toggle_contours_toggled)
+        if self.combo_contour_mode:
+            self.combo_contour_mode.currentTextChanged.connect(
+                self.on_contour_params_changed
+            )
+        if self.slider_threshold:
+            self.slider_threshold.valueChanged.connect(self.on_contour_params_changed)
+        if self.slider_canny:
+            self.slider_canny.valuesChanged.connect(self.on_contour_params_changed)
+        if self.spin_min_area:
+            self.spin_min_area.valueChanged.connect(self.on_contour_params_changed)
+        if self.spin_max_area:
+            self.spin_max_area.valueChanged.connect(self.on_contour_params_changed)
+        if self.chk_fill_contours:
+            self.chk_fill_contours.toggled.connect(self.on_contour_params_changed)
+        if self.chk_show_box:
+            self.chk_show_box.toggled.connect(self.on_contour_params_changed)
         # -----------------------------------------
 
         # Matching Tabs Connection
-        self.ui.tabs_matching.currentChanged.connect(self.on_detector_params_changed)
-        # Sync initial enabled state with checkbox
-        if hasattr(self.ui, 'chk_match_enable'):
-             self.ui.tabs_matching.setEnabled(self.ui.chk_match_enable.isChecked())
+        if self.tabs_matching:
+            self.tabs_matching.currentChanged.connect(self.on_detector_params_changed)
+            # Sync initial enabled state with checkbox
+            if self.chk_match_enable:
+                self.tabs_matching.setEnabled(self.chk_match_enable.isChecked())
 
         # ORB Parameter Connections
-        self.ui.orb_nfeatures.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_scaleFactor.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_nlevels.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_firstLevel.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_wta_k.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_scoreType.currentIndexChanged.connect(
+        self.orb_nfeatures.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_scaleFactor.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_nlevels.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_firstLevel.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_wta_k.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_scoreType.currentIndexChanged.connect(
             self.on_detector_params_changed
         )
-        self.ui.orb_patchSize.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.orb_fastThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_patchSize.valueChanged.connect(self.on_detector_params_changed)
+        self.orb_fastThreshold.valueChanged.connect(self.on_detector_params_changed)
 
         # SIFT Parameter Connections
-        self.ui.sift_nfeatures.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.sift_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.sift_contrastThreshold.valueChanged.connect(
+        self.sift_nfeatures.valueChanged.connect(self.on_detector_params_changed)
+        self.sift_nOctaveLayers.valueChanged.connect(self.on_detector_params_changed)
+        self.sift_contrastThreshold.valueChanged.connect(
             self.on_detector_params_changed
         )
-        self.ui.sift_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.sift_sigma.valueChanged.connect(self.on_detector_params_changed)
+        self.sift_edgeThreshold.valueChanged.connect(self.on_detector_params_changed)
+        self.sift_sigma.valueChanged.connect(self.on_detector_params_changed)
 
         # AKAZE Parameter Connections
-        self.ui.akaze_descriptor_type.currentIndexChanged.connect(
+        self.akaze_descriptor_type.currentIndexChanged.connect(
             self.on_detector_params_changed
         )
-        self.ui.akaze_threshold.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.akaze_nOctaves.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.akaze_nOctaveLayers.valueChanged.connect(
+        self.akaze_threshold.valueChanged.connect(self.on_detector_params_changed)
+        self.akaze_nOctaves.valueChanged.connect(self.on_detector_params_changed)
+        self.akaze_nOctaveLayers.valueChanged.connect(
             self.on_detector_params_changed
         )
 
         # Hough Circle Parameter Connections
-        self.ui.hough_dp.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.hough_minDist.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.hough_param1.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.hough_param2.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.hough_minRadius.valueChanged.connect(self.on_detector_params_changed)
-        self.ui.hough_maxRadius.valueChanged.connect(self.on_detector_params_changed)
+        self.hough_dp.valueChanged.connect(self.on_detector_params_changed)
+        self.hough_minDist.valueChanged.connect(self.on_detector_params_changed)
+        self.hough_param1.valueChanged.connect(self.on_detector_params_changed)
+        self.hough_param2.valueChanged.connect(self.on_detector_params_changed)
+        self.hough_minRadius.valueChanged.connect(self.on_detector_params_changed)
+        self.hough_maxRadius.valueChanged.connect(self.on_detector_params_changed)
 
         # ArUco Parameter Connections
-        self.ui.aruco_dict.currentTextChanged.connect(self.on_detector_params_changed)
-        self.ui.chk_aruco_show_ids.toggled.connect(self.on_detector_params_changed)
-        self.ui.chk_aruco_show_rejected.toggled.connect(self.on_detector_params_changed)
-        self.ui.spin_aruco_border_bits.valueChanged.connect(
-            self.on_detector_params_changed
-        )
+        if self.aruco_dict:
+            self.aruco_dict.currentTextChanged.connect(self.on_detector_params_changed)
+        if self.chk_aruco_show_ids:
+            self.chk_aruco_show_ids.toggled.connect(self.on_detector_params_changed)
+        if self.chk_aruco_show_rejected:
+            self.chk_aruco_show_rejected.toggled.connect(
+                self.on_detector_params_changed
+            )
+        if self.spin_aruco_border_bits:
+            self.spin_aruco_border_bits.valueChanged.connect(
+                self.on_detector_params_changed
+            )
 
         # New ArUco Enable Checkbox
-        self.ui.chk_aruco_enable.toggled.connect(self.on_aruco_enable_toggled)
-        
+        if self.chk_aruco_enable:
+            self.chk_aruco_enable.toggled.connect(self.on_aruco_enable_toggled)
+
         # Hough Enable Checkbox
-        self.ui.chk_hough_enable.toggled.connect(self.on_hough_enable_toggled)
+        if self.chk_hough_enable:
+            self.chk_hough_enable.toggled.connect(self.on_hough_enable_toggled)
 
         # Camera Setup
         self.camera = MindVisionCamera()
@@ -517,85 +661,76 @@ class MainWindow(QObject):
 
     def update_detector(self):
         # SSIM Priority
-        if hasattr(self.ui, 'chk_ssim_enable') and self.ui.chk_ssim_enable.isChecked():
+        if self.chk_ssim_enable and self.chk_ssim_enable.isChecked():
             params = {'algo': 'SSIM'}
             self.update_worker_params_signal.emit(params)
             return
 
         # QR Code Priority
-        if (
-            hasattr(self.ui, "chk_qrcode_enable")
-            and self.ui.chk_qrcode_enable.isChecked()
-        ):
+        if self.chk_qrcode_enable and self.chk_qrcode_enable.isChecked():
             params = {"algo": "QRCODE"}
             self.update_worker_params_signal.emit(params)
             return
 
         # ArUco Priority
-        if (
-            hasattr(self.ui, "chk_aruco_enable")
-            and self.ui.chk_aruco_enable.isChecked()
-        ):
+        if self.chk_aruco_enable and self.chk_aruco_enable.isChecked():
             params = {"algo": "ARUCO"}
-            if hasattr(self.ui, "aruco_dict"):
-                params["dict"] = self.ui.aruco_dict.currentText()
-            if hasattr(self.ui, "chk_aruco_show_ids"):
-                params["show_ids"] = self.ui.chk_aruco_show_ids.isChecked()
-            if hasattr(self.ui, "chk_aruco_show_rejected"):
-                params["show_rejected"] = self.ui.chk_aruco_show_rejected.isChecked()
-            if hasattr(self.ui, "spin_aruco_border_bits"):
-                params["markerBorderBits"] = self.ui.spin_aruco_border_bits.value()
+            if self.aruco_dict:
+                params["dict"] = self.aruco_dict.currentText()
+            if self.chk_aruco_show_ids:
+                params["show_ids"] = self.chk_aruco_show_ids.isChecked()
+            if self.chk_aruco_show_rejected:
+                params["show_rejected"] = self.chk_aruco_show_rejected.isChecked()
+            if self.spin_aruco_border_bits:
+                params["markerBorderBits"] = self.spin_aruco_border_bits.value()
             self.update_worker_params_signal.emit(params)
             return
 
         # Hough Circle Priority
-        if (
-            hasattr(self.ui, "chk_hough_enable")
-            and self.ui.chk_hough_enable.isChecked()
-        ):
+        if self.chk_hough_enable and self.chk_hough_enable.isChecked():
             params = {
                 "algo": "HOUGH_CIRCLE",
-                "dp": self.ui.hough_dp.value(),
-                "minDist": self.ui.hough_minDist.value(),
-                "param1": self.ui.hough_param1.value(),
-                "param2": self.ui.hough_param2.value(),
-                "minRadius": self.ui.hough_minRadius.value(),
-                "maxRadius": self.ui.hough_maxRadius.value()
+                "dp": self.hough_dp.value(),
+                "minDist": self.hough_minDist.value(),
+                "param1": self.hough_param1.value(),
+                "param2": self.hough_param2.value(),
+                "minRadius": self.hough_minRadius.value(),
+                "maxRadius": self.hough_maxRadius.value()
             }
             self.update_worker_params_signal.emit(params)
             return
 
-        tab_index = self.ui.tabs_matching.currentIndex()
+        tab_index = self.tabs_matching.currentIndex() if self.tabs_matching else 0
         params = {}
 
         if tab_index == 0:  # ORB
             params["algo"] = "ORB"
-            params["nfeatures"] = self.ui.orb_nfeatures.value()
-            params["scaleFactor"] = self.ui.orb_scaleFactor.value()
-            params["nlevels"] = self.ui.orb_nlevels.value()
-            params["edgeThreshold"] = self.ui.orb_edgeThreshold.value()
-            params["firstLevel"] = self.ui.orb_firstLevel.value()
-            params["WTA_K"] = self.ui.orb_wta_k.value()
-            params["scoreType"] = self.ui.orb_scoreType.currentIndex()
-            params["patchSize"] = self.ui.orb_patchSize.value()
-            params["fastThreshold"] = self.ui.orb_fastThreshold.value()
+            params["nfeatures"] = self.orb_nfeatures.value()
+            params["scaleFactor"] = self.orb_scaleFactor.value()
+            params["nlevels"] = self.orb_nlevels.value()
+            params["edgeThreshold"] = self.orb_edgeThreshold.value()
+            params["firstLevel"] = self.orb_firstLevel.value()
+            params["WTA_K"] = self.orb_wta_k.value()
+            params["scoreType"] = self.orb_scoreType.currentIndex()
+            params["patchSize"] = self.orb_patchSize.value()
+            params["fastThreshold"] = self.orb_fastThreshold.value()
 
         elif tab_index == 1:  # SIFT
             params["algo"] = "SIFT"
-            params["nfeatures"] = self.ui.sift_nfeatures.value()
-            params["nOctaveLayers"] = self.ui.sift_nOctaveLayers.value()
-            params["contrastThreshold"] = self.ui.sift_contrastThreshold.value()
-            params["edgeThreshold"] = self.ui.sift_edgeThreshold.value()
-            params["sigma"] = self.ui.sift_sigma.value()
+            params["nfeatures"] = self.sift_nfeatures.value()
+            params["nOctaveLayers"] = self.sift_nOctaveLayers.value()
+            params["contrastThreshold"] = self.sift_contrastThreshold.value()
+            params["edgeThreshold"] = self.sift_edgeThreshold.value()
+            params["sigma"] = self.sift_sigma.value()
 
         elif tab_index == 2:  # AKAZE
             params["algo"] = "AKAZE"
-            combo_idx = self.ui.akaze_descriptor_type.currentIndex()
+            combo_idx = self.akaze_descriptor_type.currentIndex()
             mapping = [2, 3, 4, 5]
             params["descriptor_type"] = mapping[combo_idx]
-            params["threshold"] = self.ui.akaze_threshold.value()
-            params["nOctaves"] = self.ui.akaze_nOctaves.value()
-            params["nOctaveLayers"] = self.ui.akaze_nOctaveLayers.value()
+            params["threshold"] = self.akaze_threshold.value()
+            params["nOctaves"] = self.akaze_nOctaves.value()
+            params["nOctaveLayers"] = self.akaze_nOctaveLayers.value()
 
         self.update_worker_params_signal.emit(params)
 
@@ -684,11 +819,11 @@ class MainWindow(QObject):
         self.ui.video_label.setText(f"Error: {message}")
         self.ui.action_start_camera.setEnabled(True)
         self.ui.action_stop_camera.setEnabled(False)
-        self.ui.controls_group.setEnabled(False)
-        self.ui.trigger_group.setEnabled(False)
-        self.ui.trigger_params_group.setEnabled(False)
-        self.ui.ext_trigger_group.setEnabled(False)
-        self.ui.strobe_group.setEnabled(False)
+        self.controls_group.setEnabled(False)
+        self.trigger_group.setEnabled(False)
+        self.trigger_params_group.setEnabled(False)
+        self.ext_trigger_group.setEnabled(False)
+        self.strobe_group.setEnabled(False)
 
     def on_start_clicked(self):
         if self.camera.open():
@@ -698,9 +833,9 @@ class MainWindow(QObject):
                 self.ui.action_stop_camera.setEnabled(True)
                 self.ui.action_record.setEnabled(True)
                 self.ui.action_snapshot.setEnabled(True)
-                self.ui.controls_group.setEnabled(True)
-                self.ui.trigger_group.setEnabled(True)
-                self.ui.strobe_group.setEnabled(True)
+                self.controls_group.setEnabled(True)
+                self.trigger_group.setEnabled(True)
+                self.strobe_group.setEnabled(True)
 
                 self.ui.video_label.setText("Starting stream...")
                 self.apply_camera_settings()
@@ -721,11 +856,11 @@ class MainWindow(QObject):
         self.ui.action_record.setEnabled(False)
         self.ui.action_snapshot.setEnabled(False)
 
-        self.ui.controls_group.setEnabled(False)
-        self.ui.trigger_group.setEnabled(False)
-        self.ui.trigger_params_group.setEnabled(False)
-        self.ui.ext_trigger_group.setEnabled(False)
-        self.ui.strobe_group.setEnabled(False)
+        self.controls_group.setEnabled(False)
+        self.trigger_group.setEnabled(False)
+        self.trigger_params_group.setEnabled(False)
+        self.ext_trigger_group.setEnabled(False)
+        self.strobe_group.setEnabled(False)
 
         self.ui.video_label.clear()
         self.ui.video_label.setText("Camera Stopped")
@@ -741,14 +876,14 @@ class MainWindow(QObject):
         try:
             current_exp = self.camera.getExposureTime()
             # Update UI only if not interacting (or if disabled/auto)
-            if not self.ui.slider_exposure.isSliderDown() and not self.ui.spin_exposure_time.hasFocus():
-                if abs(self.ui.spin_exposure_time.value() - current_exp) > 1.0: # Threshold
-                    self.ui.spin_exposure_time.blockSignals(True)
-                    self.ui.spin_exposure_time.setValue(current_exp)
-                    self.ui.spin_exposure_time.blockSignals(False)
+            if not self.slider_exposure.isSliderDown() and not self.spin_exposure_time.hasFocus():
+                if abs(self.spin_exposure_time.value() - current_exp) > 1.0: # Threshold
+                    self.spin_exposure_time.blockSignals(True)
+                    self.spin_exposure_time.setValue(current_exp)
+                    self.spin_exposure_time.blockSignals(False)
                     
-                    min_exp = self.ui.spin_exposure_time.minimum()
-                    max_exp = self.ui.spin_exposure_time.maximum()
+                    min_exp = self.spin_exposure_time.minimum()
+                    max_exp = self.spin_exposure_time.maximum()
                     self.update_slider_from_time(current_exp, min_exp, max_exp)
         except Exception:
             pass
@@ -756,15 +891,15 @@ class MainWindow(QObject):
         # 2. Gain
         try:
             current_gain = self.camera.getAnalogGain()
-            if not self.ui.slider_gain.isSliderDown() and not self.ui.spin_gain.hasFocus():
-                if abs(self.ui.spin_gain.value() - current_gain) > 0.1:
-                    self.ui.spin_gain.blockSignals(True)
-                    self.ui.spin_gain.setValue(current_gain)
-                    self.ui.spin_gain.blockSignals(False)
+            if not self.slider_gain.isSliderDown() and not self.spin_gain.hasFocus():
+                if abs(self.spin_gain.value() - current_gain) > 0.1:
+                    self.spin_gain.blockSignals(True)
+                    self.spin_gain.setValue(current_gain)
+                    self.spin_gain.blockSignals(False)
 
-                    self.ui.slider_gain.blockSignals(True)
-                    self.ui.slider_gain.setValue(current_gain)
-                    self.ui.slider_gain.blockSignals(False)
+                    self.slider_gain.blockSignals(True)
+                    self.slider_gain.setValue(current_gain)
+                    self.slider_gain.blockSignals(False)
         except Exception:
             pass
 
@@ -789,41 +924,29 @@ class MainWindow(QObject):
     def on_aruco_enable_toggled(self, checked):
         if checked:
             # Mutual exclusion: disable template matching if active
-            if (
-                hasattr(self.ui, "chk_match_enable")
-                and self.ui.chk_match_enable.isChecked()
-            ):
-                self.ui.chk_match_enable.blockSignals(True)
-                self.ui.chk_match_enable.setChecked(False)
-                self.ui.chk_match_enable.blockSignals(False)
+            if self.chk_match_enable and self.chk_match_enable.isChecked():
+                self.chk_match_enable.blockSignals(True)
+                self.chk_match_enable.setChecked(False)
+                self.chk_match_enable.blockSignals(False)
                 self.is_matching_ui_active = False
 
             # Mutual exclusion: disable QR Code if active
-            if (
-                hasattr(self.ui, "chk_qrcode_enable")
-                and self.ui.chk_qrcode_enable.isChecked()
-            ):
-                self.ui.chk_qrcode_enable.blockSignals(True)
-                self.ui.chk_qrcode_enable.setChecked(False)
-                self.ui.chk_qrcode_enable.blockSignals(False)
+            if self.chk_qrcode_enable and self.chk_qrcode_enable.isChecked():
+                self.chk_qrcode_enable.blockSignals(True)
+                self.chk_qrcode_enable.setChecked(False)
+                self.chk_qrcode_enable.blockSignals(False)
 
             # Mutual exclusion: disable SSIM if active
-            if (
-                hasattr(self.ui, "chk_ssim_enable")
-                and self.ui.chk_ssim_enable.isChecked()
-            ):
-                self.ui.chk_ssim_enable.blockSignals(True)
-                self.ui.chk_ssim_enable.setChecked(False)
-                self.ui.chk_ssim_enable.blockSignals(False)
+            if self.chk_ssim_enable and self.chk_ssim_enable.isChecked():
+                self.chk_ssim_enable.blockSignals(True)
+                self.chk_ssim_enable.setChecked(False)
+                self.chk_ssim_enable.blockSignals(False)
 
             # Mutual exclusion: disable Hough if active
-            if (
-                hasattr(self.ui, "chk_hough_enable")
-                and self.ui.chk_hough_enable.isChecked()
-            ):
-                self.ui.chk_hough_enable.blockSignals(True)
-                self.ui.chk_hough_enable.setChecked(False)
-                self.ui.chk_hough_enable.blockSignals(False)
+            if self.chk_hough_enable and self.chk_hough_enable.isChecked():
+                self.chk_hough_enable.blockSignals(True)
+                self.chk_hough_enable.setChecked(False)
+                self.chk_hough_enable.blockSignals(False)
             
             # Enable ArUco (update_detector picks up the checked state)
             self.update_detector()
@@ -838,12 +961,11 @@ class MainWindow(QObject):
         if checked:
             # Mutual exclusion
             for chk_name in ["chk_match_enable", "chk_aruco_enable", "chk_qrcode_enable", "chk_ssim_enable"]:
-                if hasattr(self.ui, chk_name):
-                    chk = getattr(self.ui, chk_name)
-                    if chk.isChecked():
-                        chk.blockSignals(True)
-                        chk.setChecked(False)
-                        chk.blockSignals(False)
+                chk = getattr(self, chk_name, None)
+                if chk and chk.isChecked():
+                    chk.blockSignals(True)
+                    chk.setChecked(False)
+                    chk.blockSignals(False)
             
             self.is_matching_ui_active = True
             self.update_detector()
@@ -862,15 +984,12 @@ class MainWindow(QObject):
 
             # Update Label
             filename = os.path.basename(file_path)
-            if hasattr(self.ui, "lbl_template_name"):
-                self.ui.lbl_template_name.setText(filename)
-                self.ui.lbl_template_name.setStyleSheet("color: black;")
+            if self.lbl_template_name:
+                self.lbl_template_name.setText(filename)
+                self.lbl_template_name.setStyleSheet("color: black;")
 
             # If enabled, update worker
-            if (
-                hasattr(self.ui, "chk_match_enable")
-                and self.ui.chk_match_enable.isChecked()
-            ):
+            if self.chk_match_enable and self.chk_match_enable.isChecked():
                 # self.update_detector() # Redundant, worker should already be up to date
                 self.toggle_worker_matching_signal.emit(True)
 
@@ -881,92 +1000,71 @@ class MainWindow(QObject):
                 self.on_load_template_clicked()
                 # If still not loaded (user cancelled), uncheck
                 if not self.template_loaded:
-                    self.ui.chk_match_enable.setChecked(False)
+                    if self.chk_match_enable:
+                        self.chk_match_enable.setChecked(False)
                     return
 
             # Mutual Exclusion: Disable ArUco
-            if (
-                hasattr(self.ui, "chk_aruco_enable")
-                and self.ui.chk_aruco_enable.isChecked()
-            ):
-                self.ui.chk_aruco_enable.blockSignals(True)
-                self.ui.chk_aruco_enable.setChecked(False)
-                self.ui.chk_aruco_enable.blockSignals(False)
+            if self.chk_aruco_enable and self.chk_aruco_enable.isChecked():
+                self.chk_aruco_enable.blockSignals(True)
+                self.chk_aruco_enable.setChecked(False)
+                self.chk_aruco_enable.blockSignals(False)
 
             # Mutual Exclusion: Disable QR Code
-            if (
-                hasattr(self.ui, "chk_qrcode_enable")
-                and self.ui.chk_qrcode_enable.isChecked()
-            ):
-                self.ui.chk_qrcode_enable.blockSignals(True)
-                self.ui.chk_qrcode_enable.setChecked(False)
-                self.ui.chk_qrcode_enable.blockSignals(False)
+            if self.chk_qrcode_enable and self.chk_qrcode_enable.isChecked():
+                self.chk_qrcode_enable.blockSignals(True)
+                self.chk_qrcode_enable.setChecked(False)
+                self.chk_qrcode_enable.blockSignals(False)
 
             # Mutual Exclusion: Disable SSIM
-            if (
-                hasattr(self.ui, "chk_ssim_enable")
-                and self.ui.chk_ssim_enable.isChecked()
-            ):
-                self.ui.chk_ssim_enable.blockSignals(True)
-                self.ui.chk_ssim_enable.setChecked(False)
-                self.ui.chk_ssim_enable.blockSignals(False)
+            if self.chk_ssim_enable and self.chk_ssim_enable.isChecked():
+                self.chk_ssim_enable.blockSignals(True)
+                self.chk_ssim_enable.setChecked(False)
+                self.chk_ssim_enable.blockSignals(False)
 
             # Mutual Exclusion: Disable Hough
-            if (
-                hasattr(self.ui, "chk_hough_enable")
-                and self.ui.chk_hough_enable.isChecked()
-            ):
-                self.ui.chk_hough_enable.blockSignals(True)
-                self.ui.chk_hough_enable.setChecked(False)
-                self.ui.chk_hough_enable.blockSignals(False)
+            if self.chk_hough_enable and self.chk_hough_enable.isChecked():
+                self.chk_hough_enable.blockSignals(True)
+                self.chk_hough_enable.setChecked(False)
+                self.chk_hough_enable.blockSignals(False)
 
             self.is_matching_ui_active = True
-            self.ui.tabs_matching.setEnabled(True)
+            if self.tabs_matching:
+                self.tabs_matching.setEnabled(True)
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
         else:
             self.is_matching_ui_active = False
-            self.ui.tabs_matching.setEnabled(False)
+            if self.tabs_matching:
+                self.tabs_matching.setEnabled(False)
             self.toggle_worker_matching_signal.emit(False)
 
     def on_qrcode_enable_toggled(self, checked):
         if checked:
             # Mutual exclusion: disable template matching if active
-            if (
-                hasattr(self.ui, "chk_match_enable")
-                and self.ui.chk_match_enable.isChecked()
-            ):
-                self.ui.chk_match_enable.blockSignals(True)
-                self.ui.chk_match_enable.setChecked(False)
-                self.ui.chk_match_enable.blockSignals(False)
+            if self.chk_match_enable and self.chk_match_enable.isChecked():
+                self.chk_match_enable.blockSignals(True)
+                self.chk_match_enable.setChecked(False)
+                self.chk_match_enable.blockSignals(False)
                 self.is_matching_ui_active = False
 
             # Mutual exclusion: disable ArUco
-            if (
-                hasattr(self.ui, "chk_aruco_enable")
-                and self.ui.chk_aruco_enable.isChecked()
-            ):
-                self.ui.chk_aruco_enable.blockSignals(True)
-                self.ui.chk_aruco_enable.setChecked(False)
-                self.ui.chk_aruco_enable.blockSignals(False)
+            if self.chk_aruco_enable and self.chk_aruco_enable.isChecked():
+                self.chk_aruco_enable.blockSignals(True)
+                self.chk_aruco_enable.setChecked(False)
+                self.chk_aruco_enable.blockSignals(False)
 
             # Mutual exclusion: disable SSIM
-            if (
-                hasattr(self.ui, "chk_ssim_enable")
-                and self.ui.chk_ssim_enable.isChecked()
-            ):
-                self.ui.chk_ssim_enable.blockSignals(True)
-                self.ui.chk_ssim_enable.setChecked(False)
-                self.ui.chk_ssim_enable.blockSignals(False)
+            if self.chk_ssim_enable and self.chk_ssim_enable.isChecked():
+                self.chk_ssim_enable.blockSignals(True)
+                self.chk_ssim_enable.setChecked(False)
+                self.chk_ssim_enable.blockSignals(False)
 
             # Mutual Exclusion: Disable Hough
-            if (
-                hasattr(self.ui, "chk_hough_enable")
-                and self.ui.chk_hough_enable.isChecked()
-            ):
-                self.ui.chk_hough_enable.blockSignals(True)
-                self.ui.chk_hough_enable.setChecked(False)
-                self.ui.chk_hough_enable.blockSignals(False)
+            if self.chk_hough_enable and self.chk_hough_enable.isChecked():
+                self.chk_hough_enable.blockSignals(True)
+                self.chk_hough_enable.setChecked(False)
+                self.chk_hough_enable.blockSignals(False)
             
             self.update_detector()
             self.toggle_worker_matching_signal.emit(True)
@@ -976,13 +1074,13 @@ class MainWindow(QObject):
 
     @Slot(str)
     def handle_qr_found(self, text):
-        if hasattr(self.ui, "lbl_qrcode_data"):
-            self.ui.lbl_qrcode_data.setText(f"Decoded Data: {text}")
+        if self.lbl_qrcode_data:
+            self.lbl_qrcode_data.setText(f"Decoded Data: {text}")
 
     @Slot(float)
     def handle_ssim_score(self, score):
-        if hasattr(self.ui, "lbl_ssim_score"):
-            self.ui.lbl_ssim_score.setText(f"Score: {score:.4f}")
+        if self.lbl_ssim_score:
+            self.lbl_ssim_score.setText(f"Score: {score:.4f}")
 
     def on_load_ssim_ref_clicked(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -993,11 +1091,11 @@ class MainWindow(QObject):
             self.ssim_ref_loaded = True
             
             filename = os.path.basename(file_path)
-            if hasattr(self.ui, "lbl_ssim_ref_name"):
-                self.ui.lbl_ssim_ref_name.setText(filename)
-                self.ui.lbl_ssim_ref_name.setStyleSheet("color: black;")
+            if self.lbl_ssim_ref_name:
+                self.lbl_ssim_ref_name.setText(filename)
+                self.lbl_ssim_ref_name.setStyleSheet("color: black;")
             
-            if hasattr(self.ui, "chk_ssim_enable") and self.ui.chk_ssim_enable.isChecked():
+            if self.chk_ssim_enable and self.chk_ssim_enable.isChecked():
                 self.update_detector()
                 self.toggle_worker_matching_signal.emit(True)
 
@@ -1006,17 +1104,17 @@ class MainWindow(QObject):
             if not self.ssim_ref_loaded:
                 self.on_load_ssim_ref_clicked()
                 if not self.ssim_ref_loaded:
-                    self.ui.chk_ssim_enable.setChecked(False)
+                    if self.chk_ssim_enable:
+                        self.chk_ssim_enable.setChecked(False)
                     return
 
             # Mutual Exclusion
             for chk_name in ["chk_match_enable", "chk_aruco_enable", "chk_qrcode_enable", "chk_hough_enable"]:
-                if hasattr(self.ui, chk_name):
-                    chk = getattr(self.ui, chk_name)
-                    if chk.isChecked():
-                        chk.blockSignals(True)
-                        chk.setChecked(False)
-                        chk.blockSignals(False)
+                chk = getattr(self, chk_name, None)
+                if chk and chk.isChecked():
+                    chk.blockSignals(True)
+                    chk.setChecked(False)
+                    chk.blockSignals(False)
             
             self.is_matching_ui_active = True
             self.update_detector()
@@ -1064,168 +1162,168 @@ class MainWindow(QObject):
         min_exp, max_exp = self.camera.getExposureTimeRange()
         step_exp = self.camera.getExposureTimeStep()
 
-        self.ui.spin_exposure_time.setRange(min_exp, max_exp)
+        self.spin_exposure_time.setRange(min_exp, max_exp)
         if step_exp > 0:
-            self.ui.spin_exposure_time.setSingleStep(step_exp)
-            self.ui.slider_exposure.setRange(0, int((max_exp - min_exp) / step_exp))
+            self.spin_exposure_time.setSingleStep(step_exp)
+            self.slider_exposure.setRange(0, int((max_exp - min_exp) / step_exp))
         else:
-            self.ui.slider_exposure.setRange(0, 10000)
+            self.slider_exposure.setRange(0, 10000)
 
         min_gain, max_gain = self.camera.getAnalogGainRange()
-        self.ui.spin_gain.setRange(min_gain, max_gain)
-        self.ui.slider_gain.setRange(min_gain, max_gain)
+        self.spin_gain.setRange(min_gain, max_gain)
+        self.slider_gain.setRange(min_gain, max_gain)
 
         # Values
         is_auto = self.camera.getAutoExposure()
-        self.ui.chk_auto_exposure.setChecked(is_auto)
-        self.ui.spin_exposure_time.setEnabled(not is_auto)
-        self.ui.slider_exposure.setEnabled(not is_auto)
-        self.ui.spin_ae_target.setEnabled(is_auto)
-        self.ui.slider_ae_target.setEnabled(is_auto)
+        self.chk_auto_exposure.setChecked(is_auto)
+        self.spin_exposure_time.setEnabled(not is_auto)
+        self.slider_exposure.setEnabled(not is_auto)
+        self.spin_ae_target.setEnabled(is_auto)
+        self.slider_ae_target.setEnabled(is_auto)
 
         # AE Target
         if hasattr(self.camera, "getAeTarget"):
             # Enable controls
-            self.ui.spin_ae_target.setEnabled(is_auto)
-            self.ui.slider_ae_target.setEnabled(is_auto)
-            self.ui.spin_ae_target.setToolTip("")
-            self.ui.slider_ae_target.setToolTip("")
+            self.spin_ae_target.setEnabled(is_auto)
+            self.slider_ae_target.setEnabled(is_auto)
+            self.spin_ae_target.setToolTip("")
+            self.slider_ae_target.setToolTip("")
             
             try:
                 # Set range if available or default 0-255 (typical byte range)
                 # MindVision AE target is often around 120 default.
-                self.ui.spin_ae_target.setRange(0, 255)
-                self.ui.slider_ae_target.setRange(0, 255)
+                self.spin_ae_target.setRange(0, 255)
+                self.slider_ae_target.setRange(0, 255)
 
                 current_ae = self.camera.getAeTarget()
-                self.ui.spin_ae_target.blockSignals(True)
-                self.ui.spin_ae_target.setValue(current_ae)
-                self.ui.spin_ae_target.blockSignals(False)
+                self.spin_ae_target.blockSignals(True)
+                self.spin_ae_target.setValue(current_ae)
+                self.spin_ae_target.blockSignals(False)
 
-                self.ui.slider_ae_target.blockSignals(True)
-                self.ui.slider_ae_target.setValue(current_ae)
-                self.ui.slider_ae_target.blockSignals(False)
+                self.slider_ae_target.blockSignals(True)
+                self.slider_ae_target.setValue(current_ae)
+                self.slider_ae_target.blockSignals(False)
             except Exception as e:
                 self.log(f"Error syncing AE target: {e}")
         else:
             # Feature not supported by current MindVisionCamera wrapper
-            self.ui.spin_ae_target.setEnabled(False)
-            self.ui.slider_ae_target.setEnabled(False)
-            self.ui.spin_ae_target.setToolTip("Not supported by current camera wrapper")
-            self.ui.slider_ae_target.setToolTip("Not supported by current camera wrapper")
+            self.spin_ae_target.setEnabled(False)
+            self.slider_ae_target.setEnabled(False)
+            self.spin_ae_target.setToolTip("Not supported by current camera wrapper")
+            self.slider_ae_target.setToolTip("Not supported by current camera wrapper")
 
         current_exp = self.camera.getExposureTime()
-        self.ui.spin_exposure_time.blockSignals(True)
-        self.ui.spin_exposure_time.setValue(current_exp)
-        self.ui.spin_exposure_time.blockSignals(False)
+        self.spin_exposure_time.blockSignals(True)
+        self.spin_exposure_time.setValue(current_exp)
+        self.spin_exposure_time.blockSignals(False)
 
         self.update_slider_from_time(current_exp, min_exp, max_exp)
 
-        self.ui.spin_gain.blockSignals(True)
-        self.ui.spin_gain.setValue(self.camera.getAnalogGain())
-        self.ui.spin_gain.blockSignals(False)
+        self.spin_gain.blockSignals(True)
+        self.spin_gain.setValue(self.camera.getAnalogGain())
+        self.spin_gain.blockSignals(False)
 
-        self.ui.slider_gain.blockSignals(True)
-        self.ui.slider_gain.setValue(self.camera.getAnalogGain())
-        self.ui.slider_gain.blockSignals(False)
+        self.slider_gain.blockSignals(True)
+        self.slider_gain.setValue(self.camera.getAnalogGain())
+        self.slider_gain.blockSignals(False)
 
     def update_slider_from_time(self, current, min_val, max_val):
-        self.ui.slider_exposure.blockSignals(True)
+        self.slider_exposure.blockSignals(True)
         step_exp = self.camera.getExposureTimeStep()
         if step_exp > 0:
             val = int(round((current - min_val) / step_exp))
-            self.ui.slider_exposure.setValue(val)
+            self.slider_exposure.setValue(val)
         else:
             rng = max_val - min_val
             if rng > 0:
                 val = int((current - min_val) / rng * 10000)
-                self.ui.slider_exposure.setValue(val)
-        self.ui.slider_exposure.blockSignals(False)
+                self.slider_exposure.setValue(val)
+        self.slider_exposure.blockSignals(False)
 
     def on_auto_exposure_toggled(self, checked):
         if not self.is_camera_running:
             return
         if self.camera.setAutoExposure(checked):
-            self.ui.spin_exposure_time.setEnabled(not checked)
-            self.ui.slider_exposure.setEnabled(not checked)
-            self.ui.spin_ae_target.setEnabled(checked)
-            self.ui.slider_ae_target.setEnabled(checked)
+            self.spin_exposure_time.setEnabled(not checked)
+            self.slider_exposure.setEnabled(not checked)
+            self.spin_ae_target.setEnabled(checked)
+            self.slider_ae_target.setEnabled(checked)
             if not checked:
                 # Update manual values
                 current_exp = self.camera.getExposureTime()
-                self.ui.spin_exposure_time.setValue(current_exp)
-                min_exp = self.ui.spin_exposure_time.minimum()
-                max_exp = self.ui.spin_exposure_time.maximum()
+                self.spin_exposure_time.setValue(current_exp)
+                min_exp = self.spin_exposure_time.minimum()
+                max_exp = self.spin_exposure_time.maximum()
                 self.update_slider_from_time(current_exp, min_exp, max_exp)
         else:
-            self.ui.chk_auto_exposure.setChecked(not checked)
+            self.chk_auto_exposure.setChecked(not checked)
 
     def on_roi_toggled(self, checked):
         if not self.camera.setRoi(checked):
-            self.ui.chk_roi.setChecked(not checked)
+            self.chk_roi.setChecked(not checked)
 
     def on_exposure_time_changed(self, value):
         if not self.is_camera_running:
             return
         self.camera.setExposureTime(value)
         actual = self.camera.getExposureTime()
-        self.ui.spin_exposure_time.blockSignals(True)
-        self.ui.spin_exposure_time.setValue(actual)
-        self.ui.spin_exposure_time.blockSignals(False)
+        self.spin_exposure_time.blockSignals(True)
+        self.spin_exposure_time.setValue(actual)
+        self.spin_exposure_time.blockSignals(False)
 
-        min_exp = self.ui.spin_exposure_time.minimum()
-        max_exp = self.ui.spin_exposure_time.maximum()
+        min_exp = self.spin_exposure_time.minimum()
+        max_exp = self.spin_exposure_time.maximum()
         self.update_slider_from_time(actual, min_exp, max_exp)
 
     def on_exposure_slider_changed(self, value):
-        min_exp = self.ui.spin_exposure_time.minimum()
+        min_exp = self.spin_exposure_time.minimum()
         step_exp = self.camera.getExposureTimeStep()
         if step_exp > 0:
             new_time = min_exp + (value * step_exp)
         else:
-            max_exp = self.ui.spin_exposure_time.maximum()
+            max_exp = self.spin_exposure_time.maximum()
             rng = max_exp - min_exp
             new_time = min_exp + (value / 10000.0) * rng
-        self.ui.spin_exposure_time.setValue(new_time)
+        self.spin_exposure_time.setValue(new_time)
 
     def on_gain_changed(self, value):
         if not self.is_camera_running:
             return
         self.camera.setAnalogGain(value)
-        self.ui.slider_gain.blockSignals(True)
-        self.ui.slider_gain.setValue(value)
-        self.ui.slider_gain.blockSignals(False)
+        self.slider_gain.blockSignals(True)
+        self.slider_gain.setValue(value)
+        self.slider_gain.blockSignals(False)
 
     def on_gain_slider_changed(self, value):
-        self.ui.spin_gain.setValue(value)
+        self.spin_gain.setValue(value)
 
     def on_ae_target_changed(self, value):
         if not self.is_camera_running:
             return
         if hasattr(self.camera, "setAeTarget"):
             self.camera.setAeTarget(value)
-            self.ui.slider_ae_target.blockSignals(True)
-            self.ui.slider_ae_target.setValue(value)
-            self.ui.slider_ae_target.blockSignals(False)
+            self.slider_ae_target.blockSignals(True)
+            self.slider_ae_target.setValue(value)
+            self.slider_ae_target.blockSignals(False)
         else:
             self.log("Error: Camera does not support setAeTarget")
 
     def on_ae_slider_changed(self, value):
-        self.ui.spin_ae_target.setValue(value)
+        self.spin_ae_target.setValue(value)
 
     def on_trigger_mode_changed(self, id, checked):
         if checked:
             # 0=Continuous, 1=Software, 2=Hardware
             if self.camera.setTriggerMode(id):
-                self.ui.btn_soft_trigger.setEnabled(id == 1)
+                self.btn_soft_trigger.setEnabled(id == 1)
 
                 # Logic for Trigger Params Group
                 # Enabled if Software (1) or Hardware (2)
-                self.ui.trigger_params_group.setEnabled(id in [1, 2])
+                self.trigger_params_group.setEnabled(id in [1, 2])
 
                 # Logic for External Trigger Params Group
                 # Enabled if Hardware (2)
-                self.ui.ext_trigger_group.setEnabled(id == 2)
+                self.ext_trigger_group.setEnabled(id == 2)
 
             else:
                 self.log(f"Failed to set trigger mode {id}")
@@ -1266,9 +1364,9 @@ class MainWindow(QObject):
             self.camera.setStrobeMode(index)
             # Enable manual controls if index == 1
             is_manual = index == 1
-            self.ui.combo_strobe_polarity.setEnabled(is_manual)
-            self.ui.spin_strobe_delay.setEnabled(is_manual)
-            self.ui.spin_strobe_width.setEnabled(is_manual)
+            self.combo_strobe_polarity.setEnabled(is_manual)
+            self.spin_strobe_delay.setEnabled(is_manual)
+            self.spin_strobe_width.setEnabled(is_manual)
 
     def on_strobe_polarity_changed(self, index):
         if hasattr(self.camera, "setStrobePolarity"):
@@ -1688,9 +1786,9 @@ class MainWindow(QObject):
                     settings = json.load(f)
                     
                     # Apply camera settings
-                    self.ui.spin_exposure_time.setValue(settings.get("exposure_time", 2000))
-                    self.ui.spin_gain.setValue(settings.get("gain", 1))
-                    self.ui.chk_auto_exposure.setChecked(settings.get("auto_exposure", True))
+                    self.spin_exposure_time.setValue(settings.get("exposure_time", 2000))
+                    self.spin_gain.setValue(settings.get("gain", 1))
+                    self.chk_auto_exposure.setChecked(settings.get("auto_exposure", True))
                     
                     # Apply detector params
                     if "detector" in settings:
@@ -1743,9 +1841,9 @@ class MainWindow(QObject):
 
     def save_settings(self):
         settings = {
-            "exposure_time": self.ui.spin_exposure_time.value(),
-            "gain": self.ui.spin_gain.value(),
-            "auto_exposure": self.ui.chk_auto_exposure.isChecked(),
+            "exposure_time": self.spin_exposure_time.value(),
+            "gain": self.spin_gain.value(),
+            "auto_exposure": self.chk_auto_exposure.isChecked(),
             "detector": self.get_detector_settings(),
             "ruler_calibration": self.ruler_calibration
         }
@@ -1767,18 +1865,18 @@ class MainWindow(QObject):
 
     def get_detector_settings(self):
         return {
-            "orb_nfeatures": self.ui.orb_nfeatures.value(),
+            "orb_nfeatures": self.orb_nfeatures.value(),
             # ... capture other UI values ...
             # For brevity, saving just a few
         }
 
     def load_detector_settings(self, data):
         if "orb_nfeatures" in data:
-            self.ui.orb_nfeatures.setValue(data["orb_nfeatures"])
+            self.orb_nfeatures.setValue(data["orb_nfeatures"])
         # ... load others
 
     def apply_camera_settings(self):
         # Force apply current UI values to camera
-        self.camera.setAutoExposure(self.ui.chk_auto_exposure.isChecked())
-        self.camera.setExposureTime(self.ui.spin_exposure_time.value())
-        self.camera.setAnalogGain(self.ui.spin_gain.value())
+        self.camera.setAutoExposure(self.chk_auto_exposure.isChecked())
+        self.camera.setExposureTime(self.spin_exposure_time.value())
+        self.camera.setAnalogGain(self.spin_gain.value())

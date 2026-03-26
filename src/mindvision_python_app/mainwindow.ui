@@ -2212,6 +2212,7 @@
    <addaction name="action_stop_camera" />
    <addaction name="action_record" />
    <addaction name="action_snapshot" />
+   <addaction name="action_predict" />
    <addaction name="action_ruler" />
    <addaction name="action_color_picker" />
    <addaction name="action_show_mosaic" />
@@ -2276,6 +2277,22 @@
    </property>
    <property name="toolTip">
     <string>Take Snapshot</string>
+   </property>
+  </action>
+  <action name="action_predict">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/template.png</normaloff>icons/template.png
+    </iconset>
+   </property>
+   <property name="text">
+    <string>Predict</string>
+   </property>
+   <property name="toolTip">
+    <string>Run AI prediction on current view</string>
    </property>
   </action>
   <action name="action_ruler">
@@ -2357,20 +2374,7 @@
    <extends>QGroupBox</extends>
    <header>cnc_control_panel</header>
   </customwidget>
- <widget class="QDockWidget" name="mosaic_dock">
-  <property name="windowTitle">
-   <string>Stage Control</string>
-  </property>
-  <property name="minimumSize">
-   <size>
-    <width>600</width>
-    <height>0</height>
-   </size>
-  </property>
-  <property name="allowedAreas">
-   <set>LeftDockWidgetArea|RightDockWidgetArea</set>
-  </property>
- </widget>
+ </customwidgets>
  <resources />
  <connections />
 </ui>

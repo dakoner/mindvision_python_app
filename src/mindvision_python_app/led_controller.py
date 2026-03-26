@@ -16,6 +16,7 @@ class LEDController(QObject):
     def __init__(self, ui):
         super().__init__()
         self.ui = ui
+        self._bind_ui_children()
         
         self.has_initialized_settings = False
         self.status_items_map = {}  # Map pin -> QListWidgetItem
@@ -78,7 +79,20 @@ class LEDController(QObject):
         # Disable serial tabs initially
         self.ui.tabs_serial_cmds.setEnabled(False)
 
+    def _bind_ui_children(self):
+        if not isinstance(self.ui, QObject):
+            return
+
+        for child in self.ui.findChildren(QObject):
+            name = child.objectName()
+            if name and not hasattr(self.ui, name):
+                setattr(self.ui, name, child)
+
     def stop(self):
+        if hasattr(self, "serial_poll_timer"):
+            self.serial_poll_timer.stop()
+        if hasattr(self, "status_poll_timer"):
+            self.status_poll_timer.stop()
         if self.serial_thread.isRunning():
             self.serial_thread.quit()
             self.serial_thread.wait()

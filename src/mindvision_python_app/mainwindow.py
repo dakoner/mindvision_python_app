@@ -2,6 +2,8 @@ import os
 import sys
 import time
 import json
+import cv2
+import numpy as np
 import PySide6.QtWidgets
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -35,11 +37,11 @@ from PySide6.QtCore import (
     QThread,
     QPointF,
     QLineF,
+    QRect,
 )
 
 from PySide6.QtGui import QPixmap, QAction, QPainter, QPen, QColor, QIcon, QImage
 from PySide6.QtUiTools import QUiLoader
-print("b")
 
 from _mindvision_qobject_py import MindVisionCamera, VideoThread
 from range_slider import RangeSlider
@@ -50,6 +52,11 @@ from matching_worker import MatchingWorker
 from cnc_control_panel import CNCControlPanel
 from led_controller import LEDController
 from scan_config_panel import ScanConfigPanel
+
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
 
 class MainWindow(QObject):
     update_fps_signal = Signal(float)
@@ -85,7 +92,6 @@ class MainWindow(QObject):
         self.script_dir = os.path.dirname(__file__)
 
         # Load UI from file
-        print("d")
         loader = QUiLoader()
         loader.registerCustomWidget(RangeSlider)
         loader.registerCustomWidget(IntensityChart)
@@ -93,53 +99,26 @@ class MainWindow(QObject):
         loader.registerCustomWidget(CNCControlPanel)
 
         # Load main window
-        ui_file_path = os.path.join(self.script_dir, "mainwindow_widget.ui")
-        print("e")
+        ui_file_path = os.path.join(self.script_dir, "mainwindow.ui")
         ui_file = QFile(ui_file_path)
         if not ui_file.open(QFile.ReadOnly):
             print(f"Cannot open {ui_file_path}: {ui_file.errorString()}")
             sys.exit(-1)
         self.ui = loader.load(ui_file)
         ui_file.close()
-        print("f")
 
         if not self.ui:
             print(loader.errorString())
             sys.exit(-1)
 
-        # Load and add camera settings tabs
-        camera_settings_tabs_path = os.path.join(self.script_dir, "camera_settings_tabs.ui")
-        camera_settings_tabs_file = QFile(camera_settings_tabs_path)
-        if not camera_settings_tabs_file.open(QFile.ReadOnly):
-            print(f"Cannot open {camera_settings_tabs_path}: {camera_settings_tabs_file.errorString()}")
-            sys.exit(-1)
-        self.camera_settings_tabs = loader.load(camera_settings_tabs_file)
-        camera_settings_tabs_file.close()
-        if self.camera_settings_tabs:
-            self.ui.scroll_layout.addWidget(self.camera_settings_tabs)
-
-        # Load and add hardware tabs
-        hardware_tabs_path = os.path.join(self.script_dir, "hardware_tabs.ui")
-        hardware_tabs_file = QFile(hardware_tabs_path)
-        if not hardware_tabs_file.open(QFile.ReadOnly):
-            print(f"Cannot open {hardware_tabs_path}: {hardware_tabs_file.errorString()}")
-            sys.exit(-1)
-        self.hardware_tabs = loader.load(hardware_tabs_file)
-        hardware_tabs_file.close()
-        if self.hardware_tabs:
-            self.ui.scroll_layout.addWidget(self.hardware_tabs)
-
-        # Load and add right tab widget
-        right_tab_widget_path = os.path.join(self.script_dir, "right_tab_widget.ui")
-        right_tab_widget_file = QFile(right_tab_widget_path)
-        if not right_tab_widget_file.open(QFile.ReadOnly):
-            print(f"Cannot open {right_tab_widget_path}: {right_tab_widget_file.errorString()}")
-            sys.exit(-1)
-        self.right_tab_widget = loader.load(right_tab_widget_file)
-        right_tab_widget_file.close()
-        if self.right_tab_widget:
-            self.ui.main_h_splitter.addWidget(self.right_tab_widget)
-        print("g")
+        # Since mainwindow.ui is now loaded as self.ui, find these widgets directly
+        # They are already part of the mainwindow.ui structure
+        self.camera_settings_tabs = self.ui.findChild(QTabWidget, "camera_settings_tabs")
+        self.hardware_tabs = self.ui.findChild(QTabWidget, "hardware_tabs")
+        self.right_tab_widget = self.ui.findChild(QTabWidget, "right_tab_widget")
+        
+        # Ensure the main_h_splitter is also found
+        self.main_h_splitter = self.ui.findChild(QSplitter, "main_h_splitter")
 
         # --- Find all widgets ---
         self.video_label = self.ui.findChild(QLabel, "video_label")
@@ -188,6 +167,7 @@ class MainWindow(QObject):
         self.action_stop_camera = self.ui.findChild(QAction, "action_stop_camera")
         self.action_record = self.ui.findChild(QAction, "action_record")
         self.action_snapshot = self.ui.findChild(QAction, "action_snapshot")
+        self.action_predict = self.ui.findChild(QAction, "action_predict")
         self.action_home_and_run = self.ui.findChild(QAction, "action_home_and_run")
         self.btn_load_template = self.right_tab_widget.findChild(QPushButton, "btn_load_template")
         self.chk_match_enable = self.right_tab_widget.findChild(QCheckBox, "chk_match_enable")
@@ -233,12 +213,12 @@ class MainWindow(QObject):
         self.chk_aruco_enable = self.right_tab_widget.findChild(QCheckBox, "chk_aruco_enable")
         self.chk_hough_enable = self.right_tab_widget.findChild(QCheckBox, "chk_hough_enable")
         self.main_h_splitter = self.ui.findChild(QSplitter, "main_h_splitter")
-        self.scroll_layout = self.ui.findChild(QVBoxLayout, "scroll_layout")
-        self.controls_group = self.camera_settings_tabs.findChild(QGroupBox, "controls_group")
-        self.trigger_group = self.camera_settings_tabs.findChild(QGroupBox, "trigger_group")
-        self.trigger_params_group = self.camera_settings_tabs.findChild(QGroupBox, "trigger_params_group")
-        self.ext_trigger_group = self.camera_settings_tabs.findChild(QGroupBox, "ext_trigger_group")
-        self.strobe_group = self.camera_settings_tabs.findChild(QGroupBox, "strobe_group")
+        # The following group boxes are children of camera_settings_tabs, which is now found directly in self.ui
+        self.controls_group = self.ui.findChild(QGroupBox, "controls_group")
+        self.trigger_group = self.ui.findChild(QGroupBox, "trigger_group")
+        self.trigger_params_group = self.ui.findChild(QGroupBox, "trigger_params_group")
+        self.ext_trigger_group = self.ui.findChild(QGroupBox, "ext_trigger_group")
+        self.strobe_group = self.ui.findChild(QGroupBox, "strobe_group")
 
         # --- End of widget finding ---
 
@@ -248,7 +228,13 @@ class MainWindow(QObject):
         self.video_label.installEventFilter(self)
 
         self.current_pixmap = None
-        
+        self.current_frame_image = QImage()
+        self.prediction_model = None
+        self.prediction_threshold = 0.1
+        self.prediction_boxes = []
+        self.prediction_model_path = os.path.realpath(
+            os.path.join(self.script_dir, "..", "..", "model", "weights", "best.pt")
+        )
         # Setup Worker Thread
         self.matching_thread = QThread()
         self.worker = MatchingWorker()
@@ -429,6 +415,8 @@ class MainWindow(QObject):
         self.ui.action_stop_camera.triggered.connect(self.on_stop_clicked)
         self.ui.action_record.triggered.connect(self.on_record_clicked)
         self.ui.action_snapshot.triggered.connect(self.on_snapshot_clicked)
+        if self.action_predict:
+            self.action_predict.triggered.connect(self.predict_current_frame)
         self.ui.action_home_and_run.triggered.connect(self.on_home_and_run_clicked)
 
         # Template Matching UI
@@ -621,31 +609,39 @@ class MainWindow(QObject):
 
     def refresh_video_label(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
-            # If Ruler is active and we have points, draw them on a temporary pixmap
-            # We draw on the original resolution pixmap before scaling
-            
-            # Optimization: If we are just dragging, maybe we shouldn't clone the pixmap every time 
-            # if the image is huge (5MP+). But for UI responsiveness it's usually fine.
             display_pixmap = self.current_pixmap
-            
-            if self.ruler_active and (self.ruler_start is not None):
-                # Create a copy to draw on
+
+            has_prediction_overlay = bool(self.prediction_boxes)
+            has_ruler_overlay = self.ruler_active and (self.ruler_start is not None)
+
+            if has_prediction_overlay or has_ruler_overlay:
                 display_pixmap = self.current_pixmap.copy()
                 painter = QPainter(display_pixmap)
-                pen = QPen(QColor(0, 255, 255), 2) # Cyan, 2px
-                painter.setPen(pen)
-                
-                start_pt = self.ruler_start
-                end_pt = self.ruler_end if self.ruler_end is not None else start_pt
-                
-                painter.drawLine(start_pt, end_pt)
-                
-                # Draw endpoints
-                pen.setWidth(4)
-                painter.setPen(pen)
-                painter.drawPoint(start_pt)
-                painter.drawPoint(end_pt)
-                
+
+                if has_prediction_overlay:
+                    pred_pen = QPen(QColor(0, 0, 255), 2)
+                    painter.setPen(pred_pen)
+                    for prediction in self.prediction_boxes:
+                        rect = prediction["rect"]
+                        confidence = prediction["confidence"]
+                        painter.drawRect(rect)
+                        text_y = max(14, rect.y() - 4)
+                        painter.drawText(rect.x(), text_y, f"{confidence:.2f}")
+
+                if has_ruler_overlay:
+                    ruler_pen = QPen(QColor(0, 255, 255), 2)
+                    painter.setPen(ruler_pen)
+
+                    start_pt = self.ruler_start
+                    end_pt = self.ruler_end if self.ruler_end is not None else start_pt
+
+                    painter.drawLine(start_pt, end_pt)
+
+                    ruler_pen.setWidth(4)
+                    painter.setPen(ruler_pen)
+                    painter.drawPoint(start_pt)
+                    painter.drawPoint(end_pt)
+
                 painter.end()
 
             scaled = display_pixmap.scaled(
@@ -775,6 +771,7 @@ class MainWindow(QObject):
     def update_frame(self, image):
         self.worker_busy = False
         if not image.isNull():
+            self.current_frame_image = image.copy()
             # Recording Start Trigger
             if self.recording_requested:
                 self.recording_requested = False
@@ -808,6 +805,76 @@ class MainWindow(QObject):
                 if self.cnc_state != "Home":
                     self.mosaic_panel.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
 
+    def load_prediction_model(self):
+        if YOLO is None:
+            self.log("Prediction unavailable: ultralytics is not installed.")
+            return False
+
+        if self.prediction_model is not None:
+            return True
+
+        if not os.path.exists(self.prediction_model_path):
+            self.log(f"Prediction model not found: {self.prediction_model_path}")
+            return False
+
+        try:
+            self.prediction_model = YOLO(self.prediction_model_path)
+            self.log(f"Prediction model loaded: {os.path.basename(self.prediction_model_path)}")
+            return True
+        except Exception as e:
+            self.log(f"Failed to load prediction model: {e}")
+            self.prediction_model = None
+            return False
+
+    def predict_current_frame(self):
+        if self.current_frame_image.isNull():
+            self.log("No frame available for prediction.")
+            return
+
+        if not self.load_prediction_model():
+            return
+
+        rgb_image = self.current_frame_image.convertToFormat(QImage.Format_RGB888)
+        width = rgb_image.width()
+        height = rgb_image.height()
+        frame_bytes = rgb_image.bits().tobytes()
+        frame_rgb = np.frombuffer(frame_bytes, dtype=np.uint8).reshape((height, width, 3))
+        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+        try:
+            results = self.prediction_model.predict(source=frame_bgr, verbose=False, save=False)
+        except Exception as e:
+            self.log(f"Prediction failed: {e}")
+            return
+
+        predicted_boxes = []
+        for result in results:
+            for box in result.boxes:
+                confidence = float(box.conf[0].cpu().numpy())
+                if confidence < self.prediction_threshold:
+                    continue
+
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                x = int(x1)
+                y = int(y1)
+                box_width = int(x2 - x1)
+                box_height = int(y2 - y1)
+                if box_width <= 0 or box_height <= 0:
+                    continue
+
+                predicted_boxes.append({
+                    "rect": QRect(x, y, box_width, box_height),
+                    "confidence": confidence,
+                })
+
+        self.prediction_boxes = predicted_boxes
+        self.refresh_video_label()
+
+        if predicted_boxes:
+            self.log(f"Added {len(predicted_boxes)} prediction rectangle(s).")
+        else:
+            self.log("No predictions above threshold in current frame.")
+
     @Slot(float)
     def update_fps(self, fps):
         self.current_fps = fps
@@ -833,6 +900,8 @@ class MainWindow(QObject):
                 self.ui.action_stop_camera.setEnabled(True)
                 self.ui.action_record.setEnabled(True)
                 self.ui.action_snapshot.setEnabled(True)
+                if self.action_predict:
+                    self.action_predict.setEnabled(True)
                 self.controls_group.setEnabled(True)
                 self.trigger_group.setEnabled(True)
                 self.strobe_group.setEnabled(True)
@@ -846,6 +915,7 @@ class MainWindow(QObject):
     def on_stop_clicked(self):
         self.param_poll_timer.stop()
         self.is_camera_running = False
+        self.prediction_boxes = []
         if self.video_thread.isRunning():
             self.on_record_clicked()
 
@@ -855,6 +925,8 @@ class MainWindow(QObject):
         self.ui.action_stop_camera.setEnabled(False)
         self.ui.action_record.setEnabled(False)
         self.ui.action_snapshot.setEnabled(False)
+        if self.action_predict:
+            self.action_predict.setEnabled(False)
 
         self.controls_group.setEnabled(False)
         self.trigger_group.setEnabled(False)

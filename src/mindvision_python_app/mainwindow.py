@@ -226,6 +226,7 @@ class MainWindow(QObject):
         self.ui.installEventFilter(self)
 
         self.video_label.installEventFilter(self)
+        self.video_label.setFocusPolicy(Qt.StrongFocus)
 
         self.current_pixmap = None
         self.current_frame_image = QImage()
@@ -573,9 +574,18 @@ class MainWindow(QObject):
                     self.ui.video_label.removeEventFilter(self)
                 except RuntimeError:
                     pass
+            elif watched is self.ui and event.type() == QEvent.KeyPress:
+                if self.video_label and self.video_label.underMouse():
+                    if self._handle_stage_arrow_key(event):
+                        return True
             elif watched == self.ui.video_label:
                 if event.type() == QEvent.Resize:
                     self.refresh_video_label()
+                elif event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                    self.video_label.setFocus(Qt.MouseFocusReason)
+                elif event.type() == QEvent.KeyPress:
+                    if self._handle_stage_arrow_key(event):
+                        return True
                 elif self.ruler_active:
                     if event.type() == QEvent.MouseButtonPress:
                         if event.button() == Qt.LeftButton:
@@ -606,6 +616,26 @@ class MainWindow(QObject):
         except RuntimeError:
             pass
         return super().eventFilter(watched, event)
+
+    def _handle_stage_arrow_key(self, event):
+        if not self.cnc_control_panel:
+            return False
+
+        key_to_move = {
+            Qt.Key_Left: self.cnc_control_panel.move_left,
+            Qt.Key_Right: self.cnc_control_panel.move_right,
+            Qt.Key_Up: self.cnc_control_panel.move_forward,
+            Qt.Key_Down: self.cnc_control_panel.move_back,
+            Qt.Key_PageUp: self.cnc_control_panel.move_up,
+            Qt.Key_PageDown: self.cnc_control_panel.move_down,
+        }
+
+        move_action = key_to_move.get(event.key())
+        if move_action is None:
+            return False
+
+        move_action()
+        return True
 
     def refresh_video_label(self):
         if self.current_pixmap and not self.current_pixmap.isNull():

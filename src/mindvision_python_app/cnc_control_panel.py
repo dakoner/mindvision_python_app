@@ -161,10 +161,10 @@ class CNCControlPanel(QtWidgets.QGroupBox):
 
     @Slot(str)
     def on_log_message(self, msg):
-        if self.waiting_for_m400_ok_in_scan and msg == "Rx: ok":
-            self.waiting_for_m400_ok_in_scan = False
+        if msg == "Rx: [ECHO:row_finished]":
             self.row_finished_signal.emit()
-            return  # Consume this 'ok' to prevent it from being logged in the main window
+            self.log_signal.emit("Row finished echo received.")
+            return
 
         # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):

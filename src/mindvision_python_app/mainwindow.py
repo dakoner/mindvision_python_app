@@ -1822,9 +1822,9 @@ class MainWindow(QObject):
                 cmds.append("$HX")
 
             cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
-            cmds.append("G4 P10") # Wait for moves to finish
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
-            cmds.append("G4 P10") # Wait for moves to finish
+            cmds.append("M400")
+            cmds.append("[ECHO:row_finished]")
             
             for cmd in cmds:
                 self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)

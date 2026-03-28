@@ -11,12 +11,12 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     connect_serial_signal = Signal(str, int)
     disconnect_serial_signal = Signal()
     send_serial_cmd_signal = Signal(str)
+    _internal_send_cmd_signal = Signal(str)
     send_raw_serial_cmd_signal = Signal(str)
     poll_serial_signal = Signal()
     state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float)
     scan_finished_signal = Signal()
-    row_finished_signal = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -26,7 +26,9 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         # --- Serial Worker Setup ---
         self.serial_thread = QThread()
         self.serial_worker = SerialWorker()
-        self.waiting_for_m400_ok_in_scan = False
+        self.command_queue = []
+        self.waiting_for_ok = False
+        self.last_sent_command = ""
 
     def setupUi(self):
         if self._ui_loaded:
@@ -67,7 +69,8 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         # Connect signals
         self.connect_serial_signal.connect(self.serial_worker.connect_serial)
         self.disconnect_serial_signal.connect(self.serial_worker.disconnect_serial)
-        self.send_serial_cmd_signal.connect(self.serial_worker.send_command)
+        self.send_serial_cmd_signal.connect(self.enqueue_command)
+        self._internal_send_cmd_signal.connect(self.serial_worker.send_command)
         self.send_raw_serial_cmd_signal.connect(self.serial_worker.send_raw_command)
         self.poll_serial_signal.connect(self.serial_worker.poll_serial)
 
@@ -124,12 +127,27 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         else:
             self.disconnect_serial_signal.emit()
 
+    @Slot(str)
+    def enqueue_command(self, cmd):
+        self.command_queue.append(cmd)
+        self.process_queue()
+
+    def process_queue(self):
+        if not self.waiting_for_ok and self.command_queue:
+            cmd = self.command_queue.pop(0)
+            self.last_sent_command = cmd
+            self._internal_send_cmd_signal.emit(cmd)
+            self.waiting_for_ok = True
+
     @Slot(bool)
     def on_serial_status_changed(self, connected):
         self.connect_button.setChecked(connected)
         self.connect_button.setText("Disconnect" if connected else "Connect")
         self.serial_port_combo.setEnabled(not connected)
         self.refresh_button.setEnabled(not connected)
+        if not connected:
+            self.command_queue.clear()
+            self.waiting_for_ok = False
 
         # Enable/disable movement buttons
         for button in [
@@ -161,17 +179,18 @@ class CNCControlPanel(QtWidgets.QGroupBox):
 
     @Slot(str)
     def on_log_message(self, msg):
-        if msg == "Rx: [ECHO:row_finished]":
-            self.row_finished_signal.emit()
-            self.log_signal.emit("Row finished echo received.")
-            return
-
-        # Intercept status messages for internal handling
         if msg.startswith("Rx: <") and msg.endswith(">"):
             self._parse_status(msg[5:-1])
-        elif msg == "Rx: [ECHO:scan_finished]":
-            self.scan_finished_signal.emit()
-            self.log_signal.emit("Scan finished echo received.")
+        elif msg.strip() == "Rx: ok" or msg.strip().startswith("Rx: error"):
+            self.waiting_for_ok = False
+            
+            if self.last_sent_command and "SCAN_DONE" in self.last_sent_command:
+                self.scan_finished_signal.emit()
+                self.log_signal.emit("Scan finished (G4 wait complete).")
+                self.last_sent_command = ""
+                
+            self.process_queue()
+            self.log_signal.emit(msg)
         else:
             # Pass all other messages through to the main window log
             self.log_signal.emit(msg)
@@ -247,6 +266,11 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         if command:
             self.send_serial_cmd_signal.emit(command)
             self.cnc_command_input.clear()
+
+    def clear_queue(self):
+        self.command_queue.clear()
+        self.waiting_for_ok = False
+        self.last_sent_command = ""
 
     def stop(self):
         self.status_poll_timer.stop()

@@ -133,7 +133,7 @@ class MainWindow(QObject):
         self.action_color_picker = self.ui.findChild(QAction, "action_color_picker")
         self.tab_color_picker = self.right_tab_widget.findChild(ColorPickerWidget, "tab_color_picker")
         self.action_ruler = self.ui.findChild(QAction, "action_ruler")
-        self.spin_ruler_len = self.right_tab_widget.findChild(QSpinBox, "spin_ruler_len")
+        self.spin_ruler_len = self.right_tab_widget.findChild(QDoubleSpinBox, "spin_ruler_len")
         self.lbl_ruler_px = self.right_tab_widget.findChild(QLabel, "lbl_ruler_px")
         self.lbl_ruler_calib = self.right_tab_widget.findChild(QLabel, "lbl_ruler_calib")
         self.lbl_ruler_meas = self.right_tab_widget.findChild(QLabel, "lbl_ruler_meas")
@@ -233,6 +233,7 @@ class MainWindow(QObject):
         self.prediction_model = None
         self.prediction_threshold = 0.1
         self.prediction_boxes = []
+        self.prediction_enabled = False
         self.prediction_model_path = os.path.realpath(
             os.path.join(self.script_dir, "..", "..", "model", "weights", "best.pt")
         )
@@ -412,12 +413,13 @@ class MainWindow(QObject):
         self.spin_strobe_width.valueChanged.connect(self.on_strobe_width_changed)
         
         # Retrieve Actions
-        self.ui.action_start_camera.triggered.connect(self.on_start_clicked)
+        # self.ui.action_start_camera.triggered.connect(self.on_start_clicked)
         self.ui.action_stop_camera.triggered.connect(self.on_stop_clicked)
         self.ui.action_record.triggered.connect(self.on_record_clicked)
         self.ui.action_snapshot.triggered.connect(self.on_snapshot_clicked)
         if self.action_predict:
-            self.action_predict.triggered.connect(self.predict_current_frame)
+            self.action_predict.setCheckable(True)
+            self.action_predict.toggled.connect(self.on_predict_toggled)
         self.ui.action_home_and_run.triggered.connect(self.on_home_and_run_clicked)
 
         # Template Matching UI
@@ -542,6 +544,7 @@ class MainWindow(QObject):
         self.is_camera_running = False
 
         QTimer.singleShot(0, self.load_settings)
+        QTimer.singleShot(100, self.on_start_clicked)
 
     def show(self):
         self.ui.showMaximized()
@@ -581,12 +584,14 @@ class MainWindow(QObject):
             elif watched == self.ui.video_label:
                 if event.type() == QEvent.Resize:
                     self.refresh_video_label()
-                elif event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-                    self.video_label.setFocus(Qt.MouseFocusReason)
                 elif event.type() == QEvent.KeyPress:
                     if self._handle_stage_arrow_key(event):
                         return True
-                elif self.ruler_active:
+                
+                if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                    self.video_label.setFocus(Qt.MouseFocusReason)
+
+                if self.ruler_active:
                     if event.type() == QEvent.MouseButtonPress:
                         if event.button() == Qt.LeftButton:
                             pos = self.get_image_coords(event.position())
@@ -821,6 +826,8 @@ class MainWindow(QObject):
 
             # Display
             #image = image.mirrored(True, False) # Flip horizontally
+            if self.prediction_enabled:
+                self._run_prediction_on_image(image, log_result=False)
             self.current_pixmap = QPixmap.fromImage(image)
             self.refresh_video_label()
             
@@ -856,15 +863,11 @@ class MainWindow(QObject):
             self.prediction_model = None
             return False
 
-    def predict_current_frame(self):
-        if self.current_frame_image.isNull():
-            self.log("No frame available for prediction.")
-            return
-
+    def _run_prediction_on_image(self, qimage, log_result=True):
         if not self.load_prediction_model():
-            return
+            return False
 
-        rgb_image = self.current_frame_image.convertToFormat(QImage.Format_RGB888)
+        rgb_image = qimage.convertToFormat(QImage.Format_RGB888)
         width = rgb_image.width()
         height = rgb_image.height()
         frame_bytes = rgb_image.bits().tobytes()
@@ -874,8 +877,9 @@ class MainWindow(QObject):
         try:
             results = self.prediction_model.predict(source=frame_bgr, verbose=False, save=False)
         except Exception as e:
-            self.log(f"Prediction failed: {e}")
-            return
+            if log_result:
+                self.log(f"Prediction failed: {e}")
+            return False
 
         predicted_boxes = []
         for result in results:
@@ -898,12 +902,41 @@ class MainWindow(QObject):
                 })
 
         self.prediction_boxes = predicted_boxes
-        self.refresh_video_label()
+        if log_result:
+            if predicted_boxes:
+                self.log(f"Added {len(predicted_boxes)} prediction rectangle(s).")
+            else:
+                self.log("No predictions above threshold in current frame.")
+        return True
 
-        if predicted_boxes:
-            self.log(f"Added {len(predicted_boxes)} prediction rectangle(s).")
-        else:
-            self.log("No predictions above threshold in current frame.")
+    def predict_current_frame(self):
+        if self.current_frame_image.isNull():
+            self.log("No frame available for prediction.")
+            return
+
+        if self._run_prediction_on_image(self.current_frame_image, log_result=True):
+            self.refresh_video_label()
+
+    def on_predict_toggled(self, checked):
+        if checked:
+            if not self.load_prediction_model():
+                if self.action_predict:
+                    self.action_predict.blockSignals(True)
+                    self.action_predict.setChecked(False)
+                    self.action_predict.blockSignals(False)
+                return
+
+            self.prediction_enabled = True
+            self.log("Prediction enabled (running on every frame).")
+            if not self.current_frame_image.isNull():
+                self._run_prediction_on_image(self.current_frame_image, log_result=False)
+                self.refresh_video_label()
+            return
+
+        self.prediction_enabled = False
+        self.prediction_boxes = []
+        self.refresh_video_label()
+        self.log("Prediction disabled.")
 
     @Slot(float)
     def update_fps(self, fps):
@@ -914,7 +947,7 @@ class MainWindow(QObject):
     def handle_error(self, message):
         self.log(f"Camera Error: {message}")
         self.ui.video_label.setText(f"Error: {message}")
-        self.ui.action_start_camera.setEnabled(True)
+        # self.ui.action_start_camera.setEnabled(True)
         self.ui.action_stop_camera.setEnabled(False)
         self.controls_group.setEnabled(False)
         self.trigger_group.setEnabled(False)
@@ -926,7 +959,7 @@ class MainWindow(QObject):
         if self.camera.open():
             if self.camera.start():
                 self.is_camera_running = True
-                self.ui.action_start_camera.setEnabled(False)
+                # self.ui.action_start_camera.setEnabled(False)
                 self.ui.action_stop_camera.setEnabled(True)
                 self.ui.action_record.setEnabled(True)
                 self.ui.action_snapshot.setEnabled(True)
@@ -945,17 +978,21 @@ class MainWindow(QObject):
     def on_stop_clicked(self):
         self.param_poll_timer.stop()
         self.is_camera_running = False
+        self.prediction_enabled = False
         self.prediction_boxes = []
         if self.video_thread.isRunning():
             self.on_record_clicked()
 
         self.camera.stop()
         self.camera.close()
-        self.ui.action_start_camera.setEnabled(True)
+        # self.ui.action_start_camera.setEnabled(True)
         self.ui.action_stop_camera.setEnabled(False)
         self.ui.action_record.setEnabled(False)
         self.ui.action_snapshot.setEnabled(False)
         if self.action_predict:
+            self.action_predict.blockSignals(True)
+            self.action_predict.setChecked(False)
+            self.action_predict.blockSignals(False)
             self.action_predict.setEnabled(False)
 
         self.controls_group.setEnabled(False)
@@ -1691,9 +1728,6 @@ class MainWindow(QObject):
         self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
         self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
         
-        if self.cnc_control_panel:
-            self.cnc_control_panel.row_finished_signal.connect(self.on_row_finished)
-        
         container_layout.addWidget(self.mosaic_panel)
 
         # Create the scan panel
@@ -1797,13 +1831,13 @@ class MainWindow(QObject):
         self.scan_progress_signal.emit(0, self.scan_total_rows)
 
         # Kick off the first row
-        self.scan_next_row()
+        self.scan_all_rows()
 
-    def scan_next_row(self):
+    def scan_all_rows(self):
         if not self.is_scanning:
             return
 
-        if self.scan_current_y > self.scan_y_min:
+        while self.scan_current_y > self.scan_y_min:
             y_target = max(self.scan_current_y, self.scan_y_min + self.scan_fov_y_mm/2)
             
             start_x = self.scan_x_min + (self.scan_fov_x_mm / 2)
@@ -1823,33 +1857,24 @@ class MainWindow(QObject):
 
             cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
-            cmds.append("M400")
-            cmds.append("[ECHO:row_finished]")
             
             for cmd in cmds:
                 self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             
             self.scan_current_y -= self.scan_step_y
-        else:
-            # No more rows, scan is finished
-            self.cnc_control_panel.send_serial_cmd_signal.emit("[ECHO:scan_finished]")
-
-    @Slot()
-    def on_row_finished(self):
-        if self.is_scanning:
             self.scan_current_row += 1
             self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
-            
-            # Use a single shot timer to give the UI time to update before starting the next move
-            QTimer.singleShot(100, self.scan_next_row)
+
+        # No more rows, scan is finished
+        self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P0.1 ; SCAN_DONE")
 
 
     def cancel_scan(self):
         if self.is_scanning:
             self.is_scanning = False
             if self.cnc_control_panel:
-                self.cnc_control_panel.send_serial_cmd_signal.emit("!") 
-                self.cnc_control_panel.stop() 
+                self.cnc_control_panel.clear_queue()
+                self.cnc_control_panel.send_raw_serial_cmd_signal.emit("!") 
             
             if self.scan_record_video and self.video_thread.isRunning():
                 self.on_record_clicked()

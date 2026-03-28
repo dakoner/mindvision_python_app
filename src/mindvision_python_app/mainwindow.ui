@@ -2208,7 +2208,7 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="action_start_camera" />
+
    <addaction name="action_stop_camera" />
    <addaction name="action_record" />
    <addaction name="action_snapshot" />

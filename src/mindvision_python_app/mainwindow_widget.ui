@@ -86,7 +86,6 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="action_start_camera"/>
     <addaction name="action_stop_camera"/>
     <addaction name="separator"/>
     <addaction name="action_record"/>
@@ -121,7 +120,6 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="action_start_camera"/>
    <addaction name="action_stop_camera"/>
    <addaction name="separator"/>
    <addaction name="action_record"/>

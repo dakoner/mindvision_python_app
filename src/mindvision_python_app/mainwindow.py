@@ -52,6 +52,7 @@ from matching_worker import MatchingWorker
 from cnc_control_panel import CNCControlPanel
 from led_controller import LEDController
 from scan_config_panel import ScanConfigPanel
+from scan_status_dialog import ScanStatusDialog
 
 try:
     from ultralytics import YOLO
@@ -1737,6 +1738,11 @@ class MainWindow(QObject):
         self.scan_status_signal.connect(self.scan_panel.update_status)
         self.scan_progress_signal.connect(self.scan_panel.update_progress)
         container_layout.addWidget(self.scan_panel)
+        
+        # Create the scan status dialog
+        self.scan_status_dialog = ScanStatusDialog(self.ui)
+        self.scan_status_dialog.cancel_requested.connect(self.cancel_scan)
+        self.scan_progress_signal.connect(self.scan_status_dialog.update_progress)
 
         # Create and setup the dock widget
         self.mosaic_dock = QDockWidget("Stage Control", self.ui) # Renamed title
@@ -1762,9 +1768,9 @@ class MainWindow(QObject):
     @Slot(float, float)
     def on_mosaic_move_requested(self, x, y):
         if self.cnc_control_panel:
-            # Send G-code to move to absolute position (G90) using Linear Move (G1)
+            # Send G-code to move to absolute position (G90) using Rapid Move (G0)
             feedrate = self.cnc_control_panel.feedrate
-            cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F{feedrate}"
+            cmd = f"G90 G0 X{x:.3f} Y{y:.3f}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
 
@@ -1791,8 +1797,8 @@ class MainWindow(QObject):
             self.log("Scan area selected. Configure and start scan in the 'Stage Control' panel.")
 
 
-    @Slot(float, float, float, float, bool, bool, bool)
-    def start_scan(self, x_min, y_min, x_max, y_max, home_x, home_y, record_video):
+    @Slot(float, float, float, float, bool, bool, bool, bool)
+    def start_scan(self, x_min, y_min, x_max, y_max, home_x, home_y, record_video, is_serpentine):
         if not self.cnc_control_panel:
             return
 
@@ -1803,6 +1809,7 @@ class MainWindow(QObject):
         self.scan_x_min, self.scan_y_min, self.scan_x_max, self.scan_y_max = x_min, y_min, x_max, y_max
         self.scan_home_x, self.scan_home_y = home_x, home_y
         self.scan_record_video = record_video
+        self.scan_is_serpentine = is_serpentine
         
         self.scan_fov_x_mm = img_h / self.ruler_calibration
         self.scan_fov_y_mm = img_w / self.ruler_calibration
@@ -1816,6 +1823,13 @@ class MainWindow(QObject):
         self.scan_is_first_strip = True
         
         self.is_scanning = True
+        
+        # Show dialog and set image
+        if hasattr(self, 'scan_status_dialog'):
+            self.scan_status_dialog.show()
+            scan_img = self.mosaic_panel.get_region_image(x_min, y_min, x_max, y_max)
+            self.scan_status_dialog.update_image(scan_img)
+            self.scan_status_dialog.update_progress(0, self.scan_total_rows)
         
         # Start recording
         if self.scan_record_video and not self.video_thread.isRunning():
@@ -1840,8 +1854,15 @@ class MainWindow(QObject):
         while self.scan_current_y > self.scan_y_min:
             y_target = max(self.scan_current_y, self.scan_y_min + self.scan_fov_y_mm/2)
             
-            start_x = self.scan_x_min + (self.scan_fov_x_mm / 2)
-            end_x = self.scan_x_max - (self.scan_fov_x_mm / 2)
+            x_left = self.scan_x_min + (self.scan_fov_x_mm / 2)
+            x_right = self.scan_x_max - (self.scan_fov_x_mm / 2)
+            
+            is_ltr = True
+            if self.scan_is_serpentine:
+                is_ltr = (self.scan_current_row % 2 == 0)
+            
+            start_x = x_left if is_ltr else x_right
+            end_x = x_right if is_ltr else x_left
             
             cmds = []
             if self.scan_is_first_strip:
@@ -1854,8 +1875,10 @@ class MainWindow(QObject):
                 cmds.append("$HY")
             if self.scan_home_x:
                 cmds.append("$HX")
+                cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+            else:
+                cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
 
-            cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
             cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
             
             for cmd in cmds:
@@ -1870,11 +1893,14 @@ class MainWindow(QObject):
 
 
     def cancel_scan(self):
+        if hasattr(self, 'scan_status_dialog'):
+            self.scan_status_dialog.hide()
+
         if self.is_scanning:
             self.is_scanning = False
             if self.cnc_control_panel:
                 self.cnc_control_panel.clear_queue()
-                self.cnc_control_panel.send_raw_serial_cmd_signal.emit("!") 
+                #self.cnc_control_panel.send_raw_serial_cmd_signal.emit("!") 
             
             if self.scan_record_video and self.video_thread.isRunning():
                 self.on_record_clicked()
@@ -1885,6 +1911,9 @@ class MainWindow(QObject):
 
 
     def on_scan_finished(self):
+        if hasattr(self, 'scan_status_dialog'):
+            self.scan_status_dialog.hide()
+
         # This is triggered by "[ECHO:scan_finished]" from the CNC
         if self.is_scanning:
             if self.scan_record_video and self.video_thread.isRunning():

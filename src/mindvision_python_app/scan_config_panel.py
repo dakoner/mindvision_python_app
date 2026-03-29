@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QDialogButtonBox,
+    QRadioButton,
+    QButtonGroup,
 )
 from PySide6.QtCore import Signal, Slot
 
@@ -17,8 +19,8 @@ class ScanConfigPanel(QWidget):
     A dialog to configure and monitor a mosaic scan.
     """
 
-    # Signal arguments: x_min, y_min, x_max, y_max, home_x, home_y, record_video
-    start_scan_signal = Signal(float, float, float, float, bool, bool, bool)
+    # Signal arguments: x_min, y_min, x_max, y_max, home_x, home_y, record_video, is_serpentine
+    start_scan_signal = Signal(float, float, float, float, bool, bool, bool, bool)
     cancel_scan_signal = Signal()
 
     def __init__(self, parent=None):
@@ -37,6 +39,18 @@ class ScanConfigPanel(QWidget):
         self.scan_area_label = QLabel("Scan Area: (select area on mosaic)")
         layout.addWidget(self.scan_area_label)
         
+        # Scan Style Options
+        scan_style_layout = QHBoxLayout()
+        self.radio_left_right = QRadioButton("Left-Right")
+        self.radio_serpentine = QRadioButton("Serpentine")
+        self.radio_serpentine.setChecked(True)
+        self.scan_style_group = QButtonGroup()
+        self.scan_style_group.addButton(self.radio_left_right)
+        self.scan_style_group.addButton(self.radio_serpentine)
+        scan_style_layout.addWidget(self.radio_left_right)
+        scan_style_layout.addWidget(self.radio_serpentine)
+        layout.addLayout(scan_style_layout)
+
         # Homing Options
         self.home_x_checkbox = QCheckBox("Home X before each row")
         self.home_y_checkbox = QCheckBox("Home Y before each row")
@@ -88,13 +102,16 @@ class ScanConfigPanel(QWidget):
         self.home_x_checkbox.setEnabled(False)
         self.home_y_checkbox.setEnabled(False)
         self.record_video_checkbox.setEnabled(False)
+        self.radio_left_right.setEnabled(False)
+        self.radio_serpentine.setEnabled(False)
         self.cancel_button.setEnabled(True)
 
         home_x = self.home_x_checkbox.isChecked()
         home_y = self.home_y_checkbox.isChecked()
         record_video = self.record_video_checkbox.isChecked()
+        is_serpentine = self.radio_serpentine.isChecked()
 
-        self.start_scan_signal.emit(self.x_min, self.y_min, self.x_max, self.y_max, home_x, home_y, record_video)
+        self.start_scan_signal.emit(self.x_min, self.y_min, self.x_max, self.y_max, home_x, home_y, record_video, is_serpentine)
         self.update_status("Scan started...")
 
     def on_cancel_clicked(self):
@@ -119,6 +136,8 @@ class ScanConfigPanel(QWidget):
         self.home_x_checkbox.setEnabled(True)
         self.home_y_checkbox.setEnabled(True)
         self.record_video_checkbox.setEnabled(True)
+        self.radio_left_right.setEnabled(True)
+        self.radio_serpentine.setEnabled(True)
         self.cancel_button.setEnabled(False)
         
         if success:

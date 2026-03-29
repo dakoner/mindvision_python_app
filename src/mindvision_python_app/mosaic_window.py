@@ -518,6 +518,45 @@ class MosaicPanel(QWidget):
         if self.ruler_calibration_px_per_mm > 0:
             self.position_label.setText(f"CNC: {cnc_x_mm:.1f} mm, {cnc_y_mm:.1f} mm")
 
+    def get_region_image(self, x_min_mm: float, y_min_mm: float, x_max_mm: float, y_max_mm: float) -> QImage:
+        if self.ruler_calibration_px_per_mm <= 0:
+            return QImage()
+        
+        top_left_x_px = int(x_min_mm * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
+        top_left_y_px = int((self.stage_height_mm - y_max_mm) * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
+        
+        bottom_right_x_px = int(x_max_mm * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
+        bottom_right_y_px = int((self.stage_height_mm - y_min_mm) * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
+        
+        width = max(1, bottom_right_x_px - top_left_x_px)
+        height = max(1, bottom_right_y_px - top_left_y_px)
+        
+        region_rect = QRect(top_left_x_px, top_left_y_px, width, height)
+        
+        result_image = QImage(width, height, QImage.Format_RGB32)
+        result_image.fill(Qt.white)
+        
+        painter = QPainter(result_image)
+        
+        start_col = max(0, region_rect.left() // self.TILE_SIZE)
+        end_col = min(self.cols - 1, region_rect.right() // self.TILE_SIZE)
+        start_row = max(0, region_rect.top() // self.TILE_SIZE)
+        end_row = min(self.rows - 1, region_rect.bottom() // self.TILE_SIZE)
+        
+        for r in range(start_row, end_row + 1):
+            for c in range(start_col, end_col + 1):
+                if (r, c) in self.tiles:
+                    tile = self.tiles[(r, c)]
+                    tile_x = c * self.TILE_SIZE
+                    tile_y = r * self.TILE_SIZE
+                    
+                    dest_x = tile_x - top_left_x_px
+                    dest_y = tile_y - top_left_y_px
+                    painter.drawImage(dest_x, dest_y, tile)
+                    
+        painter.end()
+        return result_image
+
     @Slot(float, float)
     def on_mosaic_clicked(self, img_x, img_y):
         if self.ruler_calibration_px_per_mm <= 0:

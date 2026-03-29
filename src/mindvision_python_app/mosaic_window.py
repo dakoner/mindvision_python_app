@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout, QScrollBar
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QTransform, QPen
 from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint, QPointF, QRectF, QFile
 from PySide6.QtUiTools import QUiLoader
@@ -34,7 +34,6 @@ class MosaicWidget(QWidget):
 
         # Dragging states
         self.is_panning = False
-        self.is_zooming = False
         self.is_selecting = False
 
         self.stage_width_mm = 0
@@ -44,6 +43,85 @@ class MosaicWidget(QWidget):
         # Overlay Rectangles
         self.scan_region_rect = QRectF()
         self.current_frame_rect = QRectF()
+
+    def setup_scrollbars(self, h_bar, v_bar):
+        self.h_scrollbar = h_bar
+        self.v_scrollbar = v_bar
+        self.h_scrollbar.show()
+        self.v_scrollbar.show()
+        self.h_scrollbar.valueChanged.connect(self.on_h_scroll)
+        self.v_scrollbar.valueChanged.connect(self.on_v_scroll)
+        self._updating_scrollbars = False
+
+    def on_h_scroll(self, value):
+        if hasattr(self, '_updating_scrollbars') and self._updating_scrollbars:
+            return
+        self.pan_offset.setX(-value)
+        self.update()
+
+    def on_v_scroll(self, value):
+        if hasattr(self, '_updating_scrollbars') and self._updating_scrollbars:
+            return
+        self.pan_offset.setY(-value)
+        self.update()
+
+    def clamp_pan_offset(self):
+        view_w = self.rect().width()
+        view_h = self.rect().height()
+        drawn_w = self.total_width * self.zoom_factor
+        drawn_h = self.total_height * self.zoom_factor
+        
+        if drawn_w > view_w:
+            x = max(-(drawn_w - view_w), min(0, self.pan_offset.x()))
+        else:
+            x = (view_w - drawn_w) / 2
+            
+        if drawn_h > view_h:
+            y = max(-(drawn_h - view_h), min(0, self.pan_offset.y()))
+        else:
+            y = (view_h - drawn_h) / 2
+            
+        self.pan_offset = QPointF(x, y)
+
+    def update_scrollbars(self):
+        if not hasattr(self, 'h_scrollbar') or not hasattr(self, 'v_scrollbar'):
+            return
+            
+        view_w = self.rect().width()
+        view_h = self.rect().height()
+        drawn_w = self.total_width * self.zoom_factor
+        drawn_h = self.total_height * self.zoom_factor
+        
+        self._updating_scrollbars = True
+        
+        if drawn_w > view_w:
+            self.h_scrollbar.setRange(0, int(drawn_w - view_w))
+            self.h_scrollbar.setPageStep(view_w)
+            self.h_scrollbar.setValue(int(-self.pan_offset.x()))
+            self.h_scrollbar.setEnabled(True)
+        else:
+            self.h_scrollbar.setRange(0, 0)
+            self.h_scrollbar.setPageStep(max(1, view_w))
+            self.h_scrollbar.setValue(0)
+            self.h_scrollbar.setEnabled(False)
+            
+        if drawn_h > view_h:
+            self.v_scrollbar.setRange(0, int(drawn_h - view_h))
+            self.v_scrollbar.setPageStep(view_h)
+            self.v_scrollbar.setValue(int(-self.pan_offset.y()))
+            self.v_scrollbar.setEnabled(True)
+        else:
+            self.v_scrollbar.setRange(0, 0)
+            self.v_scrollbar.setPageStep(max(1, view_h))
+            self.v_scrollbar.setValue(0)
+            self.v_scrollbar.setEnabled(False)
+            
+        self._updating_scrollbars = False
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.clamp_pan_offset()
+        self.update_scrollbars()
 
     def set_stage_size(self, width_mm: float, height_mm: float):
         self.stage_width_mm = width_mm
@@ -113,33 +191,45 @@ class MosaicWidget(QWidget):
             (widget_rect.width() - drawn_w) / 2,
             (widget_rect.height() - drawn_h) / 2
         )
+        self.clamp_pan_offset()
+        self.update_scrollbars()
         self.update()
 
-    def wheelEvent(self, event):
+    def do_zoom(self, zoom_direction, center_pos=None):
         if self.total_width == 0:
             return
-            
-        # Zoom Factor
-        delta = event.angleDelta().y()
-        zoom_direction = 1 if delta > 0 else -1
+
         zoom_increment = 0.1 * zoom_direction
-        
         old_zoom = self.zoom_factor
         self.zoom_factor = max(0.1, min(10.0, self.zoom_factor + zoom_increment))
 
-        # Zoom towards the mouse cursor
-        mouse_pos = event.position()
-        
-        # Position of the mouse cursor in image coordinates before zoom
-        img_pos_before = self.widget_to_image_coords(mouse_pos)
-        
-        # Expected position of the image point in widget coordinates after zoom
+        if center_pos is None:
+            center_pos = QPointF(self.rect().width() / 2, self.rect().height() / 2)
+            
+        img_pos_before = (center_pos - self.pan_offset) / old_zoom
         widget_pos_after = img_pos_before * self.zoom_factor
+        self.pan_offset = center_pos - widget_pos_after
         
-        # The new pan offset is the difference between the mouse position and the new widget pos
-        self.pan_offset = mouse_pos - widget_pos_after
-        
+        self.clamp_pan_offset()
+        self.update_scrollbars()
         self.update()
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+    def keyPressEvent(self, event):
+        if self.total_width == 0:
+            super().keyPressEvent(event)
+            return
+
+        if event.key() == Qt.Key_PageUp:
+            self.do_zoom(1)
+            event.accept()
+        elif event.key() == Qt.Key_PageDown:
+            self.do_zoom(-1)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -275,10 +365,6 @@ class MosaicWidget(QWidget):
         elif event.button() == Qt.LeftButton:
             self.is_panning = True
             self.setCursor(Qt.ClosedHandCursor)
-        elif event.button() == Qt.RightButton:
-            self.is_zooming = True
-            self.setCursor(Qt.SizeVerCursor)
-
 
     def mouseMoveEvent(self, event):
         if self.total_width == 0:
@@ -293,21 +379,8 @@ class MosaicWidget(QWidget):
         
         if self.is_panning:
             self.pan_offset += delta
-            self.update()
-            
-        elif self.is_zooming:
-            zoom_increment = -delta.y() * 0.005 # Negative so moving up zooms in
-            
-            
-            old_zoom = self.zoom_factor
-            self.zoom_factor = max(0.1, min(10.0, self.zoom_factor + zoom_increment))
-
-            # Zoom towards the mouse cursor
-            mouse_pos = event.position()
-            img_pos_before = (mouse_pos - delta - self.pan_offset) / old_zoom
-            new_widget_pos = img_pos_before * self.zoom_factor
-            self.pan_offset = mouse_pos - delta - new_widget_pos
-            
+            self.clamp_pan_offset()
+            self.update_scrollbars()
             self.update()
 
         elif self.is_selecting:
@@ -345,7 +418,6 @@ class MosaicWidget(QWidget):
 
         # Reset all states
         self.is_panning = False
-        self.is_zooming = False
         self.is_selecting = False
         self.setCursor(Qt.ArrowCursor)
 
@@ -414,6 +486,11 @@ class MosaicPanel(QWidget):
         self.display_widget = self.ui.findChild(MosaicWidget, "display_widget")
         self.position_label = self.ui.findChild(QLabel, "position_label")
         self.cursor_label = self.ui.findChild(QLabel, "cursor_label")
+        
+        self.h_scrollbar = self.ui.findChild(QScrollBar, "h_scrollbar")
+        self.v_scrollbar = self.ui.findChild(QScrollBar, "v_scrollbar")
+        if self.h_scrollbar and self.v_scrollbar:
+            self.display_widget.setup_scrollbars(self.h_scrollbar, self.v_scrollbar)
 
         self.display_widget.set_stage_size(self.stage_width_mm, self.stage_height_mm)
         self.display_widget.set_calibration(self.ruler_calibration_px_per_mm)

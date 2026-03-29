@@ -196,7 +196,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
             self.log_signal.emit(msg)
             # Check for FluidNC connection string and set report interval
             if "Grbl 4.0 [FluidNC" in msg:
-                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=1"))
+                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=10"))
 
     def _parse_status(self, status_str):
         # State is always the first part before a pipe or the end

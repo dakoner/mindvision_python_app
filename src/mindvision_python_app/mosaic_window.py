@@ -1,7 +1,8 @@
 import os
 from PySide6.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QTransform, QPen
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint, QPointF, QRectF
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint, QPointF, QRectF, QFile
+from PySide6.QtUiTools import QUiLoader
 
 
 class MosaicWidget(QWidget):
@@ -391,7 +392,29 @@ class MosaicPanel(QWidget):
         
         print(f"Initializing {self.rows}x{self.cols} tiles (Tile Size: {self.TILE_SIZE})...")
         
-        self.display_widget = MosaicWidget(self)
+        # Load UI
+        loader = QUiLoader()
+        loader.registerCustomWidget(MosaicWidget)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        ui_file_path = os.path.join(script_dir, "MosaicPanel.ui")
+        ui_file = QFile(ui_file_path)
+        ui_file.open(QFile.ReadOnly)
+        self.ui = loader.load(ui_file)
+        ui_file.close()
+
+        if self.ui is None:
+            print(f"Error loading UI: {loader.errorString()}")
+            return
+            
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.ui)
+        
+        self.display_widget = self.ui.findChild(MosaicWidget, "display_widget")
+        self.position_label = self.ui.findChild(QLabel, "position_label")
+        self.cursor_label = self.ui.findChild(QLabel, "cursor_label")
+
         self.display_widget.set_stage_size(self.stage_width_mm, self.stage_height_mm)
         self.display_widget.set_calibration(self.ruler_calibration_px_per_mm)
         self.display_widget.reset_mosaic(self.mosaic_width_px, self.mosaic_height_px, self.TILE_SIZE)
@@ -408,19 +431,6 @@ class MosaicPanel(QWidget):
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
         self.display_widget.selection_made.connect(self.on_mosaic_selection)
         self.display_widget.mouse_moved.connect(self.on_mosaic_mouse_moved)
-        
-        self.position_label = QLabel("CNC: X: 0.0, Y: 0.0")
-        self.position_label.setAlignment(Qt.AlignCenter)
-
-        self.cursor_label = QLabel("Cursor: -")
-        self.cursor_label.setAlignment(Qt.AlignCenter)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.display_widget)
-        layout.addWidget(self.position_label)
-        layout.addWidget(self.cursor_label)
 
         # Store camera frame dimensions to calculate offset
         self.camera_frame_width_px = 0

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QTabWidget,
     QSplitter,
+    QSizePolicy,
 )
 from PySide6.QtCore import (
     Qt,
@@ -120,6 +121,11 @@ class MainWindow(QObject):
         
         # Ensure the main_h_splitter is also found
         self.main_h_splitter = self.ui.findChild(QSplitter, "main_h_splitter")
+        self.center_v_splitter = self.ui.findChild(QSplitter, "center_v_splitter")
+        
+        # Center tab widget for main view and mosaic view
+        self.center_tab_widget = self.ui.findChild(QTabWidget, "center_tab_widget")
+        self.mosaic_container = self.ui.findChild(QWidget, "mosaic_container")
 
         # --- Find all widgets ---
         self.video_label = self.ui.findChild(QLabel, "video_label")
@@ -293,7 +299,12 @@ class MainWindow(QObject):
         self.ruler_end = None
         self.ruler_calibration = None 
 
-        self.mosaic_dock = None
+        # Mosaic panel state - no longer a dock widget, but embedded in tab
+        self.mosaic_panel = None
+        self.scan_panel = None
+        self.scan_status_dialog = None
+        self.mosaic_panel_initialized = False
+        
         self.current_cnc_x_mm = 0.0
         self.current_cnc_y_mm = 0.0
         self.cnc_state = "Idle"
@@ -551,6 +562,14 @@ class MainWindow(QObject):
         self.ui.showMaximized()
         # Set initial splitter sizes: [left, center, right]
         self.ui.main_h_splitter.setSizes([300, 1000, 350])
+        if self.center_v_splitter:
+            self.center_v_splitter.setChildrenCollapsible(False)
+            self.center_v_splitter.setStretchFactor(0, 1)
+            self.center_v_splitter.setStretchFactor(1, 0)
+            self.center_v_splitter.setSizes([900, 120])
+        if self.log_text_edit:
+            self.log_text_edit.setMinimumHeight(80)
+            self.log_text_edit.setMaximumHeight(120)
 
     def close(self):
         # Triggers closeEvent via the widget
@@ -838,7 +857,9 @@ class MainWindow(QObject):
                 self.update_intensity_profile(self.ruler_start, end_pt, image)
 
             # Update Mosaic Window
-            if self.mosaic_dock and self.mosaic_dock.isVisible() and self.mosaic_panel and \
+            # Check if mosaic panel is initialized and the mosaic tab is currently visible
+            if self.mosaic_panel_initialized and self.mosaic_panel and \
+               self.center_tab_widget.currentIndex() == 1 and \
                self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
                 if self.cnc_state != "Home":
                     self.mosaic_panel.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
@@ -1685,20 +1706,21 @@ class MainWindow(QObject):
 
     @Slot()
     def on_show_mosaic_triggered(self):
-        """Handles the action to show/hide the mosaic panel."""
-        if self.mosaic_dock and self.mosaic_dock.isVisible():
-            self.mosaic_dock.hide()
-            self.ui.action_show_mosaic.setChecked(False)
-        else:
+        """Handles the action to show the mosaic panel by switching to the mosaic tab."""
+        if not self.mosaic_panel_initialized:
             self.init_mosaic_panel()
-            if not self.mosaic_dock:
-                self.ui.action_show_mosaic.setChecked(False) # Reset if failed
+        
+        if self.mosaic_panel_initialized:
+            # Switch to the Stage Mosaic tab (index 1)
+            self.center_tab_widget.setCurrentIndex(1)
+            self.ui.action_show_mosaic.setChecked(True)
+        else:
+            self.ui.action_show_mosaic.setChecked(False)
 
     def init_mosaic_panel(self, force_recreate=False):
-        # If the dock already exists, just show it
-        if self.mosaic_dock and not force_recreate:
-            self.mosaic_dock.show()
-            self.ui.action_show_mosaic.setChecked(True)
+        # If the panel already exists, just switch to its tab
+        if self.mosaic_panel_initialized and not force_recreate:
+            self.center_tab_widget.setCurrentIndex(1)
             return
 
         # Prerequisite checks
@@ -1709,18 +1731,30 @@ class MainWindow(QObject):
             self.log("Cannot create Mosaic Panel: Stage settings not loaded.")
             return
 
-        # Re-creation logic
-        if self.mosaic_dock:
-            # self.ui.removeDockWidget(self.mosaic_dock)
-            self.mosaic_dock.setWidget(None)
-            self.mosaic_dock.deleteLater()
-            self.mosaic_dock = None
+        # Re-creation logic - clean up old panel if force recreating
+        if self.mosaic_panel:
+            self.mosaic_panel.setParent(None)
+            self.mosaic_panel.deleteLater()
+            self.mosaic_panel = None
+        
+        if self.scan_panel:
+            self.scan_panel.setParent(None)
+            self.scan_panel.deleteLater()
+            self.scan_panel = None
 
         # --- Create container for mosaic and scan panel ---
-        container_widget = QWidget()
-        container_layout = QVBoxLayout(container_widget)
-        container_layout.setContentsMargins(0, 0, 0, 0) # Add a little space at the top
-        container_layout.setSpacing(0) # Pack widgets tightly
+        # Clear the existing mosaic_container
+        old_layout = self.mosaic_container.layout()
+        if old_layout is not None:
+            while old_layout.count():
+                child = old_layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+            old_layout.deleteLater()
+
+        container_layout = QVBoxLayout(self.mosaic_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
 
         # Create the mosaic panel
         stage_width_mm = self.stage_settings["stage_width_mm"]
@@ -1728,8 +1762,10 @@ class MainWindow(QObject):
         self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
         self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
         self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
+        self.mosaic_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.mosaic_panel.setMinimumHeight(0)
         
-        container_layout.addWidget(self.mosaic_panel)
+        container_layout.addWidget(self.mosaic_panel, 1)
 
         # Create the scan panel
         self.scan_panel = ScanConfigPanel()
@@ -1737,23 +1773,17 @@ class MainWindow(QObject):
         self.scan_panel.cancel_scan_signal.connect(self.cancel_scan)
         self.scan_status_signal.connect(self.scan_panel.update_status)
         self.scan_progress_signal.connect(self.scan_panel.update_progress)
-        container_layout.addWidget(self.scan_panel)
+        self.scan_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        container_layout.addWidget(self.scan_panel, 0)
+        container_layout.setStretch(0, 1)
+        container_layout.setStretch(1, 0)
         
         # Create the scan status dialog
         self.scan_status_dialog = ScanStatusDialog(self.ui)
         self.scan_status_dialog.cancel_requested.connect(self.cancel_scan)
         self.scan_progress_signal.connect(self.scan_status_dialog.update_progress)
 
-        # Create and setup the dock widget
-        self.mosaic_dock = QDockWidget("Stage Control", self.ui) # Renamed title
-        self.mosaic_dock.setObjectName("MosaicDock")
-        self.mosaic_dock.setWidget(container_widget) # Set the container as the widget
-        self.mosaic_dock.visibilityChanged.connect(lambda visible: self.ui.action_show_mosaic.setChecked(visible))
-        
-        self.ui.addDockWidget(Qt.RightDockWidgetArea, self.mosaic_dock)
-
-        self.mosaic_dock.show()
-        self.ui.action_show_mosaic.setChecked(True)
+        self.mosaic_panel_initialized = True
 
     @Slot(float, float)
     def on_cnc_position_updated(self, x_mm: float, y_mm: float):

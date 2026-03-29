@@ -2154,22 +2154,58 @@
        <property name="orientation">
         <enum>Qt::Vertical</enum>
        </property>
-       <widget class="QLabel" name="video_label">
+       <widget class="QTabWidget" name="center_tab_widget">
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
           <horstretch>1</horstretch>
           <verstretch>15</verstretch>
          </sizepolicy>
         </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel { background-color : black; color : white; }</string>
-        </property>
-        <property name="text">
-         <string>Camera Stream</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
+        <widget class="QWidget" name="tab_main_view">
+         <attribute name="title">
+          <string>Main Image</string>
+         </attribute>
+         <layout class="QHBoxLayout" name="tab_main_layout">
+          <item>
+           <widget class="QLabel" name="video_label">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
+              <horstretch>1</horstretch>
+              <verstretch>15</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>100</width>
+              <height>100</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QLabel { background-color : black; color : white; }</string>
+            </property>
+            <property name="text">
+             <string>Camera Stream</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="tab_mosaic_view">
+         <attribute name="title">
+          <string>Stage Mosaic</string>
+         </attribute>
+         <layout class="QHBoxLayout" name="tab_mosaic_layout">
+          <item>
+           <widget class="QWidget" name="mosaic_container" />
+          </item>
+         </layout>
+        </widget>
        </widget>
        <widget class="QPlainTextEdit" name="log_text_edit">
         <property name="sizePolicy">

@@ -769,7 +769,9 @@ class MainWindow(QObject):
     def on_detector_params_changed(self):
         self.update_detector()
 
-    def frame_callback(self, width, height, bytes_per_line, fmt, data):
+    def frame_callback(
+        self, width, height, bytes_per_line, fmt, data, timestamp_ms=None
+    ):
         # 1. Recording (High Priority)
         if self.video_thread.isRunning():
             try:

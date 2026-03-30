@@ -44,6 +44,7 @@ class MosaicWidget(QWidget):
         # Overlay Rectangles
         self.current_frame_rect = QRectF()
         self.selected_rects = [] # List of QRectF for selected scan areas
+        self.overlay_circles = [] # List of (QPointF center, float radius_px)
 
     def setup_scrollbars(self, h_bar, v_bar):
         self.h_scrollbar = h_bar
@@ -138,6 +139,10 @@ class MosaicWidget(QWidget):
 
     def set_current_frame_rect(self, rect: QRectF):
         self.current_frame_rect = rect # This is for the current camera FOV
+        self.update()
+
+    def set_overlay_circles(self, circles: list[tuple[QPointF, float]]):
+        self.overlay_circles = circles
         self.update()
 
     def reset_mosaic(self, width: int, height: int, tile_size: int):
@@ -265,6 +270,12 @@ class MosaicWidget(QWidget):
                  painter.setPen(pen)
                  painter.setBrush(Qt.NoBrush)
                  painter.drawRect(self.current_frame_rect)
+
+            for center, radius_px in self.overlay_circles:
+                pen = QPen(QColor(255, 196, 0), 3 / self.zoom_factor)
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(center, radius_px, radius_px)
 
             # Draw grid
             if self.grid_width > 0 and self.grid_height > 0:
@@ -523,6 +534,19 @@ class MosaicPanel(QWidget):
         # Store camera frame dimensions to calculate offset
         self.camera_frame_width_px = 0
         self.camera_frame_height_px = 0
+        self.stage_circle_overlays_mm = []
+
+    def set_stage_circles(self, circles_mm: list[tuple[float, float, float]]):
+        self.stage_circle_overlays_mm = circles_mm
+
+        circle_overlays_px = []
+        for center_x_mm, center_y_mm, radius_mm in circles_mm:
+            center_x_px = center_x_mm * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR
+            center_y_px = (self.stage_height_mm - center_y_mm) * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR
+            radius_px = radius_mm * self.ruler_calibration_px_per_mm * self.SCALE_FACTOR
+            circle_overlays_px.append((QPointF(center_x_px, center_y_px), radius_px))
+
+        self.display_widget.set_overlay_circles(circle_overlays_px)
 
     @Slot(QImage, float, float)
     def update_mosaic(self, camera_frame: QImage, cnc_x_mm: float, cnc_y_mm: float):

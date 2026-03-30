@@ -16,6 +16,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     poll_serial_signal = Signal()
     state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float, float)
+    scan_start_ready_signal = Signal()
     scan_finished_signal = Signal()
 
     def __init__(self, parent=None):
@@ -183,8 +184,12 @@ class CNCControlPanel(QtWidgets.QGroupBox):
             self._parse_status(msg[5:-1])
         elif msg.strip() == "Rx: ok" or msg.strip().startswith("Rx: error"):
             self.waiting_for_ok = False
-            
-            if self.last_sent_command and "SCAN_DONE" in self.last_sent_command:
+
+            if self.last_sent_command and "SCAN_START" in self.last_sent_command and msg.strip() == "Rx: ok":
+                self.scan_start_ready_signal.emit()
+                self.log_signal.emit("Initial scan move complete.")
+                self.last_sent_command = ""
+            elif self.last_sent_command and "SCAN_DONE" in self.last_sent_command:
                 self.scan_finished_signal.emit()
                 self.log_signal.emit("Scan finished (G4 wait complete).")
                 self.last_sent_command = ""
@@ -196,7 +201,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
             self.log_signal.emit(msg)
             # Check for FluidNC connection string and set report interval
             if "Grbl 4.0 [FluidNC" in msg:
-                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=1"))
+                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=10"))
 
     def _parse_status(self, status_str):
         # State is always the first part before a pipe or the end

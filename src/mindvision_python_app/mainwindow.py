@@ -332,6 +332,7 @@ class MainWindow(QObject):
         self.stage_settings = {}
         self.lbl_stage_width_mm = self.ui.findChild(QLabel, "lbl_stage_width_mm")
         self.lbl_stage_height_mm = self.ui.findChild(QLabel, "lbl_stage_height_mm")
+        self.mosaic_circle_overlays_mm = [(51.6, 48.5, 8.0)]
         
         # Color Picker Init
         self.color_picker_active = False
@@ -350,6 +351,7 @@ class MainWindow(QObject):
         if self.cnc_control_panel:
             self.cnc_control_panel.position_updated_signal.connect(self.on_cnc_position_updated)
             self.cnc_control_panel.state_updated_signal.connect(self.on_cnc_state_updated)
+            self.cnc_control_panel.scan_start_ready_signal.connect(self.on_scan_start_ready)
             self.cnc_control_panel.scan_finished_signal.connect(self.on_scan_finished)
 
         # Measurement Tab Setup (Index 0)
@@ -1808,6 +1810,7 @@ class MainWindow(QObject):
         self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
         self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
         self.mosaic_panel.selections_changed.connect(self._on_mosaic_selections_changed)
+        self.mosaic_panel.set_stage_circles(self.mosaic_circle_overlays_mm)
         self.mosaic_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mosaic_panel.setMinimumHeight(0)
         
@@ -1953,14 +1956,18 @@ class MainWindow(QObject):
             scan_img = self.mosaic_panel.get_region_image(overall_x_min, overall_y_min, overall_x_max, overall_y_max)
             self.scan_status_dialog.update_image(scan_img)
             self.scan_status_dialog.update_progress(0, self.scan_total_rows)
-        
-        if not self.video_thread.isRunning():
-            self.on_record_clicked()
-            self.scan_started_recording = True
-        
+
+        first_y, first_start_x, _ = self._get_scan_row_targets(self.area_params[0], 0)
+
         feedrate = self.cnc_control_panel.feedrate
         self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
         self.cnc_control_panel.send_serial_cmd_signal.emit(f"F{feedrate}")
+        if self.scan_home_y:
+            self.cnc_control_panel.send_serial_cmd_signal.emit("$HY")
+        if self.scan_home_x:
+            self.cnc_control_panel.send_serial_cmd_signal.emit("$HX")
+        self.cnc_control_panel.send_serial_cmd_signal.emit(f"G0 X{first_start_x:.3f} Y{first_y:.3f}")
+        self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P0.1 ; SCAN_START")
         
         self.log(f"Starting Mosaic Scan: {len(areas)} areas, {self.scan_total_rows} total rows.")
         self.scan_status_signal.emit(f"Starting scan of {self.scan_total_rows} rows.")
@@ -1968,66 +1975,86 @@ class MainWindow(QObject):
 
         self.scan_all_rows()
 
+    def _get_scan_row_targets(self, area, row_idx):
+        scan_y_min = area["y_min"]
+        scan_y_max = area["y_max"]
+        scan_x_min = area["x_min"]
+        scan_x_max = area["x_max"]
+
+        y_target = area["start_y"] - (row_idx * self.scan_step_y)
+        if scan_y_max - scan_y_min > self.scan_fov_y_mm:
+            y_target = max(y_target, scan_y_min + self.scan_fov_y_mm / 2)
+
+        x_left = scan_x_min + (self.scan_fov_x_mm / 2)
+        x_right = scan_x_max - (self.scan_fov_x_mm / 2)
+
+        if x_left > x_right:
+            x_center = (scan_x_min + scan_x_max) / 2
+            x_left = x_center
+            x_right = x_center
+
+        is_ltr = True
+        if self.scan_is_serpentine:
+            is_ltr = (row_idx % 2 == 0)
+
+        start_x = x_left if is_ltr else x_right
+        end_x = x_right if is_ltr else x_left
+        return y_target, start_x, end_x
+
     def scan_all_rows(self):
         if not self.is_scanning:
             return
 
-        for area in self.area_params:
-            scan_y_min = area["y_min"]
-            scan_y_max = area["y_max"]
-            scan_x_min = area["x_min"]
-            scan_x_max = area["x_max"]
-            current_y = area["start_y"]
+        for area_index, area in enumerate(self.area_params):
             area_rows = area["total_rows"]
             
             is_first_strip = True
 
             for row_idx in range(area_rows):
-                y_target = current_y
-                if scan_y_max - scan_y_min > self.scan_fov_y_mm:
-                    y_target = max(y_target, scan_y_min + self.scan_fov_y_mm/2)
-                
-                x_left = scan_x_min + (self.scan_fov_x_mm / 2)
-                x_right = scan_x_max - (self.scan_fov_x_mm / 2)
-                
-                if x_left > x_right:
-                    x_center = (scan_x_min + scan_x_max) / 2
-                    x_left = x_center
-                    x_right = x_center
-                
-                is_ltr = True
-                if self.scan_is_serpentine:
-                    is_ltr = (row_idx % 2 == 0)
-                
-                start_x = x_left if is_ltr else x_right
-                end_x = x_right if is_ltr else x_left
-                
+                y_target, start_x, end_x = self._get_scan_row_targets(area, row_idx)
                 cmds = []
-                if is_first_strip:
-                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                is_initial_scan_row = area_index == 0 and row_idx == 0
+
+                if is_initial_scan_row:
                     is_first_strip = False
                 else:
-                    cmds.append(f"G1 Y{y_target:.3f}")
-                
-                if self.scan_home_y:
-                    cmds.append("$HY")
-                if self.scan_home_x:
-                    cmds.append("$HX")
-                    cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
-                else:
-                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                    if is_first_strip:
+                        cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                        is_first_strip = False
+                    else:
+                        cmds.append(f"G1 Y{y_target:.3f}")
+
+                    if self.scan_home_y:
+                        cmds.append("$HY")
+                    if self.scan_home_x:
+                        cmds.append("$HX")
+                        cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+                    else:
+                        cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
 
                 if start_x != end_x:
                     cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
                 
                 for cmd in cmds:
                     self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
-                
-                current_y -= self.scan_step_y
+
                 self.scan_current_row += 1
                 self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
 
         self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P0.1 ; SCAN_DONE")
+
+    @Slot()
+    def on_scan_start_ready(self):
+        if not self.is_scanning or self.scan_started_recording:
+            return
+
+        if self.video_thread.isRunning():
+            self.log("Initial scan move completed.")
+            return
+
+        self.on_record_clicked()
+        self.scan_started_recording = True
+        self.log("Initial scan move completed, recording starting.")
 
 
     def cancel_current_scan_area(self):

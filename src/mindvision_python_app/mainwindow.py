@@ -858,7 +858,7 @@ class MainWindow(QObject):
                 os.makedirs(video_dir, exist_ok=True)
                 
                 timestamp = int(time.time())
-                filename = os.path.join(video_dir, f"recording_{timestamp}.mkv")
+                filename = os.path.join(video_dir, f"recording_{timestamp}.rgb")
                 
                 meta_filename = os.path.join(video_dir, f"recording_{timestamp}_meta.csv")
                 self.metadata_filename = meta_filename

@@ -312,6 +312,7 @@ class MainWindow(QObject):
         self.is_scanning = False
         self.scan_panel = None # Will be created with the mosaic panel
         self.scan_current_row = 0
+        self.scan_current_area_total_rows = 0 # Total rows for the current scan area
         self.scan_total_rows = 0
         
         # Scan State for row-by-row processing
@@ -1761,7 +1762,7 @@ class MainWindow(QObject):
         stage_height_mm = self.stage_settings["stage_height_mm"]
         self.mosaic_panel = MosaicPanel(stage_width_mm, stage_height_mm, self.ruler_calibration)
         self.mosaic_panel.request_move_signal.connect(self.on_mosaic_move_requested)
-        self.mosaic_panel.request_scan_signal.connect(self.on_mosaic_scan_requested)
+        self.mosaic_panel.selections_changed.connect(self._on_mosaic_selections_changed)
         self.mosaic_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mosaic_panel.setMinimumHeight(0)
         
@@ -1770,7 +1771,7 @@ class MainWindow(QObject):
         # Create the scan panel
         self.scan_panel = ScanConfigPanel()
         self.scan_panel.start_scan_signal.connect(self.start_scan)
-        self.scan_panel.cancel_scan_signal.connect(self.cancel_scan)
+        self.scan_panel.cancel_scan_signal.connect(self.cancel_current_scan_area)
         self.scan_status_signal.connect(self.scan_panel.update_status)
         self.scan_progress_signal.connect(self.scan_panel.update_progress)
         self.scan_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -1780,10 +1781,22 @@ class MainWindow(QObject):
         
         # Create the scan status dialog
         self.scan_status_dialog = ScanStatusDialog(self.ui)
-        self.scan_status_dialog.cancel_requested.connect(self.cancel_scan)
+        self.scan_status_dialog.cancel_requested.connect(self.cancel_current_scan_area)
         self.scan_progress_signal.connect(self.scan_status_dialog.update_progress)
 
+        # Initialize scan panel with 0 selected areas
+        self.scan_panel.update_scan_areas([])
+
         self.mosaic_panel_initialized = True
+
+    @Slot(list)
+    def _on_mosaic_selections_changed(self, mm_rects: list):
+        if self.scan_panel:
+            self.scan_panel.update_scan_areas(mm_rects)
+            if mm_rects:
+                if self.is_scanning or not self.ruler_calibration or not self.current_pixmap:
+                    return
+                self.log(f"{len(mm_rects)} scan area(s) selected.")
 
     @Slot(float, float)
     def on_cnc_position_updated(self, x_mm: float, y_mm: float):
@@ -1823,106 +1836,154 @@ class MainWindow(QObject):
             return
             
         if self.scan_panel:
-            self.scan_panel.update_scan_area(x_min, y_min, x_max, y_max)
+            self.scan_panel.update_scan_areas([(x_min, y_min, x_max, y_max)])
             self.log("Scan area selected. Configure and start scan in the 'Stage Control' panel.")
 
 
-    @Slot(float, float, float, float, bool, bool, bool, bool)
-    def start_scan(self, x_min, y_min, x_max, y_max, home_x, home_y, record_video, is_serpentine):
+    @Slot(list, bool, bool, bool, bool)
+    def start_scan(self, areas, home_x, home_y, record_video, is_serpentine):
         if not self.cnc_control_panel:
             return
 
-        img_w = self.current_pixmap.width()
-        img_h = self.current_pixmap.height()
-        
-        # Store scan parameters
-        self.scan_x_min, self.scan_y_min, self.scan_x_max, self.scan_y_max = x_min, y_min, x_max, y_max
+        if not areas:
+            self.log("No scan areas defined.")
+            return
+
+        self.scan_areas = areas
         self.scan_home_x, self.scan_home_y = home_x, home_y
         self.scan_record_video = record_video
         self.scan_is_serpentine = is_serpentine
-        
-        self.scan_fov_x_mm = img_h / self.ruler_calibration
-        self.scan_fov_y_mm = img_w / self.ruler_calibration
-        
+
+        img_w = self.current_pixmap.width()
+        img_h = self.current_pixmap.height()
+        self.scan_fov_x_mm = img_w / self.ruler_calibration
+        self.scan_fov_y_mm = img_h / self.ruler_calibration
         self.scan_step_y = self.scan_fov_y_mm * 0.75
         
-        scan_height = y_max - y_min
-        self.scan_total_rows = int(scan_height / self.scan_step_y) if self.scan_step_y > 0 else 0
-        self.scan_current_row = 0
-        self.scan_current_y = y_max - (self.scan_fov_y_mm / 2)
-        self.scan_is_first_strip = True
+        self.scan_total_rows = 0
+        self.area_params = []
+
+        stage_w = self.stage_settings.get("stage_width_mm", 100)
+        stage_h = self.stage_settings.get("stage_height_mm", 100)
         
+        for area in areas:
+            x_min, y_min, x_max, y_max = area
+            x_min = max(0.0, min(x_min, stage_w))
+            x_max = max(0.0, min(x_max, stage_w))
+            y_min = max(0.0, min(y_min, stage_h))
+            y_max = max(0.0, min(y_max, stage_h))
+
+            if x_min > x_max:
+                x_min, x_max = x_max, x_min
+            if y_min > y_max:
+                y_min, y_max = y_max, y_min
+
+            scan_height = y_max - y_min
+            
+            if scan_height <= self.scan_fov_y_mm:
+                total_rows = 1
+                start_y = (y_max + y_min) / 2
+            else:
+                total_rows = int((scan_height - self.scan_fov_y_mm) / self.scan_step_y) + 1
+                if (total_rows - 1) * self.scan_step_y + self.scan_fov_y_mm < scan_height:
+                    total_rows += 1
+                start_y = y_max - (self.scan_fov_y_mm / 2)
+
+            self.scan_total_rows += total_rows
+            self.area_params.append({
+                "x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max,
+                "total_rows": total_rows, "start_y": start_y
+            })
+
+        self.scan_current_row = 0
         self.is_scanning = True
         
-        # Show dialog and set image
         if hasattr(self, 'scan_status_dialog'):
             self.scan_status_dialog.show()
-            scan_img = self.mosaic_panel.get_region_image(x_min, y_min, x_max, y_max)
+            overall_x_min = min(a["x_min"] for a in self.area_params)
+            overall_y_min = min(a["y_min"] for a in self.area_params)
+            overall_x_max = max(a["x_max"] for a in self.area_params)
+            overall_y_max = max(a["y_max"] for a in self.area_params)
+            scan_img = self.mosaic_panel.get_region_image(overall_x_min, overall_y_min, overall_x_max, overall_y_max)
             self.scan_status_dialog.update_image(scan_img)
             self.scan_status_dialog.update_progress(0, self.scan_total_rows)
         
-        # Start recording
         if self.scan_record_video and not self.video_thread.isRunning():
             self.on_record_clicked()
         
-        # Initial commands
         feedrate = self.cnc_control_panel.feedrate
         self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
         self.cnc_control_panel.send_serial_cmd_signal.emit(f"F{feedrate}")
         
-        self.log(f"Starting Mosaic Scan: {self.scan_total_rows} rows.")
+        self.log(f"Starting Mosaic Scan: {len(areas)} areas, {self.scan_total_rows} total rows.")
         self.scan_status_signal.emit(f"Starting scan of {self.scan_total_rows} rows.")
         self.scan_progress_signal.emit(0, self.scan_total_rows)
 
-        # Kick off the first row
         self.scan_all_rows()
 
     def scan_all_rows(self):
         if not self.is_scanning:
             return
 
-        while self.scan_current_y > self.scan_y_min:
-            y_target = max(self.scan_current_y, self.scan_y_min + self.scan_fov_y_mm/2)
+        for area in self.area_params:
+            scan_y_min = area["y_min"]
+            scan_y_max = area["y_max"]
+            scan_x_min = area["x_min"]
+            scan_x_max = area["x_max"]
+            current_y = area["start_y"]
+            area_rows = area["total_rows"]
             
-            x_left = self.scan_x_min + (self.scan_fov_x_mm / 2)
-            x_right = self.scan_x_max - (self.scan_fov_x_mm / 2)
-            
-            is_ltr = True
-            if self.scan_is_serpentine:
-                is_ltr = (self.scan_current_row % 2 == 0)
-            
-            start_x = x_left if is_ltr else x_right
-            end_x = x_right if is_ltr else x_left
-            
-            cmds = []
-            if self.scan_is_first_strip:
-                cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
-                self.scan_is_first_strip = False
-            else:
-                cmds.append(f"G1 Y{y_target:.3f}")
-            
-            if self.scan_home_y:
-                cmds.append("$HY")
-            if self.scan_home_x:
-                cmds.append("$HX")
-                cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
-            else:
-                cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+            is_first_strip = True
 
-            cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
-            
-            for cmd in cmds:
-                self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
-            
-            self.scan_current_y -= self.scan_step_y
-            self.scan_current_row += 1
-            self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
+            for row_idx in range(area_rows):
+                y_target = current_y
+                if scan_y_max - scan_y_min > self.scan_fov_y_mm:
+                    y_target = max(y_target, scan_y_min + self.scan_fov_y_mm/2)
+                
+                x_left = scan_x_min + (self.scan_fov_x_mm / 2)
+                x_right = scan_x_max - (self.scan_fov_x_mm / 2)
+                
+                if x_left > x_right:
+                    x_center = (scan_x_min + scan_x_max) / 2
+                    x_left = x_center
+                    x_right = x_center
+                
+                is_ltr = True
+                if self.scan_is_serpentine:
+                    is_ltr = (row_idx % 2 == 0)
+                
+                start_x = x_left if is_ltr else x_right
+                end_x = x_right if is_ltr else x_left
+                
+                cmds = []
+                if is_first_strip:
+                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                    is_first_strip = False
+                else:
+                    cmds.append(f"G1 Y{y_target:.3f}")
+                
+                if self.scan_home_y:
+                    cmds.append("$HY")
+                if self.scan_home_x:
+                    cmds.append("$HX")
+                    cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+                else:
+                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
 
-        # No more rows, scan is finished
+                if start_x != end_x:
+                    cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
+                
+                for cmd in cmds:
+                    self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+                
+                current_y -= self.scan_step_y
+                self.scan_current_row += 1
+                self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
+
         self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P0.1 ; SCAN_DONE")
 
 
-    def cancel_scan(self):
+    def cancel_current_scan_area(self):
         if hasattr(self, 'scan_status_dialog'):
             self.scan_status_dialog.hide()
 

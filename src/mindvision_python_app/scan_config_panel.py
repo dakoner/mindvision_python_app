@@ -18,18 +18,15 @@ class ScanConfigPanel(QWidget):
     """
     A dialog to configure and monitor a mosaic scan.
     """
-
-    # Signal arguments: x_min, y_min, x_max, y_max, home_x, home_y, record_video, is_serpentine
-    start_scan_signal = Signal(float, float, float, float, bool, bool, bool, bool)
+    # Signal arguments: areas_list, home_x, home_y, record_video, is_serpentine
+    start_scan_signal = Signal(list, bool, bool, bool, bool)
     cancel_scan_signal = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        self.x_min = 0
-        self.y_min = 0
-        self.x_max = 0
-        self.y_max = 0
+        
+        self.num_selected_areas = 0
+        self.scan_areas = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0) # No extra margins
@@ -37,7 +34,7 @@ class ScanConfigPanel(QWidget):
 
         # Scan Area Info
         self.scan_area_label = QLabel("Scan Area: (select area on mosaic)")
-        layout.addWidget(self.scan_area_label)
+        layout.addWidget(self.scan_area_label) # type: ignore
         
         # Scan Style Options
         scan_style_layout = QHBoxLayout()
@@ -49,19 +46,19 @@ class ScanConfigPanel(QWidget):
         self.scan_style_group.addButton(self.radio_serpentine)
         scan_style_layout.addWidget(self.radio_left_right)
         scan_style_layout.addWidget(self.radio_serpentine)
-        layout.addLayout(scan_style_layout)
+        layout.addLayout(scan_style_layout) # type: ignore
 
         # Homing Options
         self.home_x_checkbox = QCheckBox("Home X before each row")
         self.home_y_checkbox = QCheckBox("Home Y before each row")
         self.home_x_checkbox.setChecked(True)
-        layout.addWidget(self.home_x_checkbox)
-        layout.addWidget(self.home_y_checkbox)
+        layout.addWidget(self.home_x_checkbox) # type: ignore
+        layout.addWidget(self.home_y_checkbox) # type: ignore
 
         # Video recording option
         self.record_video_checkbox = QCheckBox("Take videos of each strip")
         self.record_video_checkbox.setChecked(False)
-        layout.addWidget(self.record_video_checkbox)
+        layout.addWidget(self.record_video_checkbox) # type: ignore
 
         # Status Display
         self.status_label = QLabel("Status: Idle")
@@ -70,32 +67,29 @@ class ScanConfigPanel(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        layout.addWidget(self.progress_bar)
+        layout.addWidget(self.progress_bar) # type: ignore
         
         # Buttons
         button_layout = QHBoxLayout()
         self.start_button = QPushButton("Start Scan")
         self.cancel_button = QPushButton("Cancel Scan")
         button_layout.addWidget(self.start_button)
-        button_layout.addWidget(self.cancel_button)
-        layout.addLayout(button_layout)
+        button_layout.addWidget(self.cancel_button) # type: ignore
+        layout.addLayout(button_layout) # type: ignore
 
         self.cancel_button.setEnabled(False)
         self.start_button.setEnabled(False) # Disabled until an area is selected
 
         # Connections
         self.start_button.clicked.connect(self.on_start_clicked)
-        self.cancel_button.clicked.connect(self.on_cancel_clicked)
-        
-    def update_scan_area(self, x_min, y_min, x_max, y_max):
-        self.x_min = x_min
-        self.y_min = y_min
-        self.x_max = x_max
-        self.y_max = y_max
-        self.scan_area_label.setText(f"Scan Area: X({x_min:.2f} to {x_max:.2f}), Y({y_min:.2f} to {y_max:.2f})")
-        self.start_button.setEnabled(True)
-        self.scan_finished(success=False) # Reset state
+        self.cancel_button.clicked.connect(self.cancel_scan_signal.emit)
 
+    def update_scan_areas(self, areas):
+        self.scan_areas = areas
+        self.num_selected_areas = len(areas)
+        self.scan_area_label.setText(f"Scan Area: {self.num_selected_areas} area(s) selected")
+        self.start_button.setEnabled(self.num_selected_areas > 0)
+        self.scan_finished(success=False) # Reset UI state
 
     def on_start_clicked(self):
         self.start_button.setEnabled(False)
@@ -111,13 +105,15 @@ class ScanConfigPanel(QWidget):
         record_video = self.record_video_checkbox.isChecked()
         is_serpentine = self.radio_serpentine.isChecked()
 
-        self.start_scan_signal.emit(self.x_min, self.y_min, self.x_max, self.y_max, home_x, home_y, record_video, is_serpentine)
+        self.start_scan_signal.emit(
+            self.scan_areas,
+            home_x, home_y, record_video, is_serpentine
+        )
         self.update_status("Scan started...")
 
-    def on_cancel_clicked(self):
-        self.cancel_scan_signal.emit()
-        self.update_status("Scan cancelled by user.")
-        self.scan_finished(success=False)
+    def set_scanning_active(self, active: bool):
+        self.start_button.setEnabled(not active and self.num_selected_areas > 0)
+        self.cancel_button.setEnabled(active)
 
     @Slot(str)
     def update_status(self, message):
@@ -138,7 +134,7 @@ class ScanConfigPanel(QWidget):
         self.record_video_checkbox.setEnabled(True)
         self.radio_left_right.setEnabled(True)
         self.radio_serpentine.setEnabled(True)
-        self.cancel_button.setEnabled(False)
+        self.set_scanning_active(False) # Update buttons based on active state
         
         if success:
              self.update_status("Scan completed successfully!")
@@ -146,4 +142,3 @@ class ScanConfigPanel(QWidget):
         else:
              self.update_status("Idle")
              self.progress_bar.setValue(0)
-

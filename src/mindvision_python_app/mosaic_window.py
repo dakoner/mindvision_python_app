@@ -9,9 +9,10 @@ class MosaicWidget(QWidget):
     """
     A custom widget to display a pan-and-zoomable mosaic image.
     """
-    clicked = Signal(float, float)
-    selection_made = Signal(float, float, float, float) # x, y, w, h in image pixels
+    clicked = Signal(float, float) # Emits image_x, image_y
+    selections_changed = Signal(list) # Emits list of QRectF in image pixels
     mouse_moved = Signal(float, float)
+    selection_made = Signal(float, float, float, float) # Emits x, y, width, height
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -32,8 +33,8 @@ class MosaicWidget(QWidget):
         self.pan_offset = QPointF(0, 0)
         self.last_mouse_pos = QPoint()
 
-        # Dragging states
-        self.is_panning = False
+        # Dragging states and selections
+        self.is_panning = False 
         self.is_selecting = False
 
         self.stage_width_mm = 0
@@ -41,8 +42,8 @@ class MosaicWidget(QWidget):
         self.ruler_calibration_px_per_mm = 0
         
         # Overlay Rectangles
-        self.scan_region_rect = QRectF()
         self.current_frame_rect = QRectF()
+        self.selected_rects = [] # List of QRectF for selected scan areas
 
     def setup_scrollbars(self, h_bar, v_bar):
         self.h_scrollbar = h_bar
@@ -135,12 +136,8 @@ class MosaicWidget(QWidget):
         self.grid_height = height
         self.update()
 
-    def set_scan_region(self, rect: QRectF):
-        self.scan_region_rect = rect
-        self.update()
-
     def set_current_frame_rect(self, rect: QRectF):
-        self.current_frame_rect = rect
+        self.current_frame_rect = rect # This is for the current camera FOV
         self.update()
 
     def reset_mosaic(self, width: int, height: int, tile_size: int):
@@ -251,12 +248,17 @@ class MosaicWidget(QWidget):
                 painter.drawImage(x, y, tile)
 
             # Draw Scan Region (Pink)
-            if not self.scan_region_rect.isNull():
-                 pen = QPen(QColor(255, 105, 180), 3 / self.zoom_factor)
-                 painter.setPen(pen)
-                 painter.setBrush(Qt.NoBrush)
-                 painter.drawRect(self.scan_region_rect)
+            for rect in self.selected_rects:
+                pen = QPen(QColor(255, 105, 180), 3 / self.zoom_factor)
+                painter.setPen(pen)
+                painter.setBrush(QColor(255, 105, 180, 50)) # Semi-transparent fill
+                painter.drawRect(rect)
+                
+                # Draw a cross in the middle
+                painter.drawLine(rect.center().x() - 5 / self.zoom_factor, rect.center().y(), rect.center().x() + 5 / self.zoom_factor, rect.center().y())
+                painter.drawLine(rect.center().x(), rect.center().y() - 5 / self.zoom_factor, rect.center().x(), rect.center().y() + 5 / self.zoom_factor)
 
+            
             # Draw Current Frame Rect (Green)
             if not self.current_frame_rect.isNull():
                  pen = QPen(Qt.green, 2 / self.zoom_factor)
@@ -366,6 +368,10 @@ class MosaicWidget(QWidget):
             self.is_panning = True
             self.setCursor(Qt.ClosedHandCursor)
 
+        elif event.button() == Qt.RightButton:
+            self.selected_rects.clear()
+            self.selections_changed.emit(self.selected_rects)
+            self.update()
     def mouseMoveEvent(self, event):
         if self.total_width == 0:
             return
@@ -406,12 +412,17 @@ class MosaicWidget(QWidget):
                 
                 if not start_img.isNull() and not end_img.isNull():
                     selection_rect = QRectF(start_img, end_img).normalized()
-                    self.selection_made.emit(
-                        selection_rect.x(), 
-                        selection_rect.y(), 
-                        selection_rect.width(), 
-                        selection_rect.height()
-                    )
+                    # Constrain to valid image boundaries
+                    selection_rect = selection_rect.intersected(QRectF(0, 0, self.total_width, self.total_height))
+                    if not selection_rect.isEmpty():
+                        self.selected_rects.append(selection_rect)
+                        self.selections_changed.emit(self.selected_rects)
+                        self.selection_made.emit(
+                            selection_rect.x(),
+                            selection_rect.y(),
+                            selection_rect.width(),
+                            selection_rect.height()
+                        )
             self.start_pos = None
             self.current_pos = None
             self.update()
@@ -429,6 +440,7 @@ class MosaicPanel(QWidget):
     """
     request_move_signal = Signal(float, float)
     request_scan_signal = Signal(float, float, float, float) # x_min, y_min, x_max, y_max
+    selections_changed = Signal(list) # Emits list of (x_min_mm, y_min_mm, x_max_mm, y_max_mm)
     
     TILE_SIZE = 32768
     SCALE_FACTOR = 0.1  # Downscale mosaic to 1/10 of true size
@@ -504,9 +516,8 @@ class MosaicPanel(QWidget):
                 img.fill(Qt.white)
                 self.tiles[(r, c)] = img
                 self.display_widget.update_tile(r, c, img)
-
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
-        self.display_widget.selection_made.connect(self.on_mosaic_selection)
+        self.display_widget.selections_changed.connect(self._on_selections_changed) # Connect to internal slot
         self.display_widget.mouse_moved.connect(self.on_mosaic_mouse_moved)
 
         # Store camera frame dimensions to calculate offset
@@ -553,7 +564,7 @@ class MosaicPanel(QWidget):
         self.display_widget.set_current_frame_rect(QRectF(frame_rect))
         
         # Determine intersecting tiles
-        start_col = max(0, frame_rect.left() // self.TILE_SIZE)
+        start_col = max(0, frame_rect.left() // self.TILE_SIZE) # Integer division
         end_col = min(self.cols - 1, frame_rect.right() // self.TILE_SIZE)
         start_row = max(0, frame_rect.top() // self.TILE_SIZE)
         end_row = min(self.rows - 1, frame_rect.bottom() // self.TILE_SIZE)
@@ -594,6 +605,26 @@ class MosaicPanel(QWidget):
         # Update position label
         if self.ruler_calibration_px_per_mm > 0:
             self.position_label.setText(f"CNC: {cnc_x_mm:.1f} mm, {cnc_y_mm:.1f} mm")
+
+    @Slot(list)
+    def _on_selections_changed(self, qrectf_list: list[QRectF]):
+        """
+        Converts the list of QRectF (image pixels) to a list of (x_min_mm, y_min_mm, x_max_mm, y_max_mm)
+        and emits it.
+        """
+        mm_rects = []
+        for qrectf in qrectf_list:
+            # Convert to CNC coords
+            # Image (0,0) is Top-Left. CNC (0,0) is Bottom-Left.
+            # Account for scaling
+            cnc_x1 = qrectf.x() / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
+            cnc_y1 = self.stage_height_mm - (qrectf.y() / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR))
+            cnc_x2 = qrectf.right() / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
+            cnc_y2 = self.stage_height_mm - (qrectf.bottom() / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR))
+            
+            mm_rects.append((min(cnc_x1, cnc_x2), min(cnc_y1, cnc_y2), max(cnc_x1, cnc_x2), max(cnc_y1, cnc_y2)))
+            
+        self.selections_changed.emit(mm_rects)
 
     def get_region_image(self, x_min_mm: float, y_min_mm: float, x_max_mm: float, y_max_mm: float) -> QImage:
         if self.ruler_calibration_px_per_mm <= 0:
@@ -639,9 +670,6 @@ class MosaicPanel(QWidget):
         if self.ruler_calibration_px_per_mm <= 0:
             return
         
-        # Clear scan region overlay
-        self.display_widget.set_scan_region(QRectF())
-        
         # Mosaic (0,0) is Top-Left. CNC (0,0) is Bottom-Left.
         # Account for scaling: divide by (ruler_calibration * SCALE_FACTOR)
         cnc_x = img_x / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
@@ -652,33 +680,6 @@ class MosaicPanel(QWidget):
         cnc_y = max(0.0, min(cnc_y, self.stage_height_mm))
         
         self.request_move_signal.emit(cnc_x, cnc_y)
-
-    @Slot(float, float, float, float)
-    def on_mosaic_selection(self, x, y, w, h):
-        if self.ruler_calibration_px_per_mm <= 0:
-            return
-            
-        # Set scan region overlay
-        self.display_widget.set_scan_region(QRectF(x, y, w, h))
-            
-        # Convert to CNC coords
-        # Image (0,0) is Top-Left. CNC (0,0) is Bottom-Left.
-        # Account for scaling
-        
-        # Top-Left of selection in CNC
-        cnc_x1 = x / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
-        cnc_y1 = self.stage_height_mm - (y / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR))
-        
-        # Bottom-Right of selection in CNC
-        cnc_x2 = (x + w) / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR)
-        cnc_y2 = self.stage_height_mm - ((y + h) / (self.ruler_calibration_px_per_mm * self.SCALE_FACTOR))
-        
-        x_min = min(cnc_x1, cnc_x2)
-        x_max = max(cnc_x1, cnc_x2)
-        y_min = min(cnc_y1, cnc_y2)
-        y_max = max(cnc_y1, cnc_y2)
-        
-        self.request_scan_signal.emit(x_min, y_min, x_max, y_max)
 
     @Slot(float, float)
     def on_mosaic_mouse_moved(self, img_x, img_y):

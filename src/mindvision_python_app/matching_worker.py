@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QObject, Signal, Slot, QMutex
 from PySide6.QtGui import QImage
-from utils import QMutexLocker
+from .utils import QMutexLocker
 
 def precompute_ssim_constants(img):
     img = img.astype(np.float64)

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtCore import QFile, Slot
 
-from cnc_control_panel import CNCControlPanel
+from .cnc_control_panel import CNCControlPanel
 
 
 class CncTestWindow(QMainWindow):

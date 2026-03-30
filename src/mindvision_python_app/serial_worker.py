@@ -1,7 +1,7 @@
 import serial
 import serial.tools.list_ports
 from PySide6.QtCore import QObject, Signal, Slot, QMutex
-from utils import QMutexLocker
+from .utils import QMutexLocker
 
 try:
     import serial

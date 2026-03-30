@@ -7,7 +7,7 @@ name = "mindvision_python_app"
 version = "0.1.0"
 description = "A Python application for the MindVision microscope."
 readme = "README.md"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.12"
 
 dependencies = [
     "numpy",
@@ -19,7 +19,19 @@ dependencies = [
     "pillow",
     "qimage2ndarray",
     "ultralytics",
+    "pybind11",
 ]
 
 [project.scripts]
 mindvision = "mindvision_python_app.main:main"
+camera-gui = "mindvision_python_app.camera_gui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mindvision_python_app = ["*.ui"]

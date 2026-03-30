@@ -2,7 +2,7 @@ import serial
 import serial.tools.list_ports
 from PySide6.QtCore import QObject, Signal, Slot, QThread, QTimer
 from PySide6.QtWidgets import QListWidgetItem
-from serial_worker import SerialWorker, HAS_SERIAL
+from .serial_worker import SerialWorker, HAS_SERIAL
 
 class LEDController(QObject):
     log_signal = Signal(str)

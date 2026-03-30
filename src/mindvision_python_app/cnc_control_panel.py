@@ -3,7 +3,7 @@ from PySide6.QtCore import QThread, Signal, Slot, QObject
 import serial.tools.list_ports
 import re
 
-from serial_worker import SerialWorker, HAS_SERIAL
+from .serial_worker import SerialWorker, HAS_SERIAL
 
 
 class CNCControlPanel(QtWidgets.QGroupBox): 

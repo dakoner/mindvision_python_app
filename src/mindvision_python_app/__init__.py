@@ -1,0 +1,1 @@
+"""MindVision microscope application package."""

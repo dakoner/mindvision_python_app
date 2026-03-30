@@ -45,16 +45,16 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QPixmap, QAction, QPainter, QPen, QColor, QIcon, QImage
 from PySide6.QtUiTools import QUiLoader
 
-from _mindvision_qobject_py import MindVisionCamera, VideoThread
-from range_slider import RangeSlider
-from intensity_chart import IntensityChart
-from color_picker_widget import ColorPickerWidget
-from mosaic_window import MosaicPanel
-from matching_worker import MatchingWorker
-from cnc_control_panel import CNCControlPanel
-from led_controller import LEDController
-from scan_config_panel import ScanConfigPanel
-from scan_status_dialog import ScanStatusDialog
+from .bindings import MindVisionCamera, VideoThread
+from .range_slider import RangeSlider
+from .intensity_chart import IntensityChart
+from .color_picker_widget import ColorPickerWidget
+from .mosaic_window import MosaicPanel
+from .matching_worker import MatchingWorker
+from .cnc_control_panel import CNCControlPanel
+from .led_controller import LEDController
+from .scan_config_panel import ScanConfigPanel
+from .scan_status_dialog import ScanStatusDialog
 
 try:
     from ultralytics import YOLO
@@ -89,9 +89,6 @@ class MainWindow(QObject):
     def __init__(self):
         super().__init__()
 
-        # Add the directory containing the generated module to sys.path
-        # Note: In the refactored structure, we rely on main.py to set sys.path for _mindvision_qobject_py,
-        # but for loading the UI file we need the directory of this file.
         self.script_dir = os.path.dirname(__file__)
 
         # Load UI from file

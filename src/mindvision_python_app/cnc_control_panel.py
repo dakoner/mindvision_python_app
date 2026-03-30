@@ -15,7 +15,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     send_raw_serial_cmd_signal = Signal(str)
     poll_serial_signal = Signal()
     state_updated_signal = Signal(str)
-    position_updated_signal = Signal(float, float)
+    position_updated_signal = Signal(float, float, float)
     scan_finished_signal = Signal()
 
     def __init__(self, parent=None):
@@ -196,7 +196,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
             self.log_signal.emit(msg)
             # Check for FluidNC connection string and set report interval
             if "Grbl 4.0 [FluidNC" in msg:
-                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=25"))
+                QtCore.QTimer.singleShot(500, lambda: self.send_serial_cmd_signal.emit("$Report/Interval=1"))
 
     def _parse_status(self, status_str):
         # State is always the first part before a pipe or the end
@@ -215,7 +215,7 @@ class CNCControlPanel(QtWidgets.QGroupBox):
                 self.wpos_x_label.setText(f"{x:.3f}")
                 self.wpos_y_label.setText(f"{y:.3f}")
                 self.wpos_z_label.setText(f"{z:.3f}")
-                self.position_updated_signal.emit(x, y)
+                self.position_updated_signal.emit(x, y, z)
             except (ValueError, IndexError):
                 # This might happen if the regex matches something that isn't a valid float
                 pass

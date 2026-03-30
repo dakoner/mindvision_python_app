@@ -18,8 +18,8 @@ class ScanConfigPanel(QWidget):
     """
     A dialog to configure and monitor a mosaic scan.
     """
-    # Signal arguments: areas_list, home_x, home_y, record_video, is_serpentine
-    start_scan_signal = Signal(list, bool, bool, bool, bool)
+    # Signal arguments: areas_list, home_x, home_y, is_serpentine
+    start_scan_signal = Signal(list, bool, bool, bool)
     cancel_scan_signal = Signal()
 
     def __init__(self, parent=None):
@@ -54,11 +54,6 @@ class ScanConfigPanel(QWidget):
         self.home_x_checkbox.setChecked(True)
         layout.addWidget(self.home_x_checkbox) # type: ignore
         layout.addWidget(self.home_y_checkbox) # type: ignore
-
-        # Video recording option
-        self.record_video_checkbox = QCheckBox("Take videos of each strip")
-        self.record_video_checkbox.setChecked(False)
-        layout.addWidget(self.record_video_checkbox) # type: ignore
 
         # Status Display
         self.status_label = QLabel("Status: Idle")
@@ -95,19 +90,17 @@ class ScanConfigPanel(QWidget):
         self.start_button.setEnabled(False)
         self.home_x_checkbox.setEnabled(False)
         self.home_y_checkbox.setEnabled(False)
-        self.record_video_checkbox.setEnabled(False)
         self.radio_left_right.setEnabled(False)
         self.radio_serpentine.setEnabled(False)
         self.cancel_button.setEnabled(True)
 
         home_x = self.home_x_checkbox.isChecked()
         home_y = self.home_y_checkbox.isChecked()
-        record_video = self.record_video_checkbox.isChecked()
         is_serpentine = self.radio_serpentine.isChecked()
 
         self.start_scan_signal.emit(
             self.scan_areas,
-            home_x, home_y, record_video, is_serpentine
+            home_x, home_y, is_serpentine
         )
         self.update_status("Scan started...")
 
@@ -131,7 +124,6 @@ class ScanConfigPanel(QWidget):
         self.start_button.setEnabled(True)
         self.home_x_checkbox.setEnabled(True)
         self.home_y_checkbox.setEnabled(True)
-        self.record_video_checkbox.setEnabled(True)
         self.radio_left_right.setEnabled(True)
         self.radio_serpentine.setEnabled(True)
         self.set_scanning_active(False) # Update buttons based on active state

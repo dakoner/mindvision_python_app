@@ -21,6 +21,7 @@ class SerialWorker(QObject):
         self.serial_port = None
         self.is_connected = False
         self.mutex = QMutex()
+        self._rx_text_buffer = ""
 
     @Slot(str, int)
     def connect_serial(self, port_name, baud_rate=115200):
@@ -51,6 +52,7 @@ class SerialWorker(QObject):
                     self.log_signal.emit(f"Error closing port: {e}")
             self.serial_port = None
             self.is_connected = False
+            self._rx_text_buffer = ""
             self.connection_status.emit(False)
             self.log_signal.emit("Disconnected.")
 
@@ -99,17 +101,16 @@ class SerialWorker(QObject):
         with QMutexLocker(self.mutex):
             if self.is_connected and self.serial_port and self.serial_port.in_waiting:
                 try:
-                    # Read up to 10 lines to catch up but not freeze UI
-                    for _ in range(10):
-                        if self.serial_port.in_waiting:
-                            line = (
-                                self.serial_port.readline()
-                                .decode("utf-8", errors="replace")
-                                .strip()
-                            )
-                            if line:
-                                self.log_signal.emit(f"Rx: {line}")
-                        else:
-                            break
+                    raw = self.serial_port.read(self.serial_port.in_waiting)
+                    if not raw:
+                        return
+
+                    self._rx_text_buffer += raw.decode("utf-8", errors="replace")
+
+                    while "\n" in self._rx_text_buffer:
+                        line, self._rx_text_buffer = self._rx_text_buffer.split("\n", 1)
+                        line = line.strip()
+                        if line:
+                            self.log_signal.emit(f"Rx: {line}")
                 except Exception as e:
                     self.log_signal.emit(f"Read error: {e}")

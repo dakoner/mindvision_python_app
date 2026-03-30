@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import threading
 import cv2
 import numpy as np
 import PySide6.QtWidgets
@@ -307,6 +308,7 @@ class MainWindow(QObject):
         
         self.current_cnc_x_mm = 0.0
         self.current_cnc_y_mm = 0.0
+        self.current_cnc_z_mm = 0.0
         self.cnc_state = "Idle"
         
         self.is_scanning = False
@@ -327,6 +329,7 @@ class MainWindow(QObject):
         self.scan_is_first_strip = True
         self.scan_fov_x_mm = 0
         self.scan_fov_y_mm = 0
+        self.scan_started_recording = False
         
         # Stage Settings
         self.stage_settings = {}
@@ -555,6 +558,11 @@ class MainWindow(QObject):
         self.current_fps = 30.0
         self.last_ui_update_time = 0
         self.is_camera_running = False
+        self.metadata_filename = None
+        self.recording_metadata_rows = []
+        self.recording_metadata_lock = threading.Lock()
+        self.recording_frame_index = 0
+        self.recording_start_time_ns = 0
 
         QTimer.singleShot(0, self.load_settings)
         QTimer.singleShot(100, self.on_start_clicked)
@@ -789,13 +797,25 @@ class MainWindow(QObject):
     def on_detector_params_changed(self):
         self.update_detector()
 
-    def frame_callback(self, width, height, bytes_per_line, fmt, data):
+    def frame_callback(
+        self, width, height, bytes_per_line, fmt, data, timestamp_ms=None
+    ):
         # 1. Recording (High Priority)
         if self.video_thread.isRunning():
             try:
                 self.video_thread.addFrameBytes(
                     width, height, bytes_per_line, fmt, data
                 )
+                if self.metadata_filename:
+                    current_ns = time.time_ns() - self.recording_start_time_ns
+                    x = getattr(self, 'current_cnc_x_mm', 0.0)
+                    y = getattr(self, 'current_cnc_y_mm', 0.0)
+                    z = getattr(self, 'current_cnc_z_mm', 0.0)
+                    with self.recording_metadata_lock:
+                        self.recording_metadata_rows.append(
+                            (current_ns, self.recording_frame_index, x, y, z)
+                        )
+                        self.recording_frame_index += 1
             except Exception as e:
                 self.log(f"Recording error in callback: {e}")
 
@@ -837,8 +857,16 @@ class MainWindow(QObject):
                 video_dir = os.path.join(self.script_dir, "videos")
                 os.makedirs(video_dir, exist_ok=True)
                 
-                filename = os.path.join(video_dir, f"recording_{int(time.time())}.mkv")
+                timestamp = int(time.time())
+                filename = os.path.join(video_dir, f"recording_{timestamp}.mkv")
                 
+                meta_filename = os.path.join(video_dir, f"recording_{timestamp}_meta.csv")
+                self.metadata_filename = meta_filename
+                self.recording_start_time_ns = time.time_ns()
+                self.recording_frame_index = 0
+                with self.recording_metadata_lock:
+                    self.recording_metadata_rows = []
+
                 self.video_thread.startRecording(
                     image.width(), image.height(), record_fps, filename
                 )
@@ -1073,6 +1101,26 @@ class MainWindow(QObject):
             self.video_thread.stopRecording()
             self.ui.action_record.setText("Start Recording")
             self.log("Recording stopped.")
+            self._flush_recording_metadata_csv()
+
+    def _flush_recording_metadata_csv(self):
+        metadata_filename = self.metadata_filename
+        if not metadata_filename:
+            return
+
+        with self.recording_metadata_lock:
+            rows = self.recording_metadata_rows
+            self.recording_metadata_rows = []
+
+        try:
+            with open(metadata_filename, "w") as meta_file:
+                meta_file.write("timestamp_ns,frame_index,x,y,z\n")
+                for timestamp_ns, frame_index, x, y, z in rows:
+                    meta_file.write(f"{timestamp_ns},{frame_index},{x:.3f},{y:.3f},{z:.3f}\n")
+        except Exception as e:
+            self.log(f"Failed to write recording metadata CSV: {e}")
+        finally:
+            self.metadata_filename = None
 
     def on_snapshot_clicked(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
@@ -1798,11 +1846,12 @@ class MainWindow(QObject):
                     return
                 self.log(f"{len(mm_rects)} scan area(s) selected.")
 
-    @Slot(float, float)
-    def on_cnc_position_updated(self, x_mm: float, y_mm: float):
+    @Slot(float, float, float)
+    def on_cnc_position_updated(self, x_mm: float, y_mm: float, z_mm: float):
         """Receives updated CNC position from the CNCControlPanel."""
         self.current_cnc_x_mm = x_mm
         self.current_cnc_y_mm = y_mm
+        self.current_cnc_z_mm = z_mm
 
     @Slot(str)
     def on_cnc_state_updated(self, state):
@@ -1811,9 +1860,9 @@ class MainWindow(QObject):
     @Slot(float, float)
     def on_mosaic_move_requested(self, x, y):
         if self.cnc_control_panel:
-            # Send G-code to move to absolute position (G90) using Rapid Move (G0)
+            # Send G-code to move to absolute position (G90) using Feed Move (10)
             feedrate = self.cnc_control_panel.feedrate
-            cmd = f"G90 G0 X{x:.3f} Y{y:.3f}"
+            cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F{feedrate}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
 
@@ -1840,8 +1889,8 @@ class MainWindow(QObject):
             self.log("Scan area selected. Configure and start scan in the 'Stage Control' panel.")
 
 
-    @Slot(list, bool, bool, bool, bool)
-    def start_scan(self, areas, home_x, home_y, record_video, is_serpentine):
+    @Slot(list, bool, bool, bool)
+    def start_scan(self, areas, home_x, home_y, is_serpentine):
         if not self.cnc_control_panel:
             return
 
@@ -1851,8 +1900,8 @@ class MainWindow(QObject):
 
         self.scan_areas = areas
         self.scan_home_x, self.scan_home_y = home_x, home_y
-        self.scan_record_video = record_video
         self.scan_is_serpentine = is_serpentine
+        self.scan_started_recording = False
 
         img_w = self.current_pixmap.width()
         img_h = self.current_pixmap.height()
@@ -1908,8 +1957,9 @@ class MainWindow(QObject):
             self.scan_status_dialog.update_image(scan_img)
             self.scan_status_dialog.update_progress(0, self.scan_total_rows)
         
-        if self.scan_record_video and not self.video_thread.isRunning():
+        if not self.video_thread.isRunning():
             self.on_record_clicked()
+            self.scan_started_recording = True
         
         feedrate = self.cnc_control_panel.feedrate
         self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
@@ -1993,8 +2043,9 @@ class MainWindow(QObject):
                 self.cnc_control_panel.clear_queue()
                 #self.cnc_control_panel.send_raw_serial_cmd_signal.emit("!") 
             
-            if self.scan_record_video and self.video_thread.isRunning():
+            if getattr(self, 'scan_started_recording', False) and self.video_thread.isRunning():
                 self.on_record_clicked()
+                self.scan_started_recording = False
             
             self.log("Scan cancelled by user.")
             if self.scan_panel:
@@ -2007,10 +2058,13 @@ class MainWindow(QObject):
 
         # This is triggered by "[ECHO:scan_finished]" from the CNC
         if self.is_scanning:
-            if self.scan_record_video and self.video_thread.isRunning():
+            if getattr(self, 'scan_started_recording', False) and self.video_thread.isRunning():
                 self.on_record_clicked() # Stop recording
+                self.scan_started_recording = False
+                self.log("Mosaic scan finished, recording stopped.")
+            else:
+                self.log("Mosaic scan finished.")
             self.is_scanning = False
-            self.log("Mosaic scan finished, recording stopped.")
 
             if self.scan_panel:
                 self.scan_panel.scan_finished(success=True)

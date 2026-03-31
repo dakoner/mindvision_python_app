@@ -3,6 +3,8 @@ import sys
 import time
 import json
 import threading
+from bisect import bisect_left
+from collections import deque
 import cv2
 import numpy as np
 import PySide6.QtWidgets
@@ -66,7 +68,7 @@ class MainWindow(QObject):
     error_signal = Signal(str)
 
     # Signal to send frame to worker
-    process_frame_signal = Signal(int, int, int, int, bytes)
+    process_frame_signal = Signal(int, int, int, int, bytes, object)
     # Signal to update worker params
     update_worker_params_signal = Signal(dict)
     # Signal to set template
@@ -307,6 +309,12 @@ class MainWindow(QObject):
         self.current_cnc_y_mm = 0.0
         self.current_cnc_z_mm = 0.0
         self.cnc_state = "Idle"
+        self.mosaic_position_samples = deque(
+            [(time.time_ns(), self.current_cnc_x_mm, self.current_cnc_y_mm, self.current_cnc_z_mm)]
+        )
+        self.pending_mosaic_frames = deque()
+        self.mosaic_position_retention_ns = 10_000_000_000
+        self.mosaic_interpolation_delay_ns = 75_000_000
         
         self.is_scanning = False
         self.scan_panel = None # Will be created with the mosaic panel
@@ -562,6 +570,9 @@ class MainWindow(QObject):
         self.recording_metadata_lock = threading.Lock()
         self.recording_frame_index = 0
         self.recording_start_time_ns = 0
+        self.recording_position_samples = deque()
+        self.pending_recording_metadata = deque()
+        self.recording_position_retention_ns = 10_000_000_000
 
         QTimer.singleShot(0, self.load_settings)
         QTimer.singleShot(100, self.on_start_clicked)
@@ -799,6 +810,12 @@ class MainWindow(QObject):
     def frame_callback(
         self, width, height, bytes_per_line, fmt, data, timestamp_ms=None
     ):
+        frame_timestamp_ns = (
+            int(timestamp_ms) * 1_000_000
+            if timestamp_ms is not None
+            else time.time_ns()
+        )
+
         # 1. Recording (High Priority)
         if self.video_thread.isRunning():
             try:
@@ -806,15 +823,14 @@ class MainWindow(QObject):
                     width, height, bytes_per_line, fmt, data
                 )
                 if self.metadata_filename:
-                    current_ns = time.time_ns() - self.recording_start_time_ns
-                    x = getattr(self, 'current_cnc_x_mm', 0.0)
-                    y = getattr(self, 'current_cnc_y_mm', 0.0)
-                    z = getattr(self, 'current_cnc_z_mm', 0.0)
+                    current_ns = max(0, frame_timestamp_ns - self.recording_start_time_ns)
                     with self.recording_metadata_lock:
-                        self.recording_metadata_rows.append(
-                            (current_ns, self.recording_frame_index, x, y, z)
+                        self.pending_recording_metadata.append(
+                            (frame_timestamp_ns, current_ns, self.recording_frame_index)
                         )
                         self.recording_frame_index += 1
+                        self._resolve_pending_recording_metadata_locked()
+                        self._prune_recording_position_samples_locked()
             except Exception as e:
                 self.log(f"Recording error in callback: {e}")
 
@@ -830,7 +846,7 @@ class MainWindow(QObject):
                     # Copy data for worker thread
                     data_copy = bytes(data)
                     self.process_frame_signal.emit(
-                        width, height, bytes_per_line, fmt, data_copy
+                        width, height, bytes_per_line, fmt, data_copy, frame_timestamp_ns
                     )
                 # Else: Drop frame for UI display to prevent backlog/latency
             except Exception as e:
@@ -843,7 +859,72 @@ class MainWindow(QObject):
     def error_callback(self, msg):
         self.error_signal.emit(msg)
 
-    def update_frame(self, image):
+    def _interpolate_mosaic_position(self, frame_timestamp_ns, clamp_latest=False):
+        samples = list(self.mosaic_position_samples)
+        if not samples:
+            return None
+
+        timestamps = [sample[0] for sample in samples]
+        sample_idx = bisect_left(timestamps, frame_timestamp_ns)
+
+        if sample_idx <= 0:
+            return samples[0][1:]
+
+        if sample_idx >= len(samples):
+            if not clamp_latest:
+                return None
+            return samples[-1][1:]
+
+        before_ts, before_x, before_y, before_z = samples[sample_idx - 1]
+        after_ts, after_x, after_y, after_z = samples[sample_idx]
+        if after_ts <= before_ts:
+            return (after_x, after_y, after_z)
+
+        ratio = (frame_timestamp_ns - before_ts) / (after_ts - before_ts)
+        ratio = max(0.0, min(1.0, ratio))
+        x = before_x + ((after_x - before_x) * ratio)
+        y = before_y + ((after_y - before_y) * ratio)
+        z = before_z + ((after_z - before_z) * ratio)
+        return (x, y, z)
+
+    def _prune_mosaic_position_samples(self):
+        if len(self.mosaic_position_samples) <= 2:
+            return
+
+        if self.pending_mosaic_frames:
+            cutoff_ns = self.pending_mosaic_frames[0][0]
+        else:
+            cutoff_ns = self.mosaic_position_samples[-1][0] - self.mosaic_position_retention_ns
+
+        while len(self.mosaic_position_samples) > 2:
+            next_timestamp_ns = self.mosaic_position_samples[1][0]
+            if next_timestamp_ns > cutoff_ns:
+                break
+            self.mosaic_position_samples.popleft()
+
+    def _resolve_pending_mosaic_frames(self, force=False):
+        if not self.pending_mosaic_frames or not self.mosaic_position_samples:
+            return
+
+        now_ns = time.time_ns()
+        while self.pending_mosaic_frames:
+            frame_timestamp_ns, image = self.pending_mosaic_frames[0]
+            allow_clamp = force or ((now_ns - frame_timestamp_ns) >= self.mosaic_interpolation_delay_ns)
+            position = self._interpolate_mosaic_position(
+                frame_timestamp_ns,
+                clamp_latest=allow_clamp,
+            )
+            if position is None:
+                break
+
+            self.pending_mosaic_frames.popleft()
+            if self.mosaic_panel_initialized and self.mosaic_panel and self.center_tab_widget.currentIndex() == 1:
+                if self.cnc_state != "Home":
+                    self.mosaic_panel.update_mosaic(image, position[0], position[1])
+
+        self._prune_mosaic_position_samples()
+
+    def update_frame(self, image, frame_timestamp_ns=None):
         self.worker_busy = False
         if not image.isNull():
             self.current_frame_image = image.copy()
@@ -867,6 +948,16 @@ class MainWindow(QObject):
                 self.recording_frame_index = 0
                 with self.recording_metadata_lock:
                     self.recording_metadata_rows = []
+                    self.pending_recording_metadata.clear()
+                    self.recording_position_samples.clear()
+                    self.recording_position_samples.append(
+                        (
+                            self.recording_start_time_ns,
+                            getattr(self, 'current_cnc_x_mm', 0.0),
+                            getattr(self, 'current_cnc_y_mm', 0.0),
+                            getattr(self, 'current_cnc_z_mm', 0.0),
+                        )
+                    )
 
                 self.video_thread.startRecording(
                     image.width(), image.height(), record_fps, filename
@@ -892,7 +983,11 @@ class MainWindow(QObject):
                self.center_tab_widget.currentIndex() == 1 and \
                self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
                 if self.cnc_state != "Home":
-                    self.mosaic_panel.update_mosaic(image, self.current_cnc_x_mm, self.current_cnc_y_mm)
+                    mosaic_timestamp_ns = frame_timestamp_ns if frame_timestamp_ns is not None else time.time_ns()
+                    self.pending_mosaic_frames.append((mosaic_timestamp_ns, image.copy()))
+                    self._resolve_pending_mosaic_frames()
+            else:
+                self.pending_mosaic_frames.clear()
 
     def load_prediction_model(self):
         if YOLO is None:
@@ -1110,8 +1205,13 @@ class MainWindow(QObject):
             return
 
         with self.recording_metadata_lock:
-            rows = self.recording_metadata_rows
+            self._resolve_pending_recording_metadata_locked(force=True)
+            rows = list(self.recording_metadata_rows)
             self.recording_metadata_rows = []
+            self.pending_recording_metadata.clear()
+            self.recording_position_samples.clear()
+
+        rows.sort(key=lambda row: row[1])
 
         try:
             with open(metadata_filename, "w") as meta_file:
@@ -1854,6 +1954,95 @@ class MainWindow(QObject):
         self.current_cnc_x_mm = x_mm
         self.current_cnc_y_mm = y_mm
         self.current_cnc_z_mm = z_mm
+        self.mosaic_position_samples.append((time.time_ns(), x_mm, y_mm, z_mm))
+        self._resolve_pending_mosaic_frames()
+        self._prune_mosaic_position_samples()
+
+        with self.recording_metadata_lock:
+            self.recording_position_samples.append((time.time_ns(), x_mm, y_mm, z_mm))
+            self._resolve_pending_recording_metadata_locked()
+            self._prune_recording_position_samples_locked()
+
+    def _resolve_pending_recording_metadata_locked(self, force=False):
+        if not self.pending_recording_metadata:
+            return
+
+        if not self.recording_position_samples:
+            if not force:
+                return
+
+            fallback_position = (
+                getattr(self, "current_cnc_x_mm", 0.0),
+                getattr(self, "current_cnc_y_mm", 0.0),
+                getattr(self, "current_cnc_z_mm", 0.0),
+            )
+            while self.pending_recording_metadata:
+                _, relative_timestamp_ns, frame_index = self.pending_recording_metadata.popleft()
+                self.recording_metadata_rows.append(
+                    (relative_timestamp_ns, frame_index, *fallback_position)
+                )
+            return
+
+        latest_position_timestamp_ns = self.recording_position_samples[-1][0]
+        while self.pending_recording_metadata:
+            frame_timestamp_ns, relative_timestamp_ns, frame_index = self.pending_recording_metadata[0]
+            if not force and frame_timestamp_ns > latest_position_timestamp_ns:
+                break
+
+            position = self._interpolate_stage_position_locked(
+                frame_timestamp_ns,
+                clamp_latest=force,
+            )
+            if position is None:
+                break
+
+            self.pending_recording_metadata.popleft()
+            self.recording_metadata_rows.append(
+                (relative_timestamp_ns, frame_index, *position)
+            )
+
+    def _interpolate_stage_position_locked(self, frame_timestamp_ns, clamp_latest=False):
+        samples = list(self.recording_position_samples)
+        if not samples:
+            return None
+
+        timestamps = [sample[0] for sample in samples]
+        sample_idx = bisect_left(timestamps, frame_timestamp_ns)
+
+        if sample_idx <= 0:
+            return samples[0][1:]
+
+        if sample_idx >= len(samples):
+            if not clamp_latest:
+                return None
+            return samples[-1][1:]
+
+        before_ts, before_x, before_y, before_z = samples[sample_idx - 1]
+        after_ts, after_x, after_y, after_z = samples[sample_idx]
+        if after_ts <= before_ts:
+            return (after_x, after_y, after_z)
+
+        ratio = (frame_timestamp_ns - before_ts) / (after_ts - before_ts)
+        ratio = max(0.0, min(1.0, ratio))
+        x = before_x + ((after_x - before_x) * ratio)
+        y = before_y + ((after_y - before_y) * ratio)
+        z = before_z + ((after_z - before_z) * ratio)
+        return (x, y, z)
+
+    def _prune_recording_position_samples_locked(self):
+        if len(self.recording_position_samples) <= 2:
+            return
+
+        if self.pending_recording_metadata:
+            cutoff_ns = self.pending_recording_metadata[0][0]
+        else:
+            cutoff_ns = self.recording_position_samples[-1][0] - self.recording_position_retention_ns
+
+        while len(self.recording_position_samples) > 2:
+            next_timestamp_ns = self.recording_position_samples[1][0]
+            if next_timestamp_ns > cutoff_ns:
+                break
+            self.recording_position_samples.popleft()
 
     @Slot(str)
     def on_cnc_state_updated(self, state):

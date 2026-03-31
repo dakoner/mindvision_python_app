@@ -49,7 +49,7 @@ def compute_ssim(img1, img2):
     return compute_ssim_cached(img1, stats)
 
 class MatchingWorker(QObject):
-    result_ready = Signal(QImage)
+    result_ready = Signal(QImage, object)
     log_signal = Signal(str)
     qr_found_signal = Signal(str)
     ssim_score_signal = Signal(float)
@@ -255,8 +255,8 @@ class MatchingWorker(QObject):
         with QMutexLocker(self.mutex):
             self.is_contours_enabled = enabled
 
-    @Slot(int, int, int, int, bytes)
-    def process_frame(self, width, height, bytes_per_line, fmt, data_bytes):
+    @Slot(int, int, int, int, bytes, object)
+    def process_frame(self, width, height, bytes_per_line, fmt, data_bytes, frame_timestamp_ns=None):
         # This runs in the worker thread
         with QMutexLocker(self.mutex):
             matching_active = self.is_matching_enabled
@@ -290,7 +290,7 @@ class MatchingWorker(QObject):
                 qimg = QImage(
                     img_np.data, width, height, bytes_per_line, QImage.Format(fmt)
                 ).copy()
-                self.result_ready.emit(qimg)
+                self.result_ready.emit(qimg, frame_timestamp_ns)
                 return
 
             # Prepare visualization image (BGR for OpenCV drawing)
@@ -475,7 +475,7 @@ class MatchingWorker(QObject):
             res_img_rgb = cv2.cvtColor(vis_img, cv2.COLOR_BGR2RGB)
             h, w, c = res_img_rgb.shape
             qimg = QImage(res_img_rgb.data, w, h, w * c, QImage.Format_RGB888).copy()
-            self.result_ready.emit(qimg)
+            self.result_ready.emit(qimg, frame_timestamp_ns)
 
         except Exception as e:
             self.log_signal.emit(f"Worker processing error: {e}")

@@ -853,7 +853,9 @@ class MainWindow(QObject):
                 record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
                 
                 # Create videos dir
-                video_dir = os.path.join(self.script_dir, "videos")
+                video_dir = os.path.realpath(
+                    os.path.join(self.script_dir, "..", "..", "videos")
+                )
                 os.makedirs(video_dir, exist_ok=True)
                 
                 timestamp = int(time.time())

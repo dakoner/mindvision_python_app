@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -21,9 +22,7 @@ CameraMainWindow::CameraMainWindow(QWidget *parent)
       m_camera(new MindVisionCamera(this)),
       m_videoThread(new VideoThread(this)),
       m_cameraLabel(nullptr),
-      m_openButton(nullptr),
       m_recordButton(nullptr),
-      m_closeButton(nullptr),
       m_statusBar(nullptr),
       m_fpsTimer(new QTimer(this)),
       m_renderTimer(new QTimer(this)),
@@ -36,9 +35,8 @@ CameraMainWindow::CameraMainWindow(QWidget *parent)
       m_renderedFrameSeq(0)
 {
     initUi();
+    setWindowFlag(Qt::FramelessWindowHint, true);
 
-    connect(m_openButton, &QPushButton::clicked, this, &CameraMainWindow::openCamera);
-    connect(m_closeButton, &QPushButton::clicked, this, &CameraMainWindow::closeCamera);
     connect(m_recordButton, &QPushButton::clicked, this, &CameraMainWindow::toggleRecording);
 
     connect(m_fpsTimer, &QTimer::timeout, this, &CameraMainWindow::updateFpsDisplay);
@@ -52,6 +50,8 @@ CameraMainWindow::CameraMainWindow(QWidget *parent)
 
     m_fpsTimer->start(100);
     m_renderTimer->start(33);
+
+    QTimer::singleShot(0, this, &CameraMainWindow::openCamera);
 }
 
 CameraMainWindow::~CameraMainWindow()
@@ -62,7 +62,7 @@ CameraMainWindow::~CameraMainWindow()
 void CameraMainWindow::initUi()
 {
     setWindowTitle(tr("MindVision Camera - Video Recorder"));
-    resize(900, 700);
+    resize(1280, 900);
 
     QWidget *centralWidget = new QWidget(this);
     auto *mainLayout = new QVBoxLayout(centralWidget);
@@ -71,43 +71,40 @@ void CameraMainWindow::initUi()
     m_cameraLabel = new QLabel(tr("Camera feed will appear here"), centralWidget);
     m_cameraLabel->setAlignment(Qt::AlignCenter);
     m_cameraLabel->setStyleSheet(QStringLiteral("QLabel { background-color: black; color: white; }"));
-    m_cameraLabel->setMinimumSize(640, 480);
+    m_cameraLabel->setMinimumSize(100, 100);
     mainLayout->addWidget(m_cameraLabel, 1);
-
-    m_openButton = new QPushButton(tr("Open Camera"), centralWidget);
-    buttonLayout->addWidget(m_openButton);
 
     m_recordButton = new QPushButton(tr("Start Recording"), centralWidget);
     m_recordButton->setEnabled(false);
     buttonLayout->addWidget(m_recordButton);
-
-    m_closeButton = new QPushButton(tr("Close Camera"), centralWidget);
-    m_closeButton->setEnabled(false);
-    buttonLayout->addWidget(m_closeButton);
 
     mainLayout->addLayout(buttonLayout);
     setCentralWidget(centralWidget);
 
     m_statusBar = new QStatusBar(this);
     setStatusBar(m_statusBar);
-    m_statusBar->showMessage(tr("Camera closed. Click 'Open Camera' to start."));
+    m_statusBar->showMessage(tr("Opening camera..."));
 }
 
 void CameraMainWindow::openCamera()
 {
+    if (m_recordButton->isEnabled()) {
+        return;
+    }
+
     if (!m_camera->open()) {
         QMessageBox::critical(this, tr("Error"), tr("Failed to open camera. Check if camera is connected."));
+        m_statusBar->showMessage(tr("Failed to open camera."));
         return;
     }
 
     if (!m_camera->start()) {
         QMessageBox::critical(this, tr("Error"), tr("Failed to start camera capture."));
         m_camera->close();
+        m_statusBar->showMessage(tr("Failed to start camera capture."));
         return;
     }
 
-    m_openButton->setEnabled(false);
-    m_closeButton->setEnabled(true);
     m_recordButton->setEnabled(true);
     m_statusBar->showMessage(tr("Camera opened and capturing frames."));
 }
@@ -126,8 +123,6 @@ void CameraMainWindow::closeCamera()
     m_camera->close();
     resetPreview();
 
-    m_openButton->setEnabled(true);
-    m_closeButton->setEnabled(false);
     m_recordButton->setEnabled(false);
     m_statusBar->showMessage(tr("Camera closed."));
 }
@@ -192,7 +187,12 @@ void CameraMainWindow::renderLatestFrame()
         return;
     }
 
-    m_cameraLabel->setPixmap(QPixmap::fromImage(m_latestFrame));
+    QPixmap pixmap = QPixmap::fromImage(m_latestFrame);
+    if (m_cameraLabel->size().isValid()) {
+        pixmap = pixmap.scaled(m_cameraLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
+    m_cameraLabel->setPixmap(pixmap);
     m_renderedFrameSeq = m_latestFrameSeq;
 }
 
@@ -203,9 +203,6 @@ void CameraMainWindow::handleFrameReady(const QImage &image, qint64)
     }
 
     m_lastFrameSize = image.size();
-    if (m_cameraLabel->size() != image.size()) {
-        m_cameraLabel->setFixedSize(image.size());
-    }
 
     ++m_frameCount;
     m_latestFrame = image;
@@ -252,7 +249,7 @@ void CameraMainWindow::resetPreview()
     m_cameraLabel->clear();
     m_cameraLabel->setText(tr("Camera feed will appear here"));
     m_cameraLabel->setStyleSheet(QStringLiteral("QLabel { background-color: black; color: white; }"));
-    m_cameraLabel->setMinimumSize(640, 480);
+    m_cameraLabel->setMinimumSize(100, 100);
     m_cameraLabel->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
 
     m_currentFps = 0.0;
@@ -264,6 +261,16 @@ void CameraMainWindow::resetPreview()
     m_latestFrameSeq = 0;
     m_renderedFrameSeq = 0;
     m_recordButton->setText(tr("Start Recording"));
+}
+
+void CameraMainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+
+    if (!m_latestFrame.isNull()) {
+        m_renderedFrameSeq = 0;
+        renderLatestFrame();
+    }
 }
 
 void CameraMainWindow::closeEvent(QCloseEvent *event)

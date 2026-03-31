@@ -9,7 +9,7 @@ int main(int argc, char *argv[])
     app.setOrganizationName(QStringLiteral("MicroTools"));
 
     CameraMainWindow window;
-    window.show();
+    window.showFullScreen();
 
     return app.exec();
 }

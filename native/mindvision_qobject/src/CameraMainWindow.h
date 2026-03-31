@@ -25,6 +25,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private slots:
     void openCamera();
@@ -45,9 +46,7 @@ private:
     MindVisionCamera *m_camera;
     VideoThread *m_videoThread;
     QLabel *m_cameraLabel;
-    QPushButton *m_openButton;
     QPushButton *m_recordButton;
-    QPushButton *m_closeButton;
     QStatusBar *m_statusBar;
     QTimer *m_fpsTimer;
     QTimer *m_renderTimer;

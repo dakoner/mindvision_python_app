@@ -313,8 +313,8 @@ class MainWindow(QObject):
             [(time.time_ns(), self.current_cnc_x_mm, self.current_cnc_y_mm, self.current_cnc_z_mm)]
         )
         self.pending_mosaic_frames = deque()
-        self.mosaic_position_retention_ns = 10_000_000_000
-        self.mosaic_interpolation_delay_ns = 75_000_000
+        self.mosaic_position_retention_ns = 40_000_000_000
+        self.mosaic_interpolation_delay_ns = 125_000_000
         
         self.is_scanning = False
         self.scan_panel = None # Will be created with the mosaic panel

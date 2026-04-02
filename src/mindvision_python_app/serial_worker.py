@@ -12,6 +12,43 @@ except ImportError:
     HAS_SERIAL = False
     print("Warning: pyserial not installed. Serial features disabled.")
 
+
+def _format_hex_bytes(data):
+    return " ".join(f"{byte:02x}" for byte in data)
+
+
+def _pop_complete_serial_lines(buffer):
+    lines = []
+    while True:
+        newline_positions = [index for index in (buffer.find(b"\n"), buffer.find(b"\r")) if index != -1]
+        if not newline_positions:
+            break
+
+        split_index = min(newline_positions)
+        lines.append(bytes(buffer[:split_index]))
+        del buffer[: split_index + 1]
+
+        while buffer[:1] in (b"\n", b"\r"):
+            del buffer[:1]
+
+    return lines
+
+
+def _sanitize_serial_line(raw_line):
+    if not raw_line:
+        return "", b""
+
+    cleaned = bytearray()
+    dropped = bytearray()
+
+    for byte in raw_line:
+        if byte == 0x09 or 0x20 <= byte <= 0x7E:
+            cleaned.append(byte)
+        else:
+            dropped.append(byte)
+
+    return cleaned.decode("ascii", errors="ignore").strip(), bytes(dropped)
+
 class SerialWorker(QObject):
     log_signal = Signal(str)
     connection_status = Signal(bool)
@@ -21,7 +58,8 @@ class SerialWorker(QObject):
         self.serial_port = None
         self.is_connected = False
         self.mutex = QMutex()
-        self._rx_text_buffer = ""
+        self._rx_buffer = bytearray()
+        self._rx_buffer_limit = 8192
 
     @Slot(str, int)
     def connect_serial(self, port_name, baud_rate=115200):
@@ -52,7 +90,7 @@ class SerialWorker(QObject):
                     self.log_signal.emit(f"Error closing port: {e}")
             self.serial_port = None
             self.is_connected = False
-            self._rx_text_buffer = ""
+            self._rx_buffer.clear()
             self.connection_status.emit(False)
             self.log_signal.emit("Disconnected.")
 
@@ -105,11 +143,21 @@ class SerialWorker(QObject):
                     if not raw:
                         return
 
-                    self._rx_text_buffer += raw.decode("utf-8", errors="replace")
+                    self._rx_buffer.extend(raw)
 
-                    while "\n" in self._rx_text_buffer:
-                        line, self._rx_text_buffer = self._rx_text_buffer.split("\n", 1)
-                        line = line.strip()
+                    if len(self._rx_buffer) > self._rx_buffer_limit:
+                        dropped = bytes(self._rx_buffer[:-self._rx_buffer_limit])
+                        del self._rx_buffer[:-self._rx_buffer_limit]
+                        self.log_signal.emit(
+                            f"Rx dropped oversized buffered bytes: {_format_hex_bytes(dropped)}"
+                        )
+
+                    for raw_line in _pop_complete_serial_lines(self._rx_buffer):
+                        line, dropped = _sanitize_serial_line(raw_line)
+                        if dropped:
+                            self.log_signal.emit(
+                                f"Rx filtered bytes: {_format_hex_bytes(dropped)}"
+                            )
                         if line:
                             self.log_signal.emit(f"Rx: {line}")
                 except Exception as e:

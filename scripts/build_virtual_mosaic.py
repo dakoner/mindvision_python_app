@@ -1,22 +1,14 @@
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import csv
 import json
 import math
-import os
-import time
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
 import numpy as np
 import tifffile
-
-
-DEFAULT_PIXELS_PER_MM = 2067.0
 
 
 @dataclass(frozen=True)
@@ -25,158 +17,107 @@ class FramePlacement:
     x_mm: float
     y_mm: float
     z_mm: float
+    pixel_x: float
+    pixel_y: float
 
 
 @dataclass(frozen=True)
-class MosaicWrite:
-    dst_x0: int
-    dst_y0: int
-    dst_x1: int
-    dst_y1: int
-    patch: np.ndarray
+class RowRecording:
+    rgb_path: Path
+    csv_path: Path
+    output_tiff_path: Path
+    output_manifest_path: Path
+    area_index: int
+    row_index: int
+    area_output_dir: Path
 
 
-class ProgressTracker:
-    def __init__(
-        self,
-        *,
-        total_target_frames: int,
-        total_placements: int,
-        video_frame_count: int,
-        report_interval_s: float = 1.0,
-    ) -> None:
-        self.total_target_frames = max(1, total_target_frames)
-        self.total_placements = max(1, total_placements)
-        self.video_frame_count = max(0, video_frame_count)
-        self.report_interval_s = report_interval_s
-        self.start_time = time.monotonic()
-        self.last_report_time = 0.0
-
-    def report(
-        self,
-        *,
-        current_video_frame: int,
-        processed_target_frames: int,
-        frames_written: int,
-        queued_tasks: int,
-        force: bool = False,
-    ) -> None:
-        now = time.monotonic()
-        if not force and (now - self.last_report_time) < self.report_interval_s:
-            return
-
-        elapsed_s = now - self.start_time
-        target_pct = (processed_target_frames / self.total_target_frames) * 100.0
-        placement_pct = (frames_written / self.total_placements) * 100.0
-        video_pct = 0.0
-        if self.video_frame_count > 0:
-            video_pct = (min(current_video_frame, self.video_frame_count) / self.video_frame_count) * 100.0
-
-        rate = 0.0
-        if elapsed_s > 0:
-            rate = processed_target_frames / elapsed_s
-
-        print(
-            "  progress: "
-            f"targets {processed_target_frames}/{self.total_target_frames} ({target_pct:.1f}%), "
-            f"placements {frames_written}/{self.total_placements} ({placement_pct:.1f}%), "
-            f"video {current_video_frame}/{self.video_frame_count} ({video_pct:.1f}%), "
-            f"queued {queued_tasks}, "
-            f"rate {rate:.2f} target frames/s, "
-            f"elapsed {elapsed_s:.1f}s"
-        )
-        self.last_report_time = now
+@dataclass(frozen=True)
+class AreaMosaicInput:
+    area_index: int
+    area_output_dir: Path
+    row_recordings: list[RowRecording]
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a large stage-space virtual image from a recorded MKV and its "
-            "matching CSV metadata."
+            "Build per-row TIFF virtual mosaics from scan run directories created "
+            "by the row-by-row scan recorder."
         )
     )
     parser.add_argument(
         "--videos-dir",
         type=Path,
         default=Path(__file__).resolve().parent.parent / "videos",
-        help="Directory containing recording_*.mkv and recording_*_meta.csv files.",
+        help="Directory containing scan_<timestamp>/ runs.",
     )
     parser.add_argument(
-        "--video",
+        "--scan-dir",
         type=Path,
-        help="Explicit MKV file to process. If omitted, matching files are discovered in videos-dir.",
+        help="Explicit scan run directory to process.",
     )
     parser.add_argument(
-        "--csv",
+        "--scan-metadata",
         type=Path,
-        help="Explicit metadata CSV to process. If omitted, matching files are discovered in videos-dir.",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        help="Output TIFF path. If omitted, writes <recording>_virtual_mosaic.tif next to the inputs.",
-    )
-    parser.add_argument(
-        "--pixels-per-mm",
-        type=float,
-        default=DEFAULT_PIXELS_PER_MM,
-        help="Calibration used to convert stage millimeters to image pixels.",
+        help="Explicit scan_metadata.json to process.",
     )
     parser.add_argument(
         "--max-frames",
         type=int,
         default=None,
-        help="Optional cap on the number of CSV rows to place, useful for quick tests.",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=max(1, min(8, (os.cpu_count() or 1))),
-        help="Number of worker threads used to prepare frame writes.",
+        help="Optional cap on the number of CSV rows to place per row TIFF.",
     )
     return parser.parse_args()
 
 
-def discover_pairs(videos_dir: Path) -> list[tuple[Path, Path]]:
-    pairs: list[tuple[Path, Path]] = []
-    for csv_path in sorted(videos_dir.glob("*_meta.csv")):
-        stem = csv_path.name.removesuffix("_meta.csv")
-        video_path = videos_dir / f"{stem}.mkv"
-        if video_path.exists():
-            pairs.append((video_path, csv_path))
-    return pairs
+def discover_scan_metadata_files(videos_dir: Path) -> list[Path]:
+    return sorted(videos_dir.glob("scan_*/scan_metadata.json"))
 
 
-def resolve_pairs(args: argparse.Namespace) -> list[tuple[Path, Path, Path]]:
-    if args.video and args.csv:
-        output_path = args.output or args.video.with_name(f"{args.video.stem}_virtual_mosaic.tif")
-        return [(args.video.resolve(), args.csv.resolve(), output_path.resolve())]
+def resolve_scan_metadata_files(args: argparse.Namespace) -> list[Path]:
+    if args.scan_metadata:
+        return [args.scan_metadata.resolve()]
 
-    if args.video or args.csv:
-        raise SystemExit("Provide both --video and --csv together, or neither.")
+    if args.scan_dir:
+        metadata_path = (args.scan_dir / "scan_metadata.json").resolve()
+        if not metadata_path.exists():
+            raise SystemExit(f"Missing scan metadata file: {metadata_path}")
+        return [metadata_path]
 
-    pairs = discover_pairs(args.videos_dir.resolve())
-    if not pairs:
-        raise SystemExit(f"No recording pairs found in {args.videos_dir}")
-
-    resolved: list[tuple[Path, Path, Path]] = []
-    for video_path, csv_path in pairs:
-        output_path = video_path.with_name(f"{video_path.stem}_virtual_mosaic.tif")
-        resolved.append((video_path.resolve(), csv_path.resolve(), output_path.resolve()))
-    return resolved
+    metadata_files = discover_scan_metadata_files(args.videos_dir.resolve())
+    if not metadata_files:
+        raise SystemExit(f"No scan metadata files found in {args.videos_dir}")
+    return [path.resolve() for path in metadata_files]
 
 
-def load_metadata(csv_path: Path, max_frames: int | None) -> list[FramePlacement]:
+def load_scan_metadata(metadata_path: Path) -> dict:
+    try:
+        return json.loads(metadata_path.read_text())
+    except Exception as exc:
+        raise SystemExit(f"Failed to read scan metadata {metadata_path}: {exc}") from exc
+
+
+def load_row_metadata(
+    csv_path: Path,
+    *,
+    max_frames: int | None,
+    pixel_scale_px_per_mm: float,
+) -> list[FramePlacement]:
     placements: list[FramePlacement] = []
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
+            x_mm = float(row["x"])
+            y_mm = float(row["y"])
             placements.append(
                 FramePlacement(
                     frame_index=int(row["frame_index"]),
-                    x_mm=float(row["x"]),
-                    y_mm=float(row["y"]),
+                    x_mm=x_mm,
+                    y_mm=y_mm,
                     z_mm=float(row.get("z", 0.0)),
+                    pixel_x=float(row.get("pixel_x", x_mm * pixel_scale_px_per_mm)),
+                    pixel_y=float(row.get("pixel_y", y_mm * pixel_scale_px_per_mm)),
                 )
             )
             if max_frames is not None and len(placements) >= max_frames:
@@ -187,31 +128,80 @@ def load_metadata(csv_path: Path, max_frames: int | None) -> list[FramePlacement
     return placements
 
 
-def inspect_video(video_path: Path) -> tuple[int, int, int]:
-    capture = cv2.VideoCapture(str(video_path))
-    if not capture.isOpened():
-        raise SystemExit(f"Could not open video: {video_path}")
+def discover_row_recordings(scan_metadata: dict, metadata_path: Path) -> list[RowRecording]:
+    scan_root = metadata_path.parent
+    row_recordings: list[RowRecording] = []
+    scan_regions = scan_metadata.get("scan_regions_mm", [])
 
-    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    for area_index, area_info in enumerate(scan_regions, start=1):
+        area_output_dir = Path(area_info.get("output_dir") or (scan_root / f"area_{area_index:03d}"))
+        if not area_output_dir.exists():
+            print(f"warning: area directory missing, skipping: {area_output_dir}")
+            continue
 
-    if width <= 0 or height <= 0:
-        ok, frame = capture.read()
-        if not ok:
-            capture.release()
-            raise SystemExit(f"Could not read first frame from {video_path}")
-        height, width = frame.shape[:2]
+        csv_paths = sorted(area_output_dir.glob("*_meta.csv"))
+        for csv_path in csv_paths:
+            stem = csv_path.name.removesuffix("_meta.csv")
+            rgb_path = area_output_dir / f"{stem}.rgb"
+            if not rgb_path.exists():
+                print(f"warning: missing RGB file for {csv_path.name}, skipping")
+                continue
 
-    capture.release()
-    return width, height, frame_count
+            row_suffix = stem.rsplit("_row_", 1)
+            if len(row_suffix) != 2:
+                print(f"warning: unexpected row recording name, skipping: {stem}")
+                continue
+
+            row_index = int(row_suffix[1])
+            output_tiff_path = area_output_dir / f"{stem}_virtual_mosaic.tif"
+            output_manifest_path = area_output_dir / f"{stem}_virtual_mosaic.json"
+            row_recordings.append(
+                RowRecording(
+                    rgb_path=rgb_path,
+                    csv_path=csv_path,
+                    output_tiff_path=output_tiff_path,
+                    output_manifest_path=output_manifest_path,
+                    area_index=area_index,
+                    row_index=row_index,
+                    area_output_dir=area_output_dir,
+                )
+            )
+
+    return row_recordings
+
+
+def inspect_rgb(rgb_path: Path, frame_width_px: int, frame_height_px: int) -> tuple[int, int]:
+    frame_bytes = frame_width_px * frame_height_px * 3
+    file_size = rgb_path.stat().st_size
+    if frame_bytes <= 0:
+        raise SystemExit(f"Invalid frame dimensions for RGB input: {frame_width_px}x{frame_height_px}")
+    if file_size % frame_bytes != 0:
+        raise SystemExit(
+            f"RGB file size is not divisible by frame size: {rgb_path} ({file_size} bytes)"
+        )
+    return frame_bytes, file_size // frame_bytes
+
+
+def read_rgb_frame(
+    handle,
+    *,
+    frame_index: int,
+    frame_bytes: int,
+    frame_width_px: int,
+    frame_height_px: int,
+) -> np.ndarray:
+    handle.seek(frame_index * frame_bytes)
+    frame_data = handle.read(frame_bytes)
+    if len(frame_data) != frame_bytes:
+        raise EOFError(f"Could not read frame {frame_index}")
+    frame_rgb = np.frombuffer(frame_data, dtype=np.uint8).reshape((frame_height_px, frame_width_px, 3))
+    return np.flip(frame_rgb, axis=(0, 1)).copy()
 
 
 def compute_canvas_bounds(
     placements: list[FramePlacement],
     frame_width_px: int,
     frame_height_px: int,
-    pixels_per_mm: float,
 ) -> tuple[int, int, int, int]:
     min_x_px = math.inf
     max_x_px = -math.inf
@@ -222,13 +212,10 @@ def compute_canvas_bounds(
     half_height = frame_height_px / 2.0
 
     for placement in placements:
-        center_x_px = placement.x_mm * pixels_per_mm
-        center_y_px = placement.y_mm * pixels_per_mm
-
-        min_x_px = min(min_x_px, math.floor(center_x_px - half_width))
-        max_x_px = max(max_x_px, math.ceil(center_x_px + half_width))
-        min_y_px = min(min_y_px, math.floor(center_y_px - half_height))
-        max_y_px = max(max_y_px, math.ceil(center_y_px + half_height))
+        min_x_px = min(min_x_px, math.floor(placement.pixel_x - half_width))
+        max_x_px = max(max_x_px, math.ceil(placement.pixel_x + half_width))
+        min_y_px = min(min_y_px, math.floor(placement.pixel_y - half_height))
+        max_y_px = max(max_y_px, math.ceil(placement.pixel_y + half_height))
 
     return int(min_x_px), int(max_x_px), int(min_y_px), int(max_y_px)
 
@@ -244,72 +231,51 @@ def create_mosaic_file(output_path: Path, height: int, width: int) -> np.memmap:
     )
 
 
-def prepare_frame_writes(
-    frame_bgr: np.ndarray,
-    placements: list[FramePlacement],
-    pixels_per_mm: float,
+def place_frame(
+    mosaic: np.ndarray,
+    frame_rgb: np.ndarray,
+    placement: FramePlacement,
+    *,
     min_x_world_px: int,
     max_y_world_px: int,
     mosaic_width: int,
     mosaic_height: int,
-) -> list[MosaicWrite]:
-    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    frame_rgb = cv2.flip(frame_rgb, -1)
-
+) -> None:
     frame_height, frame_width = frame_rgb.shape[:2]
-    writes: list[MosaicWrite] = []
 
-    for placement in placements:
-        center_x_px = placement.x_mm * pixels_per_mm
-        center_y_px = placement.y_mm * pixels_per_mm
+    left_world_px = int(round(placement.pixel_x - (frame_width / 2.0)))
+    top_world_px = int(round(placement.pixel_y + (frame_height / 2.0)))
 
-        left_world_px = int(round(center_x_px - (frame_width / 2.0)))
-        top_world_px = int(round(center_y_px + (frame_height / 2.0)))
+    x0 = left_world_px - min_x_world_px
+    y0 = max_y_world_px - top_world_px
+    x1 = x0 + frame_width
+    y1 = y0 + frame_height
 
-        x0 = left_world_px - min_x_world_px
-        y0 = max_y_world_px - top_world_px
-        x1 = x0 + frame_width
-        y1 = y0 + frame_height
+    dst_x0 = max(0, x0)
+    dst_y0 = max(0, y0)
+    dst_x1 = min(mosaic_width, x1)
+    dst_y1 = min(mosaic_height, y1)
 
-        dst_x0 = max(0, x0)
-        dst_y0 = max(0, y0)
-        dst_x1 = min(mosaic_width, x1)
-        dst_y1 = min(mosaic_height, y1)
+    if dst_x0 >= dst_x1 or dst_y0 >= dst_y1:
+        return
 
-        if dst_x0 >= dst_x1 or dst_y0 >= dst_y1:
-            continue
+    src_x0 = dst_x0 - x0
+    src_y0 = dst_y0 - y0
+    src_x1 = src_x0 + (dst_x1 - dst_x0)
+    src_y1 = src_y0 + (dst_y1 - dst_y0)
 
-        src_x0 = dst_x0 - x0
-        src_y0 = dst_y0 - y0
-        src_x1 = src_x0 + (dst_x1 - dst_x0)
-        src_y1 = src_y0 + (dst_y1 - dst_y0)
-
-        writes.append(
-            MosaicWrite(
-                dst_x0=dst_x0,
-                dst_y0=dst_y0,
-                dst_x1=dst_x1,
-                dst_y1=dst_y1,
-                patch=frame_rgb[src_y0:src_y1, src_x0:src_x1].copy(),
-            )
-        )
-
-    return writes
-
-
-def apply_writes(mosaic: np.ndarray, writes: list[MosaicWrite]) -> int:
-    for write in writes:
-        mosaic[write.dst_y0:write.dst_y1, write.dst_x0:write.dst_x1] = write.patch
-    return len(writes)
+    mosaic[dst_y0:dst_y1, dst_x0:dst_x1] = frame_rgb[src_y0:src_y1, src_x0:src_x1]
 
 
 def write_manifest(
     manifest_path: Path,
     *,
-    video_path: Path,
+    scan_metadata_path: Path,
+    area_index: int,
+    row_index: int,
+    rgb_path: Path,
     csv_path: Path,
     output_path: Path,
-    pixels_per_mm: float,
     frame_width_px: int,
     frame_height_px: int,
     canvas_width_px: int,
@@ -322,10 +288,12 @@ def write_manifest(
     frames_written: int,
 ) -> None:
     manifest = {
-        "video": str(video_path),
+        "scan_metadata": str(scan_metadata_path),
+        "area_index": area_index,
+        "row_index": row_index,
+        "rgb": str(rgb_path),
         "csv": str(csv_path),
         "output": str(output_path),
-        "pixels_per_mm": pixels_per_mm,
         "frame_size_px": [frame_width_px, frame_height_px],
         "canvas_size_px": [canvas_width_px, canvas_height_px],
         "world_bounds_px": {
@@ -334,12 +302,6 @@ def write_manifest(
             "min_y": min_y_world_px,
             "max_y": max_y_world_px,
         },
-        "world_bounds_mm": {
-            "min_x": min_x_world_px / pixels_per_mm,
-            "max_x": max_x_world_px / pixels_per_mm,
-            "min_y": min_y_world_px / pixels_per_mm,
-            "max_y": max_y_world_px / pixels_per_mm,
-        },
         "frame_rows": frame_rows,
         "frames_written": frames_written,
         "orientation": "Frames are flipped horizontally and vertically to match the stage mosaic view.",
@@ -347,154 +309,117 @@ def write_manifest(
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
 
-def build_virtual_mosaic(
-    video_path: Path,
-    csv_path: Path,
+def write_area_manifest(
+    manifest_path: Path,
+    *,
+    scan_metadata_path: Path,
+    area_index: int,
     output_path: Path,
-    pixels_per_mm: float,
-    max_frames: int | None,
-    workers: int,
+    canvas_width_px: int,
+    canvas_height_px: int,
+    min_x_world_px: int,
+    max_x_world_px: int,
+    min_y_world_px: int,
+    max_y_world_px: int,
+    row_outputs: list[str],
 ) -> None:
-    placements = load_metadata(csv_path, max_frames)
-    frame_width_px, frame_height_px, video_frame_count = inspect_video(video_path)
+    manifest = {
+        "scan_metadata": str(scan_metadata_path),
+        "area_index": area_index,
+        "output": str(output_path),
+        "canvas_size_px": [canvas_width_px, canvas_height_px],
+        "world_bounds_px": {
+            "min_x": min_x_world_px,
+            "max_x": max_x_world_px,
+            "min_y": min_y_world_px,
+            "max_y": max_y_world_px,
+        },
+        "row_outputs": row_outputs,
+        "orientation": "Area mosaic assembled from per-row TIFF mosaics.",
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def build_row_virtual_mosaic(
+    row_recording: RowRecording,
+    *,
+    scan_metadata_path: Path,
+    scan_metadata: dict,
+    max_frames: int | None,
+) -> None:
+    frame_width_px = int(scan_metadata["image_dimensions_px"]["width"])
+    frame_height_px = int(scan_metadata["image_dimensions_px"]["height"])
+    pixel_scale_px_per_mm = float(scan_metadata.get("pixel_scale_px_per_mm") or 0.0)
+    placements = load_row_metadata(
+        row_recording.csv_path,
+        max_frames=max_frames,
+        pixel_scale_px_per_mm=pixel_scale_px_per_mm,
+    )
+
+    frame_bytes, rgb_frame_count = inspect_rgb(
+        row_recording.rgb_path,
+        frame_width_px,
+        frame_height_px,
+    )
 
     min_x_world_px, max_x_world_px, min_y_world_px, max_y_world_px = compute_canvas_bounds(
         placements,
         frame_width_px,
         frame_height_px,
-        pixels_per_mm,
     )
     canvas_width_px = max_x_world_px - min_x_world_px
     canvas_height_px = max_y_world_px - min_y_world_px
-
     if canvas_width_px <= 0 or canvas_height_px <= 0:
-        raise SystemExit("Computed mosaic canvas has invalid dimensions.")
+        raise SystemExit(f"Computed invalid canvas for {row_recording.csv_path}")
 
-    print(f"Processing {video_path.name}")
-    print(f"  metadata rows: {len(placements)}")
-    print(f"  video frames: {video_frame_count}")
+    print(f"Processing area {row_recording.area_index:03d} row {row_recording.row_index:03d}")
+    print(f"  rgb: {row_recording.rgb_path.name}")
+    print(f"  csv rows: {len(placements)}")
+    print(f"  rgb frames: {rgb_frame_count}")
     print(f"  frame size: {frame_width_px}x{frame_height_px}")
     print(f"  mosaic size: {canvas_width_px}x{canvas_height_px}")
-    print(f"  output: {output_path}")
-    print(f"  workers: {workers}")
+    print(f"  output: {row_recording.output_tiff_path}")
 
-    mosaic = create_mosaic_file(output_path, canvas_height_px, canvas_width_px)
+    mosaic = create_mosaic_file(row_recording.output_tiff_path, canvas_height_px, canvas_width_px)
     mosaic[:] = 0
 
-    placements_by_index: dict[int, list[FramePlacement]] = defaultdict(list)
-    for placement in placements:
-        placements_by_index[placement.frame_index].append(placement)
-
-    target_indices = sorted(placements_by_index)
-    capture = cv2.VideoCapture(str(video_path))
-    if not capture.isOpened():
-        raise SystemExit(f"Could not open video: {video_path}")
-
-    target_cursor = 0
-    apply_cursor = 0
-    current_frame_index = 0
     frames_written = 0
-    progress = ProgressTracker(
-        total_target_frames=len(target_indices),
-        total_placements=len(placements),
-        video_frame_count=video_frame_count,
-    )
-    max_pending_tasks = max(1, workers * 2)
-    pending_futures: dict[int, concurrent.futures.Future[list[MosaicWrite]]] = {}
-
-    def drain_completed(force_wait: bool = False) -> int:
-        nonlocal apply_cursor, frames_written
-
-        while apply_cursor < len(target_indices):
-            target_index = target_indices[apply_cursor]
-            future = pending_futures.get(target_index)
-            if future is None:
-                break
-            if not force_wait and not future.done():
-                break
-
-            writes = future.result()
-            frames_written += apply_writes(mosaic, writes)
-            del pending_futures[target_index]
-            apply_cursor += 1
-            progress.report(
-                current_video_frame=current_frame_index,
-                processed_target_frames=apply_cursor,
-                frames_written=frames_written,
-                queued_tasks=len(pending_futures),
-            )
-
-        return apply_cursor
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        while target_cursor < len(target_indices):
-            ok, frame = capture.read()
-            if not ok:
-                break
-
-            target_index = target_indices[target_cursor]
-            if current_frame_index < target_index:
-                current_frame_index += 1
-                progress.report(
-                    current_video_frame=current_frame_index,
-                    processed_target_frames=apply_cursor,
-                    frames_written=frames_written,
-                    queued_tasks=len(pending_futures),
+    with row_recording.rgb_path.open("rb") as handle:
+        for placement in placements:
+            if placement.frame_index >= rgb_frame_count:
+                print(
+                    f"  warning: frame index {placement.frame_index} exceeds RGB frame count {rgb_frame_count}"
                 )
                 continue
 
-            if current_frame_index == target_index:
-                pending_futures[target_index] = executor.submit(
-                    prepare_frame_writes,
-                    frame.copy(),
-                    placements_by_index[target_index],
-                    pixels_per_mm,
-                    min_x_world_px,
-                    max_y_world_px,
-                    canvas_width_px,
-                    canvas_height_px,
-                )
-                target_cursor += 1
-
-                if len(pending_futures) >= max_pending_tasks:
-                    drain_completed(force_wait=True)
-                else:
-                    drain_completed(force_wait=False)
-
-            current_frame_index += 1
-            progress.report(
-                current_video_frame=current_frame_index,
-                processed_target_frames=apply_cursor,
-                frames_written=frames_written,
-                queued_tasks=len(pending_futures),
+            frame_rgb = read_rgb_frame(
+                handle,
+                frame_index=placement.frame_index,
+                frame_bytes=frame_bytes,
+                frame_width_px=frame_width_px,
+                frame_height_px=frame_height_px,
             )
-
-        capture.release()
-
-        while pending_futures:
-            drain_completed(force_wait=True)
+            place_frame(
+                mosaic,
+                frame_rgb,
+                placement,
+                min_x_world_px=min_x_world_px,
+                max_y_world_px=max_y_world_px,
+                mosaic_width=canvas_width_px,
+                mosaic_height=canvas_height_px,
+            )
+            frames_written += 1
 
     mosaic.flush()
 
-    missing_targets = len(target_indices) - target_cursor
-    if missing_targets:
-        print(f"  warning: {missing_targets} frame indices were not found in the video")
-
-    progress.report(
-        current_video_frame=current_frame_index,
-        processed_target_frames=apply_cursor,
-        frames_written=frames_written,
-        queued_tasks=0,
-        force=True,
-    )
-
-    manifest_path = output_path.with_suffix(".json")
     write_manifest(
-        manifest_path,
-        video_path=video_path,
-        csv_path=csv_path,
-        output_path=output_path,
-        pixels_per_mm=pixels_per_mm,
+        row_recording.output_manifest_path,
+        scan_metadata_path=scan_metadata_path,
+        area_index=row_recording.area_index,
+        row_index=row_recording.row_index,
+        rgb_path=row_recording.rgb_path,
+        csv_path=row_recording.csv_path,
+        output_path=row_recording.output_tiff_path,
         frame_width_px=frame_width_px,
         frame_height_px=frame_height_px,
         canvas_width_px=canvas_width_px,
@@ -506,22 +431,122 @@ def build_virtual_mosaic(
         frame_rows=len(placements),
         frames_written=frames_written,
     )
-    print(f"  manifest: {manifest_path}")
+    print(f"  manifest: {row_recording.output_manifest_path}")
     print(f"  frames written: {frames_written}")
+
+
+def group_row_recordings_by_area(row_recordings: list[RowRecording]) -> list[AreaMosaicInput]:
+    grouped: dict[int, list[RowRecording]] = {}
+    for row_recording in row_recordings:
+        grouped.setdefault(row_recording.area_index, []).append(row_recording)
+
+    area_inputs: list[AreaMosaicInput] = []
+    for area_index in sorted(grouped):
+        area_rows = sorted(grouped[area_index], key=lambda item: item.row_index)
+        area_inputs.append(
+            AreaMosaicInput(
+                area_index=area_index,
+                area_output_dir=area_rows[0].area_output_dir,
+                row_recordings=area_rows,
+            )
+        )
+    return area_inputs
+
+
+def build_area_virtual_mosaic(
+    area_input: AreaMosaicInput,
+    *,
+    scan_metadata_path: Path,
+) -> None:
+    row_manifests: list[dict] = []
+    for row_recording in area_input.row_recordings:
+        if not row_recording.output_manifest_path.exists() or not row_recording.output_tiff_path.exists():
+            print(f"warning: missing row mosaic output, skipping area assembly input {row_recording.output_tiff_path}")
+            continue
+        row_manifests.append(json.loads(row_recording.output_manifest_path.read_text()))
+
+    if not row_manifests:
+        print(f"warning: no completed row mosaics for area {area_input.area_index:03d}")
+        return
+
+    min_x_world_px = min(manifest["world_bounds_px"]["min_x"] for manifest in row_manifests)
+    max_x_world_px = max(manifest["world_bounds_px"]["max_x"] for manifest in row_manifests)
+    min_y_world_px = min(manifest["world_bounds_px"]["min_y"] for manifest in row_manifests)
+    max_y_world_px = max(manifest["world_bounds_px"]["max_y"] for manifest in row_manifests)
+    canvas_width_px = max_x_world_px - min_x_world_px
+    canvas_height_px = max_y_world_px - min_y_world_px
+    if canvas_width_px <= 0 or canvas_height_px <= 0:
+        raise SystemExit(f"Computed invalid area canvas for area {area_input.area_index:03d}")
+
+    output_tiff_path = area_input.area_output_dir / f"area_{area_input.area_index:03d}_virtual_mosaic.tif"
+    output_manifest_path = area_input.area_output_dir / f"area_{area_input.area_index:03d}_virtual_mosaic.json"
+
+    print(f"Assembling area {area_input.area_index:03d}")
+    print(f"  row mosaics: {len(row_manifests)}")
+    print(f"  output: {output_tiff_path}")
+    print(f"  mosaic size: {canvas_width_px}x{canvas_height_px}")
+
+    mosaic = create_mosaic_file(output_tiff_path, canvas_height_px, canvas_width_px)
+    mosaic[:] = 0
+
+    row_outputs: list[str] = []
+    for row_recording, row_manifest in zip(area_input.row_recordings, row_manifests):
+        row_tiff = tifffile.imread(str(row_recording.output_tiff_path))
+        row_bounds = row_manifest["world_bounds_px"]
+        x0 = int(row_bounds["min_x"] - min_x_world_px)
+        y0 = int(max_y_world_px - row_bounds["max_y"])
+        y1 = y0 + row_tiff.shape[0]
+        x1 = x0 + row_tiff.shape[1]
+        mosaic[y0:y1, x0:x1] = row_tiff
+        row_outputs.append(str(row_recording.output_tiff_path))
+
+    mosaic.flush()
+
+    write_area_manifest(
+        output_manifest_path,
+        scan_metadata_path=scan_metadata_path,
+        area_index=area_input.area_index,
+        output_path=output_tiff_path,
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
+        min_x_world_px=min_x_world_px,
+        max_x_world_px=max_x_world_px,
+        min_y_world_px=min_y_world_px,
+        max_y_world_px=max_y_world_px,
+        row_outputs=row_outputs,
+    )
+    print(f"  manifest: {output_manifest_path}")
+
+
+def process_scan_run(scan_metadata_path: Path, max_frames: int | None) -> None:
+    scan_metadata = load_scan_metadata(scan_metadata_path)
+    row_recordings = discover_row_recordings(scan_metadata, scan_metadata_path)
+    if not row_recordings:
+        print(f"warning: no row recordings found for {scan_metadata_path}")
+        return
+
+    print(f"Scan run: {scan_metadata_path.parent.name}")
+    print(f"  row recordings: {len(row_recordings)}")
+    for row_recording in row_recordings:
+        build_row_virtual_mosaic(
+            row_recording,
+            scan_metadata_path=scan_metadata_path,
+            scan_metadata=scan_metadata,
+            max_frames=max_frames,
+        )
+
+    for area_input in group_row_recordings_by_area(row_recordings):
+        build_area_virtual_mosaic(
+            area_input,
+            scan_metadata_path=scan_metadata_path,
+        )
 
 
 def main() -> None:
     args = parse_args()
-    pairs = resolve_pairs(args)
-    for video_path, csv_path, output_path in pairs:
-        build_virtual_mosaic(
-            video_path=video_path,
-            csv_path=csv_path,
-            output_path=output_path,
-            pixels_per_mm=args.pixels_per_mm,
-            max_frames=args.max_frames,
-            workers=args.workers,
-        )
+    scan_metadata_files = resolve_scan_metadata_files(args)
+    for scan_metadata_path in scan_metadata_files:
+        process_scan_run(scan_metadata_path, args.max_frames)
 
 
 if __name__ == "__main__":

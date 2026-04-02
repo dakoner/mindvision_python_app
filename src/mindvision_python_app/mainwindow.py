@@ -313,14 +313,17 @@ class MainWindow(QObject):
             [(time.time_ns(), self.current_cnc_x_mm, self.current_cnc_y_mm, self.current_cnc_z_mm)]
         )
         self.pending_mosaic_frames = deque()
-        self.mosaic_position_retention_ns = 40_000_000_000
-        self.mosaic_interpolation_delay_ns = 125_000_000
+        self.mosaic_position_retention_ns = 10_000_000_000
+        self.mosaic_interpolation_delay_ns = 75_000_000
         
         self.is_scanning = False
         self.scan_panel = None # Will be created with the mosaic panel
         self.scan_current_row = 0
         self.scan_current_area_total_rows = 0 # Total rows for the current scan area
         self.scan_total_rows = 0
+        self.scan_area_index = 0
+        self.scan_row_index = 0
+        self.area_params = []
         
         # Scan State for row-by-row processing
         self.scan_x_min = 0
@@ -335,6 +338,11 @@ class MainWindow(QObject):
         self.scan_fov_x_mm = 0
         self.scan_fov_y_mm = 0
         self.scan_started_recording = False
+        self.scan_recording_session_timestamp = None
+        self.scan_output_dir = None
+        self.scan_area_output_dirs = []
+        self.scan_pending_recording_area_index = None
+        self.scan_pending_recording_row_number = None
         
         # Stage Settings
         self.stage_settings = {}
@@ -360,6 +368,8 @@ class MainWindow(QObject):
             self.cnc_control_panel.position_updated_signal.connect(self.on_cnc_position_updated)
             self.cnc_control_panel.state_updated_signal.connect(self.on_cnc_state_updated)
             self.cnc_control_panel.scan_start_ready_signal.connect(self.on_scan_start_ready)
+            self.cnc_control_panel.scan_row_start_ready_signal.connect(self.on_scan_row_start_ready)
+            self.cnc_control_panel.scan_row_ready_signal.connect(self.on_scan_row_ready)
             self.cnc_control_panel.scan_finished_signal.connect(self.on_scan_finished)
 
         # Measurement Tab Setup (Index 0)
@@ -573,6 +583,7 @@ class MainWindow(QObject):
         self.recording_position_samples = deque()
         self.pending_recording_metadata = deque()
         self.recording_position_retention_ns = 10_000_000_000
+        self.pending_recording_output_stem = None
 
         QTimer.singleShot(0, self.load_settings)
         QTimer.singleShot(100, self.on_start_clicked)
@@ -929,41 +940,13 @@ class MainWindow(QObject):
         if not image.isNull():
             self.current_frame_image = image.copy()
             # Recording Start Trigger
-            if self.recording_requested:
+            if self.recording_requested and not self.video_thread.isRunning():
                 self.recording_requested = False
-                record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
-                
-                # Create videos dir
-                video_dir = os.path.realpath(
-                    os.path.join(self.script_dir, "..", "..", "videos")
+                self._start_recording_with_image(
+                    image,
+                    output_stem=self.pending_recording_output_stem,
                 )
-                os.makedirs(video_dir, exist_ok=True)
-                
-                timestamp = int(time.time())
-                filename = os.path.join(video_dir, f"recording_{timestamp}.rgb")
-                
-                meta_filename = os.path.join(video_dir, f"recording_{timestamp}_meta.csv")
-                self.metadata_filename = meta_filename
-                self.recording_start_time_ns = time.time_ns()
-                self.recording_frame_index = 0
-                with self.recording_metadata_lock:
-                    self.recording_metadata_rows = []
-                    self.pending_recording_metadata.clear()
-                    self.recording_position_samples.clear()
-                    self.recording_position_samples.append(
-                        (
-                            self.recording_start_time_ns,
-                            getattr(self, 'current_cnc_x_mm', 0.0),
-                            getattr(self, 'current_cnc_y_mm', 0.0),
-                            getattr(self, 'current_cnc_z_mm', 0.0),
-                        )
-                    )
-
-                self.video_thread.startRecording(
-                    image.width(), image.height(), record_fps, filename
-                )
-                self.ui.action_record.setText("Stop Recording")
-                self.log(f"Recording started: {os.path.basename(filename)}")
+                self.pending_recording_output_stem = None
 
             # Display
             #image = image.mirrored(True, False) # Flip horizontally
@@ -1191,13 +1174,152 @@ class MainWindow(QObject):
 
     def on_record_clicked(self):
         if not self.video_thread.isRunning():
-            self.recording_requested = True
-            self.log("Recording requested...")
+            self._request_recording_start()
         else:
-            self.video_thread.stopRecording()
-            self.ui.action_record.setText("Start Recording")
-            self.log("Recording stopped.")
-            self._flush_recording_metadata_csv()
+            self._stop_recording_session()
+
+    def _get_video_output_dir(self):
+        video_dir = os.path.realpath(
+            os.path.join(self.script_dir, "..", "..", "videos")
+        )
+        os.makedirs(video_dir, exist_ok=True)
+        return video_dir
+
+    def _build_recording_paths(self, output_stem=None):
+        video_dir = self._get_video_output_dir()
+        if output_stem is None:
+            timestamp = int(time.time())
+            output_stem = os.path.join(video_dir, f"recording_{timestamp}")
+        return f"{output_stem}.rgb", f"{output_stem}_meta.csv"
+
+    def _request_recording_start(self, output_stem=None):
+        self.pending_recording_output_stem = output_stem
+        self.recording_requested = True
+        self.log("Recording requested...")
+
+    def _start_recording_with_image(self, image, output_stem=None):
+        record_fps = self.current_fps if self.current_fps > 0.1 else 30.0
+        filename, meta_filename = self._build_recording_paths(output_stem)
+
+        self.metadata_filename = meta_filename
+        self.recording_start_time_ns = time.time_ns()
+        self.recording_frame_index = 0
+        with self.recording_metadata_lock:
+            self.recording_metadata_rows = []
+            self.pending_recording_metadata.clear()
+            self.recording_position_samples.clear()
+            self.recording_position_samples.append(
+                (
+                    self.recording_start_time_ns,
+                    getattr(self, 'current_cnc_x_mm', 0.0),
+                    getattr(self, 'current_cnc_y_mm', 0.0),
+                    getattr(self, 'current_cnc_z_mm', 0.0),
+                )
+            )
+
+        self.video_thread.startRecording(
+            image.width(), image.height(), record_fps, filename
+        )
+        self.ui.action_record.setText("Stop Recording")
+        self.log(f"Recording started: {os.path.basename(filename)}")
+
+    def _stop_recording_session(self, log_message="Recording stopped."):
+        self.recording_requested = False
+        self.pending_recording_output_stem = None
+        self.video_thread.stopRecording()
+        self.ui.action_record.setText("Start Recording")
+        self.log(log_message)
+        self._flush_recording_metadata_csv()
+
+    def _get_scan_run_output_dir(self):
+        session_timestamp = self.scan_recording_session_timestamp
+        if session_timestamp is None:
+            session_timestamp = int(time.time())
+            self.scan_recording_session_timestamp = session_timestamp
+        if not self.scan_output_dir:
+            video_dir = self._get_video_output_dir()
+            self.scan_output_dir = os.path.join(video_dir, f"scan_{session_timestamp}")
+            os.makedirs(self.scan_output_dir, exist_ok=True)
+        return self.scan_output_dir
+
+    def _get_scan_row_recording_stem(self, area_index, row_number):
+        area_output_dir = None
+        if 0 <= area_index < len(self.scan_area_output_dirs):
+            area_output_dir = self.scan_area_output_dirs[area_index]
+        if not area_output_dir:
+            area_output_dir = self._get_scan_run_output_dir()
+        session_timestamp = self.scan_recording_session_timestamp
+        return os.path.join(
+            area_output_dir,
+            f"recording_{session_timestamp}_row_{row_number:03d}",
+        )
+
+    def _start_scan_row_recording(self, area_index, row_number):
+        output_stem = self._get_scan_row_recording_stem(area_index, row_number)
+        if not self.current_frame_image.isNull() and not self.video_thread.isRunning():
+            self._start_recording_with_image(self.current_frame_image, output_stem=output_stem)
+        else:
+            self._request_recording_start(output_stem=output_stem)
+
+    def _get_scan_metadata_filename(self):
+        session_timestamp = self.scan_recording_session_timestamp
+        if session_timestamp is None:
+            return None
+        return os.path.join(self._get_scan_run_output_dir(), "scan_metadata.json")
+
+    def _stage_mm_to_pixel_xy(self, x_mm, y_mm):
+        pixel_scale = self.ruler_calibration if self.ruler_calibration else 0.0
+        return x_mm * pixel_scale, y_mm * pixel_scale
+
+    def _write_scan_metadata_json(self):
+        metadata_filename = self._get_scan_metadata_filename()
+        if not metadata_filename or not self.area_params:
+            return
+
+        overall_x_min = min(area["x_min"] for area in self.area_params)
+        overall_y_min = min(area["y_min"] for area in self.area_params)
+        overall_x_max = max(area["x_max"] for area in self.area_params)
+        overall_y_max = max(area["y_max"] for area in self.area_params)
+
+        scan_metadata = {
+            "scan_timestamp": self.scan_recording_session_timestamp,
+            "scan_output_dir": self._get_scan_run_output_dir(),
+            "scan_total_rows": self.scan_total_rows,
+            "scan_region_mm": {
+                "x_min": overall_x_min,
+                "y_min": overall_y_min,
+                "x_max": overall_x_max,
+                "y_max": overall_y_max,
+            },
+            "scan_regions_mm": [
+                {
+                    "x_min": area["x_min"],
+                    "y_min": area["y_min"],
+                    "x_max": area["x_max"],
+                    "y_max": area["y_max"],
+                    "total_rows": area["total_rows"],
+                    "start_y": area["start_y"],
+                    "output_dir": self.scan_area_output_dirs[index] if index < len(self.scan_area_output_dirs) else None,
+                }
+                for index, area in enumerate(self.area_params)
+            ],
+            "image_dimensions_px": {
+                "width": self.current_pixmap.width() if self.current_pixmap else 0,
+                "height": self.current_pixmap.height() if self.current_pixmap else 0,
+            },
+            "pixel_scale_px_per_mm": self.ruler_calibration,
+            "scan_mode": {
+                "serpentine": self.scan_is_serpentine,
+                "home_x_each_row": self.scan_home_x,
+                "home_y_each_row": self.scan_home_y,
+            },
+        }
+
+        try:
+            with open(metadata_filename, "w") as metadata_file:
+                json.dump(scan_metadata, metadata_file, indent=2)
+        except Exception as e:
+            self.log(f"Failed to write scan metadata JSON: {e}")
 
     def _flush_recording_metadata_csv(self):
         metadata_filename = self.metadata_filename
@@ -1215,9 +1337,11 @@ class MainWindow(QObject):
 
         try:
             with open(metadata_filename, "w") as meta_file:
-                meta_file.write("timestamp_ns,frame_index,x,y,z\n")
-                for timestamp_ns, frame_index, x, y, z in rows:
-                    meta_file.write(f"{timestamp_ns},{frame_index},{x:.3f},{y:.3f},{z:.3f}\n")
+                meta_file.write("timestamp_ns,frame_index,x,y,z,pixel_x,pixel_y\n")
+                for timestamp_ns, frame_index, x, y, z, pixel_x, pixel_y in rows:
+                    meta_file.write(
+                        f"{timestamp_ns},{frame_index},{x:.3f},{y:.3f},{z:.3f},{pixel_x:.3f},{pixel_y:.3f}\n"
+                    )
         except Exception as e:
             self.log(f"Failed to write recording metadata CSV: {e}")
         finally:
@@ -1978,8 +2102,11 @@ class MainWindow(QObject):
             )
             while self.pending_recording_metadata:
                 _, relative_timestamp_ns, frame_index = self.pending_recording_metadata.popleft()
+                pixel_x, pixel_y = self._stage_mm_to_pixel_xy(
+                    fallback_position[0], fallback_position[1]
+                )
                 self.recording_metadata_rows.append(
-                    (relative_timestamp_ns, frame_index, *fallback_position)
+                    (relative_timestamp_ns, frame_index, *fallback_position, pixel_x, pixel_y)
                 )
             return
 
@@ -1997,8 +2124,9 @@ class MainWindow(QObject):
                 break
 
             self.pending_recording_metadata.popleft()
+            pixel_x, pixel_y = self._stage_mm_to_pixel_xy(position[0], position[1])
             self.recording_metadata_rows.append(
-                (relative_timestamp_ns, frame_index, *position)
+                (relative_timestamp_ns, frame_index, *position, pixel_x, pixel_y)
             )
 
     def _interpolate_stage_position_locked(self, frame_timestamp_ns, clamp_latest=False):
@@ -2093,6 +2221,9 @@ class MainWindow(QObject):
         self.scan_home_x, self.scan_home_y = home_x, home_y
         self.scan_is_serpentine = is_serpentine
         self.scan_started_recording = False
+        self.scan_recording_session_timestamp = int(time.time())
+        self.scan_output_dir = None
+        self.scan_area_output_dirs = []
 
         img_w = self.current_pixmap.width()
         img_h = self.current_pixmap.height()
@@ -2135,8 +2266,20 @@ class MainWindow(QObject):
                 "total_rows": total_rows, "start_y": start_y
             })
 
+        scan_output_dir = self._get_scan_run_output_dir()
+        self.scan_area_output_dirs = []
+        for area_index, _ in enumerate(self.area_params, start=1):
+            area_output_dir = os.path.join(scan_output_dir, f"area_{area_index:03d}")
+            os.makedirs(area_output_dir, exist_ok=True)
+            self.scan_area_output_dirs.append(area_output_dir)
+
         self.scan_current_row = 0
+        self.scan_area_index = 0
+        self.scan_row_index = 0
+        self.scan_pending_recording_area_index = None
+        self.scan_pending_recording_row_number = None
         self.is_scanning = True
+        self._write_scan_metadata_json()
         
         if hasattr(self, 'scan_status_dialog'):
             self.scan_status_dialog.show()
@@ -2164,8 +2307,6 @@ class MainWindow(QObject):
         self.scan_status_signal.emit(f"Starting scan of {self.scan_total_rows} rows.")
         self.scan_progress_signal.emit(0, self.scan_total_rows)
 
-        self.scan_all_rows()
-
     def _get_scan_row_targets(self, area, row_idx):
         scan_y_min = area["y_min"]
         scan_y_max = area["y_max"]
@@ -2192,97 +2333,165 @@ class MainWindow(QObject):
         end_x = x_right if is_ltr else x_left
         return y_target, start_x, end_x
 
-    def scan_all_rows(self):
+    def _queue_next_scan_row(self):
         if not self.is_scanning:
             return
 
-        for area_index, area in enumerate(self.area_params):
-            area_rows = area["total_rows"]
-            
-            is_first_strip = True
+        while self.scan_area_index < len(self.area_params):
+            area = self.area_params[self.scan_area_index]
+            if self.scan_row_index >= area["total_rows"]:
+                self.scan_area_index += 1
+                self.scan_row_index = 0
+                continue
 
-            for row_idx in range(area_rows):
-                y_target, start_x, end_x = self._get_scan_row_targets(area, row_idx)
-                cmds = []
-                is_initial_scan_row = area_index == 0 and row_idx == 0
+            y_target, start_x, end_x = self._get_scan_row_targets(area, self.scan_row_index)
+            cmds = []
+            is_initial_scan_row = self.scan_area_index == 0 and self.scan_row_index == 0
+            is_first_strip = self.scan_row_index == 0
 
-                if is_initial_scan_row:
-                    is_first_strip = False
+            if not is_initial_scan_row:
+                if is_first_strip:
+                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
                 else:
-                    if is_first_strip:
-                        cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
-                        is_first_strip = False
-                    else:
-                        cmds.append(f"G1 Y{y_target:.3f}")
+                    cmds.append(f"G1 Y{y_target:.3f}")
 
-                    if self.scan_home_y:
-                        cmds.append("$HY")
-                    if self.scan_home_x:
-                        cmds.append("$HX")
-                        cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
-                    else:
-                        cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                if self.scan_home_y:
+                    cmds.append("$HY")
+                if self.scan_home_x:
+                    cmds.append("$HX")
+                    cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
+                    cmds.append("G4 P0.1 ; SCAN_ROW_START")
+                else:
+                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
 
-                if start_x != end_x:
-                    cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
-                
-                for cmd in cmds:
-                    self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+            if start_x != end_x:
+                cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
 
-                self.scan_current_row += 1
-                self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
+            cmds.append("G4 P0.1 ; SCAN_ROW_END")
+
+            for cmd in cmds:
+                self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
+
+            self.scan_row_index += 1
+            if self.scan_row_index >= area["total_rows"]:
+                self.scan_area_index += 1
+                self.scan_row_index = 0
+            return
 
         self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P0.1 ; SCAN_DONE")
 
     @Slot()
     def on_scan_start_ready(self):
-        if not self.is_scanning or self.scan_started_recording:
+        if not self.is_scanning:
             return
 
-        if self.video_thread.isRunning():
-            self.log("Initial scan move completed.")
+        if not self.scan_started_recording:
+            self._start_scan_row_recording(0, 1)
+            self.scan_started_recording = True
+            self.log("Initial scan move completed, row 1 recording starting.")
+
+        self._queue_next_scan_row()
+
+    @Slot()
+    def on_scan_row_start_ready(self):
+        if not self.is_scanning:
             return
 
-        self.on_record_clicked()
+        area_index = self.scan_pending_recording_area_index
+        row_number = self.scan_pending_recording_row_number
+        if area_index is None or row_number is None:
+            return
+
+        self._start_scan_row_recording(area_index, row_number)
         self.scan_started_recording = True
-        self.log("Initial scan move completed, recording starting.")
+        self.scan_pending_recording_area_index = None
+        self.scan_pending_recording_row_number = None
+        self.log(f"Row {row_number} recording starting after X homing/reposition.")
+
+    @Slot()
+    def on_scan_row_ready(self):
+        if not self.is_scanning:
+            return
+
+        self.scan_current_row += 1
+        self.scan_progress_signal.emit(self.scan_current_row, self.scan_total_rows)
+        if self.scan_current_row >= self.scan_total_rows:
+            self._queue_next_scan_row()
+            self._finalize_scan(success=True)
+            return
+
+        if self.scan_started_recording and self.video_thread.isRunning():
+            self._stop_recording_session(
+                log_message=f"Row {self.scan_current_row} recording stopped."
+            )
+            self.scan_started_recording = False
+
+        next_area_index = self.scan_area_index
+        next_row_number = self.scan_row_index + 1
+        if self.scan_home_x:
+            self.scan_pending_recording_area_index = next_area_index
+            self.scan_pending_recording_row_number = next_row_number
+        else:
+            self._start_scan_row_recording(next_area_index, next_row_number)
+            self.scan_started_recording = True
+
+        self._queue_next_scan_row()
+
+
+    def _dismiss_scan_status_dialog(self):
+        dialog = getattr(self, 'scan_status_dialog', None)
+        if dialog:
+            dialog.hide()
+            dialog.close()
+
+    def _finalize_scan(self, success: bool):
+        if not self.is_scanning:
+            self._dismiss_scan_status_dialog()
+            return
+
+        self._dismiss_scan_status_dialog()
+
+        if getattr(self, 'scan_started_recording', False) and self.video_thread.isRunning():
+            self.on_record_clicked()
+            self.scan_started_recording = False
+            if success:
+                self.log("Mosaic scan finished, recording stopped.")
+            else:
+                self.log("Scan cancelled by user.")
+        else:
+            self.scan_started_recording = False
+            if success:
+                self.log("Mosaic scan finished.")
+            else:
+                self.log("Scan cancelled by user.")
+
+        self.is_scanning = False
+        self.scan_area_index = 0
+        self.scan_row_index = 0
+        self.scan_recording_session_timestamp = None
+        self.scan_output_dir = None
+        self.scan_area_output_dirs = []
+        self.scan_pending_recording_area_index = None
+        self.scan_pending_recording_row_number = None
+
+        if self.scan_panel:
+            self.scan_panel.scan_finished(success=success)
 
 
     def cancel_current_scan_area(self):
-        if hasattr(self, 'scan_status_dialog'):
-            self.scan_status_dialog.hide()
-
         if self.is_scanning:
-            self.is_scanning = False
             if self.cnc_control_panel:
                 self.cnc_control_panel.clear_queue()
                 #self.cnc_control_panel.send_raw_serial_cmd_signal.emit("!") 
-            
-            if getattr(self, 'scan_started_recording', False) and self.video_thread.isRunning():
-                self.on_record_clicked()
-                self.scan_started_recording = False
-            
-            self.log("Scan cancelled by user.")
-            if self.scan_panel:
-                self.scan_panel.scan_finished(success=False)
+            self._finalize_scan(success=False)
 
 
     def on_scan_finished(self):
-        if hasattr(self, 'scan_status_dialog'):
-            self.scan_status_dialog.hide()
-
         # This is triggered by "[ECHO:scan_finished]" from the CNC
         if self.is_scanning:
-            if getattr(self, 'scan_started_recording', False) and self.video_thread.isRunning():
-                self.on_record_clicked() # Stop recording
-                self.scan_started_recording = False
-                self.log("Mosaic scan finished, recording stopped.")
-            else:
-                self.log("Mosaic scan finished.")
-            self.is_scanning = False
-
-            if self.scan_panel:
-                self.scan_panel.scan_finished(success=True)
+            self._finalize_scan(success=True)
+        else:
+            self._dismiss_scan_status_dialog()
 
     def on_home_and_run_clicked(self):
         if self.cnc_control_panel:

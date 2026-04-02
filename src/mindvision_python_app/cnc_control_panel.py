@@ -6,6 +6,26 @@ import re
 from .serial_worker import SerialWorker, HAS_SERIAL
 
 
+def _normalize_rx_content(content):
+    return re.sub(r"[^\x20-\x7E]+", "", content).strip()
+
+
+def _classify_rx_content(content):
+    normalized = _normalize_rx_content(content)
+    lowered = normalized.lower()
+
+    if normalized.startswith("<") and normalized.endswith(">"):
+        return "status", normalized
+
+    if re.search(r"(^|[^a-z])ok([^a-z]|$)", lowered):
+        return "ok", normalized
+
+    if "error" in lowered:
+        return "error", normalized
+
+    return None, normalized
+
+
 class CNCControlPanel(QtWidgets.QGroupBox): 
     log_signal = Signal(str)
     connect_serial_signal = Signal(str, int)
@@ -17,6 +37,8 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     state_updated_signal = Signal(str)
     position_updated_signal = Signal(float, float, float)
     scan_start_ready_signal = Signal()
+    scan_row_start_ready_signal = Signal()
+    scan_row_ready_signal = Signal()
     scan_finished_signal = Signal()
 
     def __init__(self, parent=None):
@@ -180,14 +202,28 @@ class CNCControlPanel(QtWidgets.QGroupBox):
 
     @Slot(str)
     def on_log_message(self, msg):
-        if msg.startswith("Rx: <") and msg.endswith(">"):
-            self._parse_status(msg[5:-1])
-        elif msg.strip() == "Rx: ok" or msg.strip().startswith("Rx: error"):
+        rx_content = None
+        rx_kind = None
+        normalized_content = None
+
+        if msg.startswith("Rx: "):
+            rx_content = msg[4:]
+            rx_kind, normalized_content = _classify_rx_content(rx_content)
+
+        if rx_kind == "status":
+            self._parse_status(normalized_content[1:-1])
+        elif rx_kind in {"ok", "error"}:
             self.waiting_for_ok = False
 
-            if self.last_sent_command and "SCAN_START" in self.last_sent_command and msg.strip() == "Rx: ok":
+            if self.last_sent_command and "SCAN_START" in self.last_sent_command and rx_kind == "ok":
                 self.scan_start_ready_signal.emit()
                 self.log_signal.emit("Initial scan move complete.")
+                self.last_sent_command = ""
+            elif self.last_sent_command and "SCAN_ROW_START" in self.last_sent_command and rx_kind == "ok":
+                self.scan_row_start_ready_signal.emit()
+                self.last_sent_command = ""
+            elif self.last_sent_command and "SCAN_ROW_END" in self.last_sent_command and rx_kind == "ok":
+                self.scan_row_ready_signal.emit()
                 self.last_sent_command = ""
             elif self.last_sent_command and "SCAN_DONE" in self.last_sent_command:
                 self.scan_finished_signal.emit()

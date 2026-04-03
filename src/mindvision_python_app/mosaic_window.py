@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from PySide6.QtWidgets import QMainWindow, QLabel, QWidget, QVBoxLayout, QScrollBar
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QTransform, QPen
 from PySide6.QtCore import Qt, Signal, Slot, QSize, QRect, QPoint, QPointF, QRectF, QFile
@@ -482,6 +483,7 @@ class MosaicPanel(QWidget):
         
         # Tile initialization
         self.tiles = {} # (row, col) -> QImage
+        self.tile_coverage = {} # (row, col) -> QImage mask of written pixels
         self.cols = (self.mosaic_width_px + self.TILE_SIZE - 1) // self.TILE_SIZE
         self.rows = (self.mosaic_height_px + self.TILE_SIZE - 1) // self.TILE_SIZE
         
@@ -525,7 +527,10 @@ class MosaicPanel(QWidget):
                 h = min(self.TILE_SIZE, self.mosaic_height_px - r * self.TILE_SIZE)
                 img = QImage(w, h, QImage.Format_RGB32)
                 img.fill(Qt.white)
+                coverage = QImage(w, h, QImage.Format_Grayscale8)
+                coverage.fill(0)
                 self.tiles[(r, c)] = img
+                self.tile_coverage[(r, c)] = coverage
                 self.display_widget.update_tile(r, c, img)
         self.display_widget.clicked.connect(self.on_mosaic_clicked)
         self.display_widget.selections_changed.connect(self._on_selections_changed) # Connect to internal slot
@@ -592,11 +597,16 @@ class MosaicPanel(QWidget):
         end_col = min(self.cols - 1, frame_rect.right() // self.TILE_SIZE)
         start_row = max(0, frame_rect.top() // self.TILE_SIZE)
         end_row = min(self.rows - 1, frame_rect.bottom() // self.TILE_SIZE)
+
+        scaled_frame_rgb32 = camera_frame.convertToFormat(QImage.Format_RGB32)
         
         for r in range(start_row, end_row + 1):
             for c in range(start_col, end_col + 1):
                 if (r, c) in self.tiles:
                     tile = self.tiles[(r, c)]
+                    coverage = self.tile_coverage.get((r, c))
+                    if coverage is None:
+                        continue
                     
                     tile_x = c * self.TILE_SIZE
                     tile_y = r * self.TILE_SIZE
@@ -615,20 +625,59 @@ class MosaicPanel(QWidget):
                         src_y = int((intersection.y() - frame_rect.y()) / self.SCALE_FACTOR)
                         src_w = int(intersection.width() / self.SCALE_FACTOR)
                         src_h = int(intersection.height() / self.SCALE_FACTOR)
-                        
-                        painter = QPainter(tile)
-                        # Scale down the camera frame region and flip vertically
-                        scaled_frame = camera_frame.copy(src_x, src_y, src_w, src_h).scaled(
+
+                        # Scale down the camera frame region and flip vertically before blending.
+                        scaled_frame = scaled_frame_rgb32.copy(src_x, src_y, src_w, src_h).scaled(
                             intersection.width(), intersection.height(), 
                             Qt.IgnoreAspectRatio, Qt.SmoothTransformation).mirrored(True, True)
-                        painter.drawImage(dest_x, dest_y, scaled_frame.convertToFormat(QImage.Format_RGB32))
-                        painter.end()
+                        self._blend_into_tile(tile, coverage, dest_x, dest_y, scaled_frame)
                         
                         self.display_widget.update_tile(r, c, tile)
 
         # Update position label
         if self.ruler_calibration_px_per_mm > 0:
             self.position_label.setText(f"CNC: {cnc_x_mm:.1f} mm, {cnc_y_mm:.1f} mm")
+
+    def _blend_into_tile(self, tile: QImage, coverage: QImage, dest_x: int, dest_y: int, source: QImage):
+        source_rgb32 = source.convertToFormat(QImage.Format_RGB32)
+        width = source_rgb32.width()
+        height = source_rgb32.height()
+        if width <= 0 or height <= 0:
+            return
+
+        tile_array = np.frombuffer(
+            tile.bits(),
+            dtype=np.uint8,
+            count=tile.sizeInBytes(),
+        ).reshape((tile.height(), tile.bytesPerLine() // 4, 4))
+
+        source_array = np.frombuffer(
+            source_rgb32.bits(),
+            dtype=np.uint8,
+            count=source_rgb32.sizeInBytes(),
+        ).reshape((height, source_rgb32.bytesPerLine() // 4, 4))
+
+        coverage_array = np.frombuffer(
+            coverage.bits(),
+            dtype=np.uint8,
+            count=coverage.sizeInBytes(),
+        ).reshape((coverage.height(), coverage.bytesPerLine()))
+
+        tile_region = tile_array[dest_y:dest_y + height, dest_x:dest_x + width, :]
+        source_region = source_array[:height, :width, :]
+        coverage_region = coverage_array[dest_y:dest_y + height, dest_x:dest_x + width]
+
+        overlap_mask = coverage_region > 0
+        if np.any(overlap_mask):
+            blended = ((tile_region[..., :3].astype(np.uint16) + source_region[..., :3].astype(np.uint16)) // 2).astype(np.uint8)
+            tile_region[..., :3][overlap_mask] = blended[overlap_mask]
+
+        new_mask = ~overlap_mask
+        if np.any(new_mask):
+            tile_region[..., :3][new_mask] = source_region[..., :3][new_mask]
+
+        tile_region[..., 3] = 255
+        coverage_region[:, :] = 255
 
     @Slot(list)
     def _on_selections_changed(self, qrectf_list: list[QRectF]):

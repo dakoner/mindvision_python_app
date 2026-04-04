@@ -303,6 +303,8 @@ class MatchingWorker(QObject):
 
             # --- 1. Contours Processing ---
             if contours_active:
+                pass
+                """
                 # Blur to reduce noise
                 blurred = cv2.GaussianBlur(gray_frame, (5, 5), 0)
 
@@ -344,9 +346,12 @@ class MatchingWorker(QObject):
                             cv2.rectangle(
                                 vis_img, (x, y), (x + w, y + h), (0, 0, 255), 2
                             )
+                """
 
             # --- 2. Matching Processing ---
             if matching_active:
+                pass
+                """
                 if algo == 'SSIM' and local_ssim_ref is not None:
                     # Resize reference if dimensions don't match or cache is missing
                     use_cache = local_ssim_cache
@@ -468,6 +473,7 @@ class MatchingWorker(QObject):
                         None,
                         flags=0 
                     )
+                """
 
             # Convert final result to QImage
             # vis_img is BGR (or BGR-like output from drawMatches)

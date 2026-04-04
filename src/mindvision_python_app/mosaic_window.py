@@ -598,7 +598,12 @@ class MosaicPanel(QWidget):
         start_row = max(0, frame_rect.top() // self.TILE_SIZE)
         end_row = min(self.rows - 1, frame_rect.bottom() // self.TILE_SIZE)
 
-        scaled_frame_rgb32 = camera_frame.convertToFormat(QImage.Format_RGB32)
+        # OPTIMIZATION: Scale the image DOWN first, then convert format!
+        # This operates on an image 100x smaller (10x in each dimension), saving massive CPU time.
+        scaled_full_frame = camera_frame.scaled(
+            scaled_frame_width, scaled_frame_height, 
+            Qt.IgnoreAspectRatio, Qt.FastTransformation
+        ).convertToFormat(QImage.Format_RGB32)
         
         for r in range(start_row, end_row + 1):
             for c in range(start_col, end_col + 1):
@@ -620,16 +625,17 @@ class MosaicPanel(QWidget):
                         dest_x = intersection.x() - tile_x
                         dest_y = intersection.y() - tile_y
                         
-                        # Source from camera frame (need to scale back to original frame coordinates)
-                        src_x = int((intersection.x() - frame_rect.x()) / self.SCALE_FACTOR)
-                        src_y = int((intersection.y() - frame_rect.y()) / self.SCALE_FACTOR)
-                        src_w = int(intersection.width() / self.SCALE_FACTOR)
-                        src_h = int(intersection.height() / self.SCALE_FACTOR)
-
-                        # Scale down the camera frame region and flip vertically before blending.
-                        scaled_frame = scaled_frame_rgb32.copy(src_x, src_y, src_w, src_h).scaled(
-                            intersection.width(), intersection.height(), 
-                            Qt.IgnoreAspectRatio, Qt.SmoothTransformation).mirrored(True, True)
+                        # Source coordinates directly on the already scaled frame
+                        src_x_scaled = intersection.x() - frame_rect.x()
+                        src_y_scaled = intersection.y() - frame_rect.y()
+                        src_w_scaled = intersection.width()
+                        src_h_scaled = intersection.height()
+                        
+                        # Copy the small chunk and flip it for blending
+                        scaled_frame = scaled_full_frame.copy(
+                            src_x_scaled, src_y_scaled, src_w_scaled, src_h_scaled
+                        ).mirrored(True, True)
+                        
                         self._blend_into_tile(tile, coverage, dest_x, dest_y, scaled_frame)
                         
                         self.display_widget.update_tile(r, c, tile)

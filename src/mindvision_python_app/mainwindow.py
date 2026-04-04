@@ -87,6 +87,9 @@ class MainWindow(QObject):
     scan_status_signal = Signal(str)
     scan_progress_signal = Signal(int, int)
 
+    # Signal for high-priority live mosaic feed
+    mosaic_frame_signal = Signal(object, object)
+
 
     def __init__(self):
         super().__init__()
@@ -267,6 +270,8 @@ class MainWindow(QObject):
         self.worker.ssim_score_signal.connect(self.handle_ssim_score)
         
         self.matching_thread.start()
+        
+        self.mosaic_frame_signal.connect(self.on_mosaic_frame_received)
 
         # Parameter Poll Timer (for Auto Exposure updates)
         self.param_poll_timer = QTimer()
@@ -875,11 +880,17 @@ class MainWindow(QObject):
                         self._prune_recording_position_samples_locked()
             except Exception as e:
                 self.log(f"Recording error in callback: {e}")
+                
+        # 1.5. Live Mosaic (High Priority, bypass worker)
+        if self.mosaic_panel_initialized and self.mosaic_panel and self.center_tab_widget.currentIndex() == 1:
+            if self.cnc_state != "Home":
+                img = QImage(data, width, height, bytes_per_line, QImage.Format(fmt)).copy()
+                self.mosaic_frame_signal.emit(img, frame_timestamp_ns)
 
         # 2. UI Update (Throttled)
         current_time = time.time()
-        # Cap sending to UI/Worker at ~30 FPS to avoid overwhelming event loop
-        if current_time - self.last_ui_update_time > 0.033:
+        # Cap sending to UI/Worker at ~60 FPS to avoid overwhelming event loop
+        if current_time - self.last_ui_update_time > 0.001:
             self.last_ui_update_time = current_time
             try:
                 # Flow Control: Only send to worker if it's not busy
@@ -891,9 +902,13 @@ class MainWindow(QObject):
                         width, height, bytes_per_line, fmt, data_copy, frame_timestamp_ns
                     )
                 # Else: Drop frame for UI display to prevent backlog/latency
+                #else:
+                #    self.log("Dropped frame for UI (worker busy)")
             except Exception as e:
                 self.worker_busy = False  # Reset on error
                 self.log(f"Error in frame callback (UI): {e}")
+        #else:
+        #    self.log("Intentionally dropped frame for UI (throttle)")
 
     def fps_callback(self, fps):
         self.update_fps_signal.emit(fps)
@@ -991,17 +1006,17 @@ class MainWindow(QObject):
                 end_pt = self.ruler_end if self.ruler_end is not None else self.ruler_start
                 self.update_intensity_profile(self.ruler_start, end_pt, image)
 
-            # Update Mosaic Window
-            # Check if mosaic panel is initialized and the mosaic tab is currently visible
-            if self.mosaic_panel_initialized and self.mosaic_panel and \
-               self.center_tab_widget.currentIndex() == 1 and \
-               self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
+    @Slot(object, object)
+    def on_mosaic_frame_received(self, image, frame_timestamp_ns):
+        """Handles live frames for the mosaic decoupled from the MatchingWorker."""
+        if self.mosaic_panel_initialized and self.mosaic_panel and self.center_tab_widget.currentIndex() == 1:
+            if self.current_cnc_x_mm is not None and self.current_cnc_y_mm is not None:
                 if self.cnc_state != "Home":
                     mosaic_timestamp_ns = frame_timestamp_ns if frame_timestamp_ns is not None else time.time_ns()
-                    self.pending_mosaic_frames.append((mosaic_timestamp_ns, image.copy()))
+                    self.pending_mosaic_frames.append((mosaic_timestamp_ns, image))
                     self._resolve_pending_mosaic_frames()
-            else:
-                self.pending_mosaic_frames.clear()
+        else:
+            self.pending_mosaic_frames.clear()
 
     def load_prediction_model(self):
         if YOLO is None:

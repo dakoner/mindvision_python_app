@@ -315,6 +315,7 @@ class MainWindow(QObject):
         self.pending_mosaic_frames = deque()
         self.mosaic_position_retention_ns = 10_000_000_000
         self.mosaic_interpolation_delay_ns = 75_000_000
+        self.active_stage_jog_key = None
         
         self.is_scanning = False
         self.scan_panel = None # Will be created with the mosaic panel
@@ -627,14 +628,14 @@ class MainWindow(QObject):
                     self.ui.video_label.removeEventFilter(self)
                 except RuntimeError:
                     pass
-            elif watched is self.ui and event.type() == QEvent.KeyPress:
+            elif watched is self.ui and event.type() in (QEvent.KeyPress, QEvent.KeyRelease):
                 if self.video_label and self.video_label.underMouse():
                     if self._handle_stage_arrow_key(event):
                         return True
             elif watched == self.ui.video_label:
                 if event.type() == QEvent.Resize:
                     self.refresh_video_label()
-                elif event.type() == QEvent.KeyPress:
+                elif event.type() in (QEvent.KeyPress, QEvent.KeyRelease):
                     if self._handle_stage_arrow_key(event):
                         return True
                 
@@ -676,21 +677,51 @@ class MainWindow(QObject):
         if not self.cnc_control_panel:
             return False
 
-        key_to_move = {
-            Qt.Key_Left: self.cnc_control_panel.move_left,
-            Qt.Key_Right: self.cnc_control_panel.move_right,
-            Qt.Key_Up: self.cnc_control_panel.move_forward,
-            Qt.Key_Down: self.cnc_control_panel.move_back,
-            Qt.Key_PageUp: self.cnc_control_panel.move_up,
-            Qt.Key_PageDown: self.cnc_control_panel.move_down,
+        key_to_jog = {
+            Qt.Key_Left: ("X", -max(self.stage_settings.get("stage_width_mm", 100.0), 1.0)),
+            Qt.Key_Right: ("X", max(self.stage_settings.get("stage_width_mm", 100.0), 1.0)),
+            Qt.Key_Up: ("Y", max(self.stage_settings.get("stage_height_mm", 100.0), 1.0)),
+            Qt.Key_Down: ("Y", -max(self.stage_settings.get("stage_height_mm", 100.0), 1.0)),
+            Qt.Key_PageUp: ("Z", max(getattr(self.cnc_control_panel, "z_step_size", 0.01) * 100.0, 1.0)),
+            Qt.Key_PageDown: ("Z", -max(getattr(self.cnc_control_panel, "z_step_size", 0.01) * 100.0, 1.0)),
         }
 
-        move_action = key_to_move.get(event.key())
-        if move_action is None:
+        jog_spec = key_to_jog.get(event.key())
+        if jog_spec is None:
             return False
 
-        move_action()
-        return True
+        if event.type() == QEvent.KeyPress:
+            if event.isAutoRepeat():
+                return True
+
+            if self.active_stage_jog_key == event.key():
+                return True
+
+            if self.active_stage_jog_key is not None:
+                self.cnc_control_panel.cancel_jog()
+
+            axis, distance = jog_spec
+            feedrate = (
+                self.cnc_control_panel.z_feedrate
+                if axis == "Z"
+                else self.cnc_control_panel.xy_feedrate
+            )
+            self.cnc_control_panel.send_serial_cmd_signal.emit(
+                f"$J=G91 {axis}{distance:.3f} F{feedrate}"
+            )
+            self.active_stage_jog_key = event.key()
+            return True
+
+        if event.type() == QEvent.KeyRelease:
+            if event.isAutoRepeat():
+                return True
+
+            if self.active_stage_jog_key == event.key():
+                self.cnc_control_panel.cancel_jog()
+                self.active_stage_jog_key = None
+            return True
+
+        return False
 
     def refresh_video_label(self):
         if self.current_pixmap and not self.current_pixmap.isNull():
@@ -2181,7 +2212,7 @@ class MainWindow(QObject):
         if self.cnc_control_panel:
             if str(getattr(self, "cnc_state", "")).lower().startswith("jog"):
                 self.cnc_control_panel.cancel_jog()
-            feedrate = self.cnc_control_panel.feedrate
+            feedrate = self.cnc_control_panel.xy_feedrate
             cmd = f"$J=G90 X{x:.3f} Y{y:.3f} F{feedrate}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
             self.log(f"Mosaic Click: Jogging to X={x:.3f}, Y={y:.3f}")
@@ -2294,7 +2325,7 @@ class MainWindow(QObject):
 
         first_y, first_start_x, _ = self._get_scan_row_targets(self.area_params[0], 0)
 
-        feedrate = self.cnc_control_panel.feedrate
+        feedrate = self.cnc_control_panel.xy_feedrate
         self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
         self.cnc_control_panel.send_serial_cmd_signal.emit(f"F{feedrate}")
         if self.scan_home_y:
@@ -2496,7 +2527,7 @@ class MainWindow(QObject):
 
     def on_home_and_run_clicked(self):
         if self.cnc_control_panel:
-            feedrate = self.cnc_control_panel.feedrate
+            feedrate = self.cnc_control_panel.xy_feedrate
             self.cnc_control_panel.send_serial_cmd_signal.emit("$H")
             self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
             self.cnc_control_panel.send_serial_cmd_signal.emit(f"G1 X0 Y0 F{feedrate}")

@@ -79,11 +79,13 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         self.wpos_z_label = self.findChild(QtWidgets.QLabel, "wpos_z_label")
         self.cnc_command_input = self.findChild(QtWidgets.QLineEdit, "cnc_command_input")
         self.send_command_button = self.findChild(QtWidgets.QPushButton, "send_command_button")
-        self.feedrate_input = self.findChild(QtWidgets.QSpinBox, "feedrate_input")
+        self.xy_feedrate_input = self.findChild(QtWidgets.QSpinBox, "xy_feedrate_input")
+        self.z_feedrate_input = self.findChild(QtWidgets.QSpinBox, "z_feedrate_input")
 
         self.step_size = 0.1
         self.z_step_size = 0.01
-        self.feedrate = self.feedrate_input.value()
+        self.xy_feedrate = self.xy_feedrate_input.value()
+        self.z_feedrate = self.z_feedrate_input.value()
         self.step_input.setValue(self.step_size)
         self.z_step_input.setValue(self.z_step_size)
 
@@ -125,7 +127,8 @@ class CNCControlPanel(QtWidgets.QGroupBox):
         self.z_step_input.valueChanged.connect(self.on_z_step_size_changed)
         self.send_command_button.clicked.connect(self.send_console_command)
         self.cnc_command_input.returnPressed.connect(self.send_console_command)
-        self.feedrate_input.valueChanged.connect(self.on_feedrate_changed)
+        self.xy_feedrate_input.valueChanged.connect(self.on_xy_feedrate_changed)
+        self.z_feedrate_input.valueChanged.connect(self.on_z_feedrate_changed)
 
         self.refresh_serial_ports()
         self.on_serial_status_changed(False)  # Initial state
@@ -185,7 +188,8 @@ class CNCControlPanel(QtWidgets.QGroupBox):
             self.reboot_button,
             self.send_command_button,
             self.cnc_command_input,
-            self.feedrate_input,
+            self.xy_feedrate_input,
+            self.z_feedrate_input,
         ]:
             button.setEnabled(connected)
             
@@ -271,26 +275,29 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     def on_z_step_size_changed(self, value):
         self.z_step_size = value
 
-    def on_feedrate_changed(self, value):
-        self.feedrate = value
+    def on_xy_feedrate_changed(self, value):
+        self.xy_feedrate = value
+
+    def on_z_feedrate_changed(self, value):
+        self.z_feedrate = value
 
     def move_up(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F{self.feedrate}")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z{self.z_step_size} F{self.z_feedrate}")
 
     def move_down(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F{self.feedrate}")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Z-{self.z_step_size} F{self.z_feedrate}")
 
     def move_left(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F{self.feedrate}")
+        self.send_serial_cmd_signal.emit(f"$J=G91 X-{self.step_size} F{self.xy_feedrate}")
 
     def move_right(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 X{self.step_size} F{self.feedrate}")
+        self.send_serial_cmd_signal.emit(f"$J=G91 X{self.step_size} F{self.xy_feedrate}")
 
     def move_forward(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Y{self.step_size} F{self.feedrate}")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Y{self.step_size} F{self.xy_feedrate}")
 
     def move_back(self):
-        self.send_serial_cmd_signal.emit(f"$J=G91 Y-{self.step_size} F{self.feedrate}")
+        self.send_serial_cmd_signal.emit(f"$J=G91 Y-{self.step_size} F{self.xy_feedrate}")
 
     def home(self):
         self.send_serial_cmd_signal.emit(f"$H")

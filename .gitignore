@@ -7,3 +7,4 @@ src/mindvision_python_app.egg-info/
 src/mindvision_python_app/videos
 src/mindvision_python_app/snapshots
 native/mindvision_qobject/release
+model/

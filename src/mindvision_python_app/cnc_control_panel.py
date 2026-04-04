@@ -295,6 +295,10 @@ class CNCControlPanel(QtWidgets.QGroupBox):
     def home(self):
         self.send_serial_cmd_signal.emit(f"$H")
 
+    def cancel_jog(self):
+        self.command_queue.clear()
+        self.send_raw_serial_cmd_signal.emit("\x85")
+
     def reset_cnc(self):
         self.send_raw_serial_cmd_signal.emit("\x18")
 

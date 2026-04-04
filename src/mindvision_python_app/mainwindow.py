@@ -2179,11 +2179,12 @@ class MainWindow(QObject):
     @Slot(float, float)
     def on_mosaic_move_requested(self, x, y):
         if self.cnc_control_panel:
-            # Send G-code to move to absolute position (G90) using Feed Move (10)
+            if str(getattr(self, "cnc_state", "")).lower().startswith("jog"):
+                self.cnc_control_panel.cancel_jog()
             feedrate = self.cnc_control_panel.feedrate
-            cmd = f"G90 G1 X{x:.3f} Y{y:.3f} F{feedrate}"
+            cmd = f"$J=G90 X{x:.3f} Y{y:.3f} F{feedrate}"
             self.cnc_control_panel.send_serial_cmd_signal.emit(cmd)
-            self.log(f"Mosaic Click: Moving to X={x:.3f}, Y={y:.3f}")
+            self.log(f"Mosaic Click: Jogging to X={x:.3f}, Y={y:.3f}")
 
     @Slot(float, float, float, float)
     def on_mosaic_scan_requested(self, x_min, y_min, x_max, y_max):

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QRadioButton,
     QButtonGroup,
+    QSpinBox,
 )
 from PySide6.QtCore import Signal, Slot
 
@@ -18,8 +19,8 @@ class ScanConfigPanel(QWidget):
     """
     A dialog to configure and monitor a mosaic scan.
     """
-    # Signal arguments: areas_list, home_x, home_y, is_serpentine
-    start_scan_signal = Signal(list, bool, bool, bool)
+    # Signal arguments: areas_list, home_x, home_y, is_serpentine, scan_feedrate
+    start_scan_signal = Signal(list, bool, bool, bool, int)
     cancel_scan_signal = Signal()
 
     def __init__(self, parent=None):
@@ -54,6 +55,15 @@ class ScanConfigPanel(QWidget):
         self.home_x_checkbox.setChecked(True)
         layout.addWidget(self.home_x_checkbox) # type: ignore
         layout.addWidget(self.home_y_checkbox) # type: ignore
+
+        scan_feedrate_layout = QHBoxLayout()
+        self.scan_feedrate_label = QLabel("Scan Feedrate:")
+        self.scan_feedrate_input = QSpinBox()
+        self.scan_feedrate_input.setRange(1, 1000)
+        self.scan_feedrate_input.setValue(100)
+        scan_feedrate_layout.addWidget(self.scan_feedrate_label)
+        scan_feedrate_layout.addWidget(self.scan_feedrate_input)
+        layout.addLayout(scan_feedrate_layout) # type: ignore
 
         # Status Display
         self.status_label = QLabel("Status: Idle")
@@ -92,15 +102,17 @@ class ScanConfigPanel(QWidget):
         self.home_y_checkbox.setEnabled(False)
         self.radio_left_right.setEnabled(False)
         self.radio_serpentine.setEnabled(False)
+        self.scan_feedrate_input.setEnabled(False)
         self.cancel_button.setEnabled(True)
 
         home_x = self.home_x_checkbox.isChecked()
         home_y = self.home_y_checkbox.isChecked()
         is_serpentine = self.radio_serpentine.isChecked()
+        scan_feedrate = self.scan_feedrate_input.value()
 
         self.start_scan_signal.emit(
             self.scan_areas,
-            home_x, home_y, is_serpentine
+            home_x, home_y, is_serpentine, scan_feedrate
         )
         self.update_status("Scan started...")
 
@@ -126,6 +138,7 @@ class ScanConfigPanel(QWidget):
         self.home_y_checkbox.setEnabled(True)
         self.radio_left_right.setEnabled(True)
         self.radio_serpentine.setEnabled(True)
+        self.scan_feedrate_input.setEnabled(True)
         self.set_scanning_active(False) # Update buttons based on active state
         
         if success:

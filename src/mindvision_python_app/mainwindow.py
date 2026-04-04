@@ -2240,8 +2240,8 @@ class MainWindow(QObject):
             self.log("Scan area selected. Configure and start scan in the 'Stage Control' panel.")
 
 
-    @Slot(list, bool, bool, bool)
-    def start_scan(self, areas, home_x, home_y, is_serpentine):
+    @Slot(list, bool, bool, bool, int)
+    def start_scan(self, areas, home_x, home_y, is_serpentine, scan_feedrate):
         if not self.cnc_control_panel:
             return
 
@@ -2252,6 +2252,7 @@ class MainWindow(QObject):
         self.scan_areas = areas
         self.scan_home_x, self.scan_home_y = home_x, home_y
         self.scan_is_serpentine = is_serpentine
+        self.scan_feedrate = scan_feedrate
         self.scan_started_recording = False
         self.scan_recording_session_timestamp = int(time.time())
         self.scan_output_dir = None
@@ -2325,7 +2326,7 @@ class MainWindow(QObject):
 
         first_y, first_start_x, _ = self._get_scan_row_targets(self.area_params[0], 0)
 
-        feedrate = self.cnc_control_panel.xy_feedrate
+        feedrate = self.scan_feedrate
         self.cnc_control_panel.send_serial_cmd_signal.emit("G90")
         self.cnc_control_panel.send_serial_cmd_signal.emit(f"F{feedrate}")
         if self.scan_home_y:
@@ -2335,7 +2336,9 @@ class MainWindow(QObject):
         self.cnc_control_panel.send_serial_cmd_signal.emit(f"G0 X{first_start_x:.3f} Y{first_y:.3f}")
         self.cnc_control_panel.send_serial_cmd_signal.emit("G4 P0.1 ; SCAN_START")
         
-        self.log(f"Starting Mosaic Scan: {len(areas)} areas, {self.scan_total_rows} total rows.")
+        self.log(
+            f"Starting Mosaic Scan: {len(areas)} areas, {self.scan_total_rows} total rows at F{feedrate}."
+        )
         self.scan_status_signal.emit(f"Starting scan of {self.scan_total_rows} rows.")
         self.scan_progress_signal.emit(0, self.scan_total_rows)
 

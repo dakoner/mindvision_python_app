@@ -6,7 +6,7 @@ QT += core serialport
 TARGET = _serial_qobject_py
 DESTDIR = release
 
-PYBIND11_CFLAGS = $$system(python3 -m pybind11 --includes)
+PYBIND11_CFLAGS = $$system(uv run python3 -m pybind11 --includes)
 QMAKE_CXXFLAGS += $$PYBIND11_CFLAGS
 
 # Set correct extension for Python modules

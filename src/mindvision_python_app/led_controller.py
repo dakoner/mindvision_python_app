@@ -109,9 +109,6 @@ class LEDController(QObject):
             self.serial_poll_timer.stop()
         if hasattr(self, "status_poll_timer"):
             self.status_poll_timer.stop()
-        if self.serial_thread.isRunning():
-            self.serial_thread.quit()
-            self.serial_thread.wait()
 
     @Slot(str)
     def on_serial_log(self, message):

@@ -1,15 +1,15 @@
 #include "VideoThread.h"
 #include "MindVisionCamera.h"
 #include <QDebug>
-#include <QFile>
+#include <QProcess>
 
 namespace {
 
-bool writeAll(QFile &file, const char *data, qint64 bytesToWrite)
+bool writeAll(QIODevice &device, const char *data, qint64 bytesToWrite)
 {
     qint64 totalWritten = 0;
     while (totalWritten < bytesToWrite) {
-        const qint64 written = file.write(data + totalWritten, bytesToWrite - totalWritten);
+        const qint64 written = device.write(data + totalWritten, bytesToWrite - totalWritten);
         if (written <= 0) {
             return false;
         }
@@ -106,7 +106,7 @@ void VideoThread::clearFrameSource()
 
 void VideoThread::run()
 {
-    QFile outputFile;
+    QProcess ffmpeg;
     
     m_mutex.lock();
     int width = m_width;
@@ -115,12 +115,25 @@ void VideoThread::run()
     QString filename = m_filename;
     m_mutex.unlock();
 
-    qDebug() << "VideoThread: Writing rawvideo rgb24 to" << filename
+    qDebug() << "VideoThread: Starting ffmpeg to write mkv to" << filename
              << "size" << width << "x" << height << "fps" << fps;
 
-    outputFile.setFileName(filename);
-    if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qDebug() << "VideoThread: Failed to open output file:" << outputFile.errorString();
+    QStringList args;
+    args << "-y"
+         << "-f" << "rawvideo"
+         << "-vcodec" << "rawvideo"
+         << "-s" << QString("%1x%2").arg(width).arg(height)
+         << "-pix_fmt" << "rgb24"
+         << "-r" << QString::number(fps)
+         << "-i" << "-"
+         << "-c:v" << "libx264"
+         << "-preset" << "ultrafast"
+         << "-crf" << "0"
+         << filename;
+
+    ffmpeg.start("ffmpeg", args);
+    if (!ffmpeg.waitForStarted()) {
+        qDebug() << "VideoThread: Failed to start ffmpeg process";
         return;
     }
 
@@ -169,11 +182,14 @@ void VideoThread::run()
             const qint64 rowBytes = static_cast<qint64>(convertedImg.width()) * 3;
             bool writeOk = true;
             for (int y = 0; y < convertedImg.height(); ++y) {
-                if (!writeAll(outputFile, reinterpret_cast<const char *>(convertedImg.constScanLine(y)), rowBytes)) {
-                    qDebug() << "VideoThread: Failed to write raw frame:" << outputFile.errorString();
+                if (!writeAll(ffmpeg, reinterpret_cast<const char *>(convertedImg.constScanLine(y)), rowBytes)) {
+                    qDebug() << "VideoThread: Failed to write raw frame:" << ffmpeg.errorString();
                     writeOk = false;
                     break;
                 }
+            }
+            if (writeOk) {
+                ffmpeg.waitForBytesWritten(-1);
             }
 
             if (!writeOk) {
@@ -196,7 +212,8 @@ void VideoThread::run()
         }
     }
 
-    outputFile.close();
+    ffmpeg.closeWriteChannel();
+    ffmpeg.waitForFinished(-1);
     
-    qDebug() << "VideoThread: Finished.";
+    qDebug() << "VideoThread: Finished ffmpeg with exit code" << ffmpeg.exitCode();
 }

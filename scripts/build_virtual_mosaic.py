@@ -7,6 +7,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
 import numpy as np
 import tifffile
 
@@ -23,7 +24,7 @@ class FramePlacement:
 
 @dataclass(frozen=True)
 class RowRecording:
-    rgb_path: Path
+    mkv_path: Path
     csv_path: Path
     output_tiff_path: Path
     output_manifest_path: Path
@@ -78,6 +79,11 @@ def parse_args() -> argparse.Namespace:
         "--skip-row-mosaics",
         action="store_true",
         help="Skip building per-row TIFF virtual mosaics.",
+    )
+    parser.add_argument(
+        "--optimize-x",
+        action="store_true",
+        help="Optimize frame X placements using image similarity (NCC).",
     )
     return parser.parse_args()
 
@@ -153,9 +159,9 @@ def discover_row_recordings(scan_metadata: dict, metadata_path: Path) -> list[Ro
         csv_paths = sorted(area_output_dir.glob("*_meta.csv"))
         for csv_path in csv_paths:
             stem = csv_path.name.removesuffix("_meta.csv")
-            rgb_path = area_output_dir / f"{stem}.rgb"
-            if not rgb_path.exists():
-                print(f"warning: missing RGB file for {csv_path.name}, skipping")
+            mkv_path = area_output_dir / f"{stem}.mkv"
+            if not mkv_path.exists():
+                print(f"warning: missing MKV file for {csv_path.name}, skipping")
                 continue
 
             row_suffix = stem.rsplit("_row_", 1)
@@ -168,7 +174,7 @@ def discover_row_recordings(scan_metadata: dict, metadata_path: Path) -> list[Ro
             output_manifest_path = area_output_dir / f"{stem}_virtual_mosaic.json"
             row_recordings.append(
                 RowRecording(
-                    rgb_path=rgb_path,
+                    mkv_path=mkv_path,
                     csv_path=csv_path,
                     output_tiff_path=output_tiff_path,
                     output_manifest_path=output_manifest_path,
@@ -180,31 +186,6 @@ def discover_row_recordings(scan_metadata: dict, metadata_path: Path) -> list[Ro
 
     return row_recordings
 
-
-def inspect_rgb(rgb_path: Path) -> tuple[int, int]:
-    file_size = rgb_path.stat().st_size
-    # We don't know the dimensions, so we can't easily infer them from file size alone
-    # without knowing the frame size. But the original code had a dummy call.
-    # Let's assume we can get it from some other way or it's provided.
-    # Actually, let's look at how it was used.
-    # It was used in build_row_virtual_mosaic.
-    # The original code was: frame_width_px, frame_height_px = inspect_rgb(rgb_path, 0, 0)
-    # That's weird. Let's try to implement it properly or find another way.
-    # For now, let's just try to read the first frame if possible, or use a placeholder.
-    # Actually, let's try to read the shape using tifffile if it's a tiff, but it's an .rgb file.
-    # If it's raw RGB, we might need the dimensions. 
-    # Let's assume for a moment we can get it from the metadata or something.
-    # Wait, the original code's inspect_rgb was:
-    # def inspect_rgb(rgb_path: Path, frame_width_px: int, frame_height_px: int) -> tuple[int, int]:
-    #    frame_bytes = frame_width_px * frame_height_px * 3
-    #    file_size = rgb_path.stat().st_size
-    #    if frame_bytes <= 0:
-    #        raise SystemExit(f"Invalid frame dimensions for RGB input: {frame_width_px}x{frame_height_px}")
-    #    if file_size % frame_bytes != 0:
-    #        ra...
-    # It seems it was meant to VALIDATE.
-    # Let's look at the original file again.
-    return 0, 0 # Placeholder
 
 def create_mosaic_file(output_path: Path, height_px: int, width_px: int) -> np.ndarray:
     mosaic = np.zeros((height_px, width_px, 3), dtype=np.uint8)
@@ -243,12 +224,12 @@ def composite_nonzero_rgb(
 
 
 def write_manifest(
-    output_path: Path,
+    manifest_path: Path,
     *,
     scan_metadata_path: Path,
     area_index: int,
     row_index: int,
-    rgb_path: Path,
+    mkv_path: Path,
     csv_path: Path,
     output_path: Path,
     frame_width_px: int,
@@ -266,7 +247,7 @@ def write_manifest(
         "scan_metadata_path": str(scan_metadata_path),
         "area_index": area_index,
         "row_index": row_index,
-        "rgb_path": str(rgb_path),
+        "mkv_path": str(mkv_path),
         "csv_path": str(csv_path),
         "output_path": str(output_path),
         "frame_width_px": frame_width_px,
@@ -282,7 +263,7 @@ def write_manifest(
         "frame_rows": frame_rows,
         "frames_written": frames_written,
     }
-    output_path.write_text(json.dumps(manifest, indent=4))
+    manifest_path.write_text(json.dumps(manifest, indent=4))
 
 
 def write_area_manifest(
@@ -316,12 +297,67 @@ def write_area_manifest(
     output_path.write_text(json.dumps(manifest, indent=4))
 
 
+def optimize_placement(frame1: np.ndarray, frame2: np.ndarray, dx_est: float, dy_est: float) -> tuple[float, float]:
+    gray1 = cv2.cvtColor(frame1, cv2.COLOR_RGB2GRAY)
+    gray2 = cv2.cvtColor(frame2, cv2.COLOR_RGB2GRAY)
+    H, W = gray1.shape
+    
+    shift_x = int(round(dx_est))
+    shift_y = int(round(dy_est))
+    
+    x_min = max(0, shift_x)
+    x_max = min(W, W + shift_x)
+    y_min = max(0, shift_y)
+    y_max = min(H, H + shift_y)
+    
+    if x_max - x_min < 50 or y_max - y_min < 50:
+        return float(dx_est), float(dy_est)
+        
+    tw, th = int((x_max - x_min)*0.5), int((y_max - y_min)*0.5)
+    cx, cy = (x_min + x_max)//2, (y_min + y_max)//2
+    
+    tx0 = cx - tw//2
+    ty0 = cy - th//2
+    tx1 = tx0 + tw
+    ty1 = ty0 + th
+    
+    template = gray1[ty0:ty1, tx0:tx1]
+    
+    search_cx = cx - shift_x
+    search_cy = cy - shift_y
+    
+    sw, sh = tw + 60, th + 60
+    sx0 = max(0, search_cx - sw//2)
+    sy0 = max(0, search_cy - sh//2)
+    sx1 = min(W, search_cx + sw//2)
+    sy1 = min(H, search_cy + sh//2)
+    
+    search_region = gray2[sy0:sy1, sx0:sx1]
+    if search_region.shape[0] < template.shape[0] or search_region.shape[1] < template.shape[1]:
+        return float(dx_est), float(dy_est)
+        
+    res = cv2.matchTemplate(search_region, template, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+    
+    if max_val < 0.3:
+        return float(dx_est), float(dy_est)
+        
+    match_x2 = sx0 + max_loc[0]
+    match_y2 = sy0 + max_loc[1]
+    
+    opt_dx = tx0 - match_x2
+    opt_dy = ty0 - match_y2
+    
+    return float(opt_dx), float(opt_dy)
+
+
 def build_row_virtual_mosaic(
     row_recording: RowRecording,
     *,
     scan_metadata_path: Path,
     scan_metadata: dict,
     max_frames: int | None,
+    optimize_x: bool = False,
 ) -> None:
     pixel_scale_px_per_mm = scan_metadata.get("pixel_scale_px_per_mm", 1.0)
     placements = load_row_metadata(
@@ -330,134 +366,69 @@ def build_row_virtual_mosaic(
         pixel_scale_px_per_mm=pixel_scale_px_per_mm,
     )
 
-    rgb_path = row_recording.rgb_path
-    
-    # Since we don't know the frame dimensions, let's try to infer them from the CSV if possible, 
-    # or just assume they are consistent. 
-    # The original code seemed to have some way of knowing.
-    # Let's try to find it in the placements.
-    if not placements:
+    mkv_path = row_recording.mkv_path
+
+    if not placements:        return
+
+    cap = cv2.VideoCapture(str(mkv_path))
+    if not cap.isOpened():
+        print(f"warning: failed to open video file {mkv_path}")
         return
 
-    # We'll use the first placement's pixel coordinates to estimate dimensions if needed, 
-    # but that's not reliable.
-    # Let's assume we can't do much without better info, and just use a placeholder for now.
-    # Actually, let's try to read the RGB file as a numpy array and see its shape.
-    # Since it's a raw RGB file, we need dimensions.
-    # Let's check if we can get dimensions from the CSV. 
-    # The CSV has x and y in mm.
-    
-    # Let's try a different approach: read the first frame from the RGB file.
-    # But we don't know the frame size.
-    
-    # Wait, I'll just look at the original code's inspect_rgb again.
-    # It took frame_width_px and frame_height_px as arguments!
-    # That means the caller was supposed to know them.
-    # In the original code: frame_width_px, frame_height_px = inspect_rgb(rgb_path, 0, 0)
-    # That was definitely a placeholder or a bug in the original.
-    # Let's try to fix it by assuming the dimensions are somehow available.
-    
-    # For now, let's just make it work by assuming some dimensions or skipping.
-    # Actually, let's just use the first placement to get some idea? No.
-    
-    # Let's just use a dummy for now to avoid breaking things.
-    frame_width_px, frame_height_px = 1920, 1080 # Placeholder
-    
-    # Let's check the file size and see if it's a multiple of something.
-    file_size = rgb_path.stat().st_size
-    # If we assume 1920x1080x3
-    if file_size % (frame_width_px * frame_height_px * 3) != 0:
-         # Try to find a better dimension? 
-         # This is getting complicated. Let's just use the original logic if I can find it.
-         pass
+    frame_width_px = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height_px = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    frame_rgb = np.fromfile(rgb_path, dtype=np.uint8).reshape(-1, 3)
-    # This still needs dimensions.
-    # Let's just use a very simple approach: read the whole thing and reshape.
-    # But we need the shape.
-    
-    # Let's assume for now the dimensions are 1920x1080.
-    frame_rgb = np.fromfile(rgb_path, dtype=np.uint8).reshape(-1, 3)
-    # This will fail if the reshape is wrong.
-    
-    # Let's try to get the shape from the file size and some common dimensions.
-    # This is not great. Let's just use the original code's structure.
-    
-    # I'll just try to use the original code's structure and fix the broken parts.
-    # The original code had:
-    # def build_row_virtual_mosaic(
-    #    row_recording: RowRecording,
-    #    *,
-    #    scan_metadata_path: Path,
-    #    scan_metadata: dict,
-    #    max_frames: int | None,
-    # ) -> None:
-    # ...
-    # frame_width_px, frame_height_px = inspect_rgb(rgb_path, 0, 0)
-    # ...
-    # frames_written += 1
-    # ...
-    # write_manifest(...)
-    
-    # I will try to implement a more robust version.
-    
-    # Let's assume we can get dimensions from the file size if we know one dimension.
-    # Or let's just use the first placement's info if available.
-    
-    # Actually, let's just assume the dimensions are provided by the user or something.
-    # I'll just use 1920, 1080 for now and see if it works.
-    
-    # Wait, I'll try to read the file and see if I can infer the dimensions.
-    # If it's a sequence of frames, then file_size = N * W * H * 3.
-    # We have N = len(placement) if all frames are present.
-    # So W * H = file_size / (N * 3).
-    
+    frames = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # OpenCV reads in BGR, convert to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame_rgb)
+    cap.release()
+
     N = len(placements)
-    if N > 0:
-        total_pixels = file_size // 3
-        pixels_per_frame = total_pixels // N
-        # Now we need to find W, H such that W * H = pixels_per_frame.
-        # This is still ambiguous.
-        # Let's assume W = 1920.
-        W = 1920
-        if pixels_per_frame % W == 0:
-            H = pixels_per_frame // W
-        else:
-            # Try another common width
-            W = 1280
-            if pixels_per_frame % W == 0:
-                H = pixels_per_frame // W
-            else:
-                # Fallback
-                H = 1
-                W = pixels_per_frame
-        frame_width_px, frame_height_px = W, H
-    else:
-        return
+    if len(frames) < N:
+        print(f"warning: video {mkv_path.name} has fewer frames ({len(frames)}) than placements ({N}).")
+        N = min(N, len(frames))
+        placements = placements[:N]
 
-    frame_rgb = np.fromfile(rgb_path, dtype=np.uint8).reshape(-1, 3)
-    # Now we have the whole thing as a list of frames.
-    # We need to reshape it to (N, H, W, 3).
-    frame_rgb = frame_rgb.reshape(N, frame_height_px, frame_width_px, 3)
+    if optimize_x and len(placements) > 1:
+        optimized_placements = [placements[0]]
+        for i in range(1, len(placements)):
+            prev_p = optimized_placements[-1]
+            curr_p = placements[i]
+            
+            dx_est = curr_p.pixel_x - placements[i-1].pixel_x
+            dy_est = curr_p.pixel_y - placements[i-1].pixel_y
+            
+            opt_dx, opt_dy = optimize_placement(frames[i-1], frames[i], dx_est, dy_est)
+            
+            new_p = FramePlacement(
+                frame_index=curr_p.frame_index,
+                x_mm=curr_p.x_mm,
+                y_mm=curr_p.y_mm,
+                z_mm=curr_p.z_mm,
+                pixel_x=prev_p.pixel_x + opt_dx,
+                pixel_y=prev_p.pixel_y + opt_dy,
+            )
+            optimized_placements.append(new_p)
+        placements = optimized_placements
 
     min_x_world_px = min(p.pixel_x for p in placements)
     max_x_world_px = max(p.pixel_x for p in placements)
     min_y_world_px = min(p.pixel_y for p in placements)
     max_y_world_px = max(p.pixel_y for p in placements)
     
-    canvas_width_px = int(max_x_world_px - min_x_world_px)
-    canvas_height_px = int(max_y_world_px - min_y_world_px)
+    canvas_width_px = int(max_x_world_px - min_x_world_px) + frame_width_px
+    canvas_height_px = int(max_y_world_px - min_y_world_px) + frame_height_px
     
-    # We need to create a canvas that covers all frames.
-    # However, the original code used the bounds from the placements.
-    # Let's use the bounds from the placements.
-    
-    mosaic = create_mosaic_file(row_recording.output_tiff_path, canvas_height_px, canvas_width_px)
-    mosaic[:] = 0
+    mosaic = np.zeros((canvas_height_px, canvas_width_px, 3), dtype=np.uint8)
 
     frames_written = 0
     for i, placement in enumerate(placements):
-        frame_rgb = frame_rgb[i]
+        frame_rgb = frames[i]
         
         x0 = int(placement.pixel_x - min_x_world_px)
         y0 = int(max_y_world_px - placement.pixel_y)
@@ -465,7 +436,6 @@ def build_row_virtual_mosaic(
         composite_nonzero_rgb(
             mosaic,
             frame_rgb,
-            *,
             min_x_world_px=min_x_world_px,
             max_y_world_px=max_y_world_px,
             x0=x0,
@@ -475,14 +445,14 @@ def build_row_virtual_mosaic(
         )
         frames_written += 1
 
-    mosaic.flush()
+    tifffile.imwrite(str(row_recording.output_tiff_path), mosaic)
 
     write_manifest(
         row_recording.output_manifest_path,
         scan_metadata_path=scan_metadata_path,
         area_index=row_recording.area_index,
         row_index=row_recording.row_index,
-        rgb_path=row_recording.rgb_path,
+        mkv_path=row_recording.mkv_path,
         csv_path=row_recording.csv_path,
         output_path=row_recording.output_tiff_path,
         frame_width_px=frame_width_px,
@@ -569,14 +539,13 @@ def build_area_virtual_mosaic(
         composite_nonzero_rgb(mosaic, row_tiff, x0=x0, y0=y0, 
                                min_x_world_px=min_x_world_px, 
                                max_y_world_px=max_y_world_px,
-                               mosaic_width=canvas_width_px, 
+                               mosaic_width=canvas_width_px,
                                mosaic_height=canvas_height_px)
         row_outputs.append(str(row_recording.output_tiff_path))
 
-    mosaic.flush()
+    tifffile.imwrite(str(output_tiff_path), mosaic)
 
-    write_area_manifest(
-        output_manifest_path,
+    write_area_manifest(        output_manifest_path,
         scan_metadata_path=scan_metadata_path,
         area_index=area_input.area_index,
         output_path_tiff=output_tiff_path,
@@ -594,7 +563,8 @@ def build_area_virtual_mosaic(
 def process_scan_run(
     scan_metadata_path: Path, 
     max_frames: int | None,
-    skip_row_mosaics: bool
+    skip_row_mosaics: bool,
+    optimize_x: bool
 ) -> None:
     scan_metadata = load_scan_metadata(scan_metadata_path)
     row_recordings = discover_row_recordings(scan_metadata, scan_metadata_path)
@@ -612,6 +582,7 @@ def process_scan_run(
                 scan_metadata_path=scan_metadata_path,
                 scan_metadata=scan_metadata,
                 max_frames=max_frames,
+                optimize_x=optimize_x,
             )
     else:
         print("  skipping row mosaic building")
@@ -630,7 +601,8 @@ def main() -> None:
         process_scan_run(
             scan_metadata_path, 
             args.max_frames,
-            args.skip_row_mosaics
+            args.skip_row_mosaics,
+            args.optimize_x,
         )
 
 

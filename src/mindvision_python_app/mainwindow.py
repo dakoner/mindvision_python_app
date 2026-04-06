@@ -1236,7 +1236,7 @@ class MainWindow(QObject):
         if output_stem is None:
             timestamp = int(time.time())
             output_stem = os.path.join(video_dir, f"recording_{timestamp}")
-        return f"{output_stem}.rgb", f"{output_stem}_meta.csv"
+        return f"{output_stem}.mkv", f"{output_stem}_meta.csv"
 
     def _request_recording_start(self, output_stem=None):
         self.pending_recording_output_stem = output_stem
@@ -2401,9 +2401,9 @@ class MainWindow(QObject):
 
             if not is_initial_scan_row:
                 if is_first_strip:
-                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f} F{self.scan_feedrate}")
                 else:
-                    cmds.append(f"G1 Y{y_target:.3f}")
+                    cmds.append(f"G1 Y{y_target:.3f} F{self.scan_feedrate}")
 
                 if self.scan_home_y:
                     cmds.append("$HY")
@@ -2412,10 +2412,10 @@ class MainWindow(QObject):
                     cmds.append(f"G0 X{start_x:.3f} Y{y_target:.3f}")
                     cmds.append("G4 P0.1 ; SCAN_ROW_START")
                 else:
-                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f}")
+                    cmds.append(f"G1 X{start_x:.3f} Y{y_target:.3f} F{self.scan_feedrate}")
 
             if start_x != end_x:
-                cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f}")
+                cmds.append(f"G1 X{end_x:.3f} Y{y_target:.3f} F{self.scan_feedrate}")
 
             cmds.append("G4 P0.1 ; SCAN_ROW_END")
 

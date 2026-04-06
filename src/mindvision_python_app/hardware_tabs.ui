@@ -259,14 +259,14 @@
          </layout>
         </widget>
        </item>
-       <item row="7" column="0" colspan="3">
+       <item row="8" column="0" colspan="3">
         <widget class="QLineEdit" name="cnc_command_input">
          <property name="placeholderText">
           <string>Enter command...</string>
          </property>
         </widget>
        </item>
-       <item row="7" column="3">
+       <item row="8" column="3">
         <widget class="QPushButton" name="send_command_button">
          <property name="text">
           <string>Send</string>

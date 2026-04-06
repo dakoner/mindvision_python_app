@@ -107,10 +107,10 @@ void SerialWorker::handleReadyRead()
         if (m_log_cb) {
             QString s = QString::fromLatin1(line).trimmed();
             if (!s.isEmpty()) {
-                m_log_cb(s.toStdString());
+                m_log_cb("Rx: " + s.toStdString());
             }
         }
-        emit log_signal(QString::fromLatin1(line).trimmed());
+        emit log_signal("Rx: " + QString::fromLatin1(line).trimmed());
     }
 }
 

@@ -1,8 +1,28 @@
-import serial
-import serial.tools.list_ports
+import os
+import sys
 from PySide6.QtCore import QObject, Signal, Slot, QThread, QTimer
 from PySide6.QtWidgets import QListWidgetItem
-from .serial_worker import SerialWorker, HAS_SERIAL
+
+try:
+    # Pre-load QtSerialPort to prevent conflicts with system Qt libraries
+    from PySide6.QtSerialPort import QSerialPort
+except ImportError:
+    pass
+
+project_root = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+native_dir = os.path.join(project_root, "native", "serial_qobject", "release")
+if native_dir not in sys.path:
+    sys.path.append(native_dir)
+
+import _serial_qobject_py
+SerialWorker = _serial_qobject_py.SerialWorker
+
+HAS_SERIAL = True
+try:
+    import serial
+    import serial.tools.list_ports
+except ImportError:
+    HAS_SERIAL = False
 
 class LEDController(QObject):
     log_signal = Signal(str)
@@ -24,20 +44,16 @@ class LEDController(QObject):
         self.pin_buttons = {}
 
         # --- Serial Worker Setup ---
-        self.serial_thread = QThread()
         self.serial_worker = SerialWorker()
-        self.serial_worker.moveToThread(self.serial_thread)
 
         # Connect signals
-        self.connect_serial_signal.connect(self.serial_worker.connect_serial)
-        self.disconnect_serial_signal.connect(self.serial_worker.disconnect_serial)
-        self.send_serial_cmd_signal.connect(self.serial_worker.send_command)
-        self.poll_serial_signal.connect(self.serial_worker.poll_serial)
+        self.connect_serial_signal.connect(lambda p, b: self.serial_worker.connect_serial(p, b))
+        self.disconnect_serial_signal.connect(lambda: self.serial_worker.disconnect_serial())
+        self.send_serial_cmd_signal.connect(lambda cmd: self.serial_worker.send_command(cmd))
+        self.poll_serial_signal.connect(lambda: self.serial_worker.poll_serial())
 
-        self.serial_worker.log_signal.connect(self.on_serial_log)
-        self.serial_worker.connection_status.connect(self.on_serial_status_changed)
-
-        self.serial_thread.start()
+        self.serial_worker.register_log_callback(self.on_serial_log)
+        self.serial_worker.register_status_callback(self.on_serial_status_changed)
 
         # Timer for polling serial read
         self.serial_poll_timer = QTimer()
@@ -347,4 +363,3 @@ class LEDController(QObject):
 
     def get_port(self):
         return self.ui.combo_serial_port.currentText()
-

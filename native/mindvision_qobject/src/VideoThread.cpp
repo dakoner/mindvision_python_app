@@ -1,21 +1,26 @@
 #include "VideoThread.h"
 #include "MindVisionCamera.h"
 #include <QDebug>
-#include <QProcess>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 
 namespace {
 
-bool writeAll(QIODevice &device, const char *data, qint64 bytesToWrite)
+// Shell-quote a filename so it is safe to embed in a popen() command string.
+// Uses POSIX single-quote escaping: 'text' with any ' replaced by '\''
+QByteArray shellQuote(const QString &s)
 {
-    qint64 totalWritten = 0;
-    while (totalWritten < bytesToWrite) {
-        const qint64 written = device.write(data + totalWritten, bytesToWrite - totalWritten);
-        if (written <= 0) {
-            return false;
+    QByteArray quoted = "'";
+    for (const QChar c : s) {
+        if (c == QLatin1Char('\'')) {
+            quoted += "'\\''";
+        } else {
+            quoted += c.toLatin1();
         }
-        totalWritten += written;
     }
-    return true;
+    quoted += "'";
+    return quoted;
 }
 
 } // namespace
@@ -106,8 +111,6 @@ void VideoThread::clearFrameSource()
 
 void VideoThread::run()
 {
-    QProcess ffmpeg;
-    
     m_mutex.lock();
     int width = m_width;
     int height = m_height;
@@ -118,28 +121,26 @@ void VideoThread::run()
     qDebug() << "VideoThread: Starting ffmpeg to write mkv to" << filename
              << "size" << width << "x" << height << "fps" << fps;
 
-    QStringList args;
-    args << "-y"
-         << "-f" << "rawvideo"
-         << "-vcodec" << "rawvideo"
-         << "-s" << QString("%1x%2").arg(width).arg(height)
-         << "-pix_fmt" << "rgb24"
-         << "-r" << QString::number(fps)
-         << "-i" << "-"
-         << "-c:v" << "libx264"
-         << "-preset" << "ultrafast"
-         << "-crf" << "0"
-         << filename;
+    const QByteArray cmd =
+        "ffmpeg -y"
+        " -f rawvideo -vcodec rawvideo"
+        " -s " + QByteArray::number(width) + "x" + QByteArray::number(height) +
+        " -pix_fmt rgb24"
+        " -r " + QByteArray::number(fps, 'f', 6) +
+        " -i pipe:0"
+        " -c:v libx264 -preset veryfast -crf 12"
+        " " + shellQuote(filename);
 
-    ffmpeg.start("ffmpeg", args);
-    if (!ffmpeg.waitForStarted()) {
-        qDebug() << "VideoThread: Failed to start ffmpeg process";
+    FILE *const pipe = ::popen(cmd.constData(), "w");
+    if (!pipe) {
+        qDebug() << "VideoThread: Failed to popen ffmpeg:" << ::strerror(errno);
         return;
     }
 
-    while (true) {
+    bool failed = false;
+    while (!failed) {
         m_mutex.lock();
-        
+
         if (m_abort) {
             m_mutex.unlock();
             break;
@@ -160,7 +161,7 @@ void VideoThread::run()
             m_mutex.unlock();
             break;
         }
-        
+
         if (m_queue.isEmpty() && !m_isRecording) {
             m_mutex.unlock();
             break;
@@ -169,33 +170,25 @@ void VideoThread::run()
         if (!m_queue.isEmpty()) {
             QImage img = m_queue.dequeue();
             m_mutex.unlock();
-            
-            QImage convertedImg = img.convertToFormat(QImage::Format_RGB888);
 
-            if (convertedImg.width() != width || convertedImg.height() != height) {
+            const QImage converted = img.convertToFormat(QImage::Format_RGB888);
+
+            if (converted.width() != width || converted.height() != height) {
                 qDebug() << "VideoThread: Dropping frame with unexpected size"
-                         << convertedImg.width() << "x" << convertedImg.height()
+                         << converted.width() << "x" << converted.height()
                          << "expected" << width << "x" << height;
                 continue;
             }
 
-            const qint64 rowBytes = static_cast<qint64>(convertedImg.width()) * 3;
-            bool writeOk = true;
-            for (int y = 0; y < convertedImg.height(); ++y) {
-                if (!writeAll(ffmpeg, reinterpret_cast<const char *>(convertedImg.constScanLine(y)), rowBytes)) {
-                    qDebug() << "VideoThread: Failed to write raw frame:" << ffmpeg.errorString();
-                    writeOk = false;
+            const std::size_t rowBytes = static_cast<std::size_t>(converted.width()) * 3;
+            for (int y = 0; y < converted.height(); ++y) {
+                if (::fwrite(converted.constScanLine(y), 1, rowBytes, pipe) != rowBytes) {
+                    qDebug() << "VideoThread: fwrite failed:" << ::strerror(errno);
+                    failed = true;
                     break;
                 }
             }
-            if (writeOk) {
-                ffmpeg.waitForBytesWritten(-1);
-            }
 
-            if (!writeOk) {
-                break;
-            }
-            
             static int frameCount = 0;
             if (++frameCount % 30 == 0) {
                 m_mutex.lock();
@@ -212,8 +205,6 @@ void VideoThread::run()
         }
     }
 
-    ffmpeg.closeWriteChannel();
-    ffmpeg.waitForFinished(-1);
-    
-    qDebug() << "VideoThread: Finished ffmpeg with exit code" << ffmpeg.exitCode();
+    ::pclose(pipe);
+    qDebug() << "VideoThread: Finished recording to" << filename;
 }

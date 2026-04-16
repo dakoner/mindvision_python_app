@@ -20,7 +20,7 @@ class CameraMainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit CameraMainWindow(QWidget *parent = nullptr);
+    explicit CameraMainWindow(bool autoStartRecording = false, QWidget *parent = nullptr);
     ~CameraMainWindow() override;
 
 protected:
@@ -52,6 +52,7 @@ private:
     QTimer *m_renderTimer;
     QPointer<QFileDialog> m_recordFileDialog;
     bool m_isRecording;
+    bool m_autoStartRecording;
     double m_currentFps;
     QSize m_lastFrameSize;
     qulonglong m_lastQueueSize;

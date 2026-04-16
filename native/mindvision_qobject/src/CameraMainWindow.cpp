@@ -1,5 +1,4 @@
 #include "CameraMainWindow.h"
-
 #include "MindVisionCamera.h"
 #include "VideoThread.h"
 
@@ -17,7 +16,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-CameraMainWindow::CameraMainWindow(QWidget *parent)
+CameraMainWindow::CameraMainWindow(bool autoStartRecording, QWidget *parent)
     : QMainWindow(parent),
       m_camera(new MindVisionCamera(this)),
       m_videoThread(new VideoThread(this)),
@@ -27,6 +26,7 @@ CameraMainWindow::CameraMainWindow(QWidget *parent)
       m_fpsTimer(new QTimer(this)),
       m_renderTimer(new QTimer(this)),
       m_isRecording(false),
+      m_autoStartRecording(autoStartRecording),
       m_currentFps(0.0),
       m_lastQueueSize(0),
       m_lastDroppedFrames(0),
@@ -203,6 +203,12 @@ void CameraMainWindow::handleFrameReady(const QImage &image, qint64)
     }
 
     m_lastFrameSize = image.size();
+
+    if (m_autoStartRecording && !m_isRecording) {
+        m_autoStartRecording = false;
+        const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss"));
+        handleRecordFileSelected(QStringLiteral("recording_%1.mkv").arg(timestamp));
+    }
 
     ++m_frameCount;
     m_latestFrame = image;
